@@ -202,7 +202,7 @@ const CONNECTIONS: Connection[] = [
   { key: "drive", label: "Google Drive folder", laterTask: "Create their Google Drive folder and add the link on their client page" },
   { key: "slack", label: "Slack channel", laterTask: "Create their Slack channel, invite the portal app, and add the channel on their client page" },
   { key: "rella", label: "Rella space", laterTask: "Set up their Rella space and add the link on their client page" },
-  { key: "dubsado", label: "Dubsado", laterTask: "Set up the client in Dubsado and add their Dubsado email on their client page" },
+  { key: "dubsado", label: "Contract", laterTask: "Set up the client in Dubsado and add their contract link and Dubsado email on their client page" },
 ];
 
 export async function createClientAccount(_: Result, form: FormData): Promise<Result> {
@@ -228,6 +228,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (!later("slack") && !slackId) missing.push("paste the Slack channel link");
   if (!later("rella") && !isUrl(rella)) missing.push("paste the Rella space link");
   if (!later("dubsado") && !dubsadoEmail) missing.push("add the client's Dubsado email");
+  if (!later("dubsado") && get("dubsado_project") && !isUrl(get("dubsado_project"))) missing.push("paste the full contract link, starting with https://");
   if (missing.length) return { error: `Almost there: ${missing.join(", ")}, or tick "Set up later" for it.` };
 
   const website = get("website");

@@ -51,6 +51,7 @@ export type Client = {
   drive_folder_id: string | null;
   rella_space_url: string | null;
   dubsado_email: string | null;
+  /** The client's contract link (shown as their Open contract button). */
   dubsado_project_url: string | null;
   website: string | null;
   start_date: string | null;

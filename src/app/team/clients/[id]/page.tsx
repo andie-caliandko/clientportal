@@ -227,7 +227,8 @@ export default async function ClientDetail({
             <dt>Google Drive</dt><dd>{client.drive_folder_id ? <a href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open folder</a> : <span className="note">Not set</span>}</dd>
             <dt>Slack channel</dt><dd>{client.slack_channel_id ?? <span className="note">Not set</span>}</dd>
             <dt>Rella space</dt><dd>{client.rella_space_url ? <a href={client.rella_space_url} target="_blank" rel="noreferrer">Open</a> : <span className="note">Not set</span>}</dd>
-            <dt>Dubsado</dt><dd>{client.dubsado_email ?? <span className="note">Not set</span>}{client.dubsado_project_url && <> · <a href={client.dubsado_project_url} target="_blank" rel="noreferrer">Project</a></>}</dd>
+            <dt>Contract</dt><dd>{client.dubsado_project_url ? <a href={client.dubsado_project_url} target="_blank" rel="noreferrer">Open contract</a> : <span className="note">No link yet</span>}</dd>
+            <dt>Dubsado email</dt><dd>{client.dubsado_email ?? <span className="note">Not set</span>}</dd>
             <dt>Website</dt><dd>{client.website ? <a href={client.website} target="_blank" rel="noreferrer">{client.website.replace(/^https?:\/\//, "")}</a> : <span className="note">Not set</span>}</dd>
             <dt>Start date</dt><dd>{client.start_date ? new Date(`${client.start_date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : <span className="note">Not set</span>}</dd>
             <dt>Client logins</dt>

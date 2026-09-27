@@ -214,10 +214,10 @@ export function NewClientForm({ members }: { members: Opt[] }) {
       <Connect id="rella" label="Rella space" hint="The link to this client's space in Rella." later={!!later.rella} setLater={set("rella")}>
         <input className="input" name="rella" aria-label="Rella space link" placeholder="https://…" />
       </Connect>
-      <Connect id="dubsado" label="Dubsado" hint="When a contract is signed in Dubsado, Zapier sends this email to the portal and their contract step checks off." later={!!later.dubsado} setLater={set("dubsado")}>
+      <Connect id="dubsado" label="Contract (Dubsado)" hint="The contract link shows as the client's Open contract button. When they sign, Zapier sends their email to the portal and the step checks off." later={!!later.dubsado} setLater={set("dubsado")}>
         <div className="row">
           <input className="input" name="dubsado_email" type="email" aria-label="Client's email in Dubsado" placeholder="Client's email in Dubsado (defaults to the main contact)" style={{ flex: 1, minWidth: 220 }} />
-          <input className="input" name="dubsado_project" aria-label="Dubsado project link" placeholder="Dubsado project link (optional)" style={{ flex: 1, minWidth: 220 }} />
+          <input className="input" name="dubsado_project" aria-label="Contract link" placeholder="Contract link" style={{ flex: 1, minWidth: 220 }} />
         </div>
       </Connect>
 
@@ -308,7 +308,7 @@ export function ClientInfoForm({ client }: {
       {f("drive_folder", "Google Drive folder link", client.drive_folder_id ? `https://drive.google.com/drive/folders/${client.drive_folder_id}` : "")}
       {f("slack_channel", "Slack channel link or ID", client.slack_channel_id)}
       {f("rella", "Rella space link", client.rella_space_url)}
-      <div className="row">{f("dubsado_email", "Client's email in Dubsado", client.dubsado_email, { type: "email" })}{f("dubsado_project", "Dubsado project link", client.dubsado_project_url)}</div>
+      <div className="row">{f("dubsado_email", "Client's email in Dubsado", client.dubsado_email, { type: "email" })}{f("dubsado_project", "Contract link", client.dubsado_project_url)}</div>
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
       <div><button className="btn sm" disabled={pending}>Save changes</button></div>

@@ -59,7 +59,7 @@ with a as (select id from agencies where slug = 'cali-ko')
 insert into onboarding_steps (agency_id, position, kind, title, help, action_label)
 select a.id, s.position, s.kind, s.title, s.help, s.action_label
 from a, (values
-  (1, 'contract',        'Sign your contract',                    'Sent to your email from Dubsado. It checks off here once it''s signed.', 'Open contract'),
+  (1, 'contract',        'Sign your contract',                    'Your contract was sent to you by email. This checks off once it''s signed.', 'Open contract'),
   (2, 'questionnaire',   'Fill out your onboarding questionnaire', '14 questions, about 20 minutes. You can stop and come back any time.', 'Start'),
   (3, 'upload_branding', 'Upload your branding',                   'Logos, fonts, colors and any brand guide you have.', 'Upload'),
   (4, 'upload_content',  'Upload your content',                    'Photos and videos of your products, space and team.', 'Upload'),

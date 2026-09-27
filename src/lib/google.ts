@@ -131,3 +131,62 @@ export const getDueDates = (agencyId: string, fromIso: string, toIso: string) =>
     ["due-dates", agencyId, fromIso.slice(0, 10), toIso.slice(0, 10)],
     { revalidate: 900, tags: [`due-dates-${agencyId}`] },
   )();
+
+export type Meeting = { id: string; title: string; start: string; end: string; allDay: boolean; meetLink: string | null };
+
+/**
+ * A client's calls: events on the given calendars (usually their account
+ * manager's) that include one of the client's contacts. Cached for 15 minutes.
+ */
+export const getClientMeetings = (agencyId: string, calendarIds: string[], emails: string[]) =>
+  unstable_cache(
+    async (): Promise<Meeting[]> => {
+      const i = await integration(agencyId);
+      const wanted = new Set(emails.map((e) => e.toLowerCase()));
+      if (!i?.google_refresh_token || !wanted.size) return [];
+      try {
+        const token = await accessToken(i.google_refresh_token);
+        const now = Date.now();
+        const params = new URLSearchParams({
+          timeMin: new Date(now - 90 * 86_400_000).toISOString(),
+          timeMax: new Date(now + 120 * 86_400_000).toISOString(),
+          singleEvents: "true",
+          orderBy: "startTime",
+          maxResults: "250",
+        });
+        const seen = new Map<string, Meeting>();
+        for (const cal of [...new Set(calendarIds)]) {
+          const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal)}/events?${params}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          if (!res.ok) continue;
+          const data = (await res.json()) as {
+            items?: {
+              id: string; summary?: string; status?: string; hangoutLink?: string;
+              start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
+              attendees?: { email?: string }[];
+            }[];
+          };
+          for (const e of data.items ?? []) {
+            if (e.status === "cancelled" || seen.has(e.id)) continue;
+            if (!(e.attendees ?? []).some((a) => a.email && wanted.has(a.email.toLowerCase()))) continue;
+            seen.set(e.id, {
+              id: e.id,
+              title: e.summary ?? "Meeting",
+              start: e.start.dateTime ?? e.start.date!,
+              end: e.end.dateTime ?? e.end.date!,
+              allDay: !e.start.dateTime,
+              meetLink: e.hangoutLink ?? null,
+            });
+          }
+        }
+        return [...seen.values()].sort((a, b) => a.start.localeCompare(b.start));
+      } catch (err) {
+        console.error("Couldn't load client meetings from Google Calendar", err);
+        return [];
+      }
+    },
+    ["client-meetings", agencyId, ...calendarIds, ...emails],
+    { revalidate: 900, tags: [`due-dates-${agencyId}`] },
+  )();

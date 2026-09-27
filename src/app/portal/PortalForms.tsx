@@ -28,23 +28,26 @@ export function Compose({ agencyName }: { agencyName: string }) {
   );
 }
 
-export function PeopleCard({ people, canAdd }: { people: ClientUser[]; canAdd: boolean }) {
+/** Client's own people in the Members panel, with room to invite one more. */
+export function RailPeople({ people, canAdd }: { people: ClientUser[]; canAdd: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(invitePerson, {});
   return (
-    <section className="card" style={{ display: "grid", gap: 14 }} aria-labelledby="h-people">
-      <h2 id="h-people" style={{ fontSize: "1.6rem" }}>People on your portal</h2>
-      <ul className="list">
+    <>
+      <ul className="people">
         {people.map((p) => (
           <li key={p.user_id}>
-            <span><b>{p.display_name}</b><br /><span className="note">{p.email}</span></span>
-            <span className="r"><span className="pill info">{p.role === "owner" ? "Owner" : "Member"}</span></span>
+            <span className="av">{p.display_name.split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>
+            <span><b>{p.display_name}</b><span className="note">{p.role === "owner" ? "Owner" : "Team member"}</span></span>
           </li>
         ))}
       </ul>
       {state.ok && <p className="flash">{state.ok}</p>}
       {canAdd && !open && !state.ok && (
-        <div><button className="btn sm line" onClick={() => setOpen(true)}>Add a person</button></div>
+        <>
+          <div><button className="btn sm line" onClick={() => setOpen(true)}>Add a person</button></div>
+          <p className="note">You can add one more person from your team.</p>
+        </>
       )}
       {open && !state.ok && (
         <form action={action} style={{ display: "grid", gap: 10 }}>
@@ -57,6 +60,6 @@ export function PeopleCard({ people, canAdd }: { people: ClientUser[]; canAdd: b
           </div>
         </form>
       )}
-    </section>
+    </>
   );
 }
