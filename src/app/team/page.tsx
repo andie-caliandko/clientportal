@@ -66,10 +66,27 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const overdue = (t: Task) => !!t.due_at && new Date(t.due_at).getTime() < now;
   const dueToday = list.filter((t) => t.due_at && new Date(t.due_at) <= endOfToday && !overdue(t)).length;
 
+  // A friendly hello, like clients get in their portal. Counts are for this person.
+  const mine = ((tasks ?? []) as Task[]).filter((t) => t.assignee_id === userId && (!t.client_id || t.client_id in clientName));
+  const myToday = mine.filter((t) => t.due_at && new Date(t.due_at) <= endOfToday && !overdue(t)).length;
+  const myLate = mine.filter(overdue).length;
+  const hour = +new Intl.DateTimeFormat("en-US", { timeZone: agency.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date());
+  const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const summary = [
+    myToday ? `${myToday} task${myToday === 1 ? "" : "s"} due today` : null,
+    myLate ? `${myLate} overdue` : null,
+    openApprovals ? `${openApprovals} content approval${openApprovals === 1 ? "" : "s"} waiting on clients` : null,
+  ].filter(Boolean);
+
   return (
     <section style={{ display: "grid", gap: 22 }}>
+      <div className="hello">
+        <p className="eyebrow">{agency.brand.shortName ?? agency.name} · Week {currentWeek}</p>
+        <h1>{hello}, <em>{member.display_name.split(" ")[0]}.</em></h1>
+        <p>{summary.length ? `You have ${summary.join(", ")}.` : "You're all caught up. Nice work."}</p>
+      </div>
       <div className="top">
-        <h1>Tasks</h1>
+        <h2 style={{ fontSize: "2rem" }}>Tasks</h2>
         <form className="row" style={{ alignItems: "center" }}>
           <label htmlFor="who" className="note">Show tasks for</label>
           <select className="sel" id="who" name="who" defaultValue={who}>
