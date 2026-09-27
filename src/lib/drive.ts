@@ -3,9 +3,12 @@ import { accessToken, integration } from "./google";
 import { createAdminClient } from "./supabase/server";
 
 // Files clients upload are stored in the portal first, then copied into the
-// client's Google Drive folder (Branding, Content or Task files subfolder).
+// client's Google Drive folder. Branding and content uploads go in their own
+// folders (every client folder gets both); anything else, like task files and
+// message attachments, goes straight into the client's folder.
 
-const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Content", task: "Task files", message: "Messages" };
+const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Content" };
+const STANDARD = Object.values(SUBFOLDER);
 const API = "https://www.googleapis.com/drive/v3";
 
 async function findOrCreateFolder(token: string, parentId: string, name: string) {
@@ -54,6 +57,48 @@ async function uploadOne(token: string, folderId: string, name: string, sourceUr
   return file.id as string;
 }
 
+type Agency = { token: string; root: string | null };
+
+async function agencyDrive(agencyId: string): Promise<Agency | null> {
+  const i = await integration(agencyId);
+  return i?.google_refresh_token ? { token: await accessToken(i.google_refresh_token), root: i.drive_root_folder_id ?? null } : null;
+}
+
+/**
+ * The client's Drive folder, with its Branding and Content folders. Uses the
+ * folder set on their page, or makes one in the agency's main client folder.
+ * Null when Drive isn't set up.
+ */
+async function clientFolder(agency: Agency, client: { id: string; name: string; drive_folder_id: string | null }) {
+  let folder = client.drive_folder_id;
+  if (!folder && agency.root) {
+    folder = await findOrCreateFolder(agency.token, agency.root, client.name);
+    await createAdminClient().from("clients").update({ drive_folder_id: folder }).eq("id", client.id);
+  }
+  if (!folder) return null;
+  for (const name of STANDARD) await findOrCreateFolder(agency.token, folder, name);
+  return folder;
+}
+
+/** Sets up Drive folders for one client, or every active client of an agency. Safe to repeat. */
+export async function ensureClientFolders(opts: { clientId?: string; agencyId?: string }) {
+  const admin = createAdminClient();
+  let q = admin.from("clients").select("id, name, agency_id, drive_folder_id").is("archived_at", null);
+  if (opts.clientId) q = q.eq("id", opts.clientId);
+  if (opts.agencyId) q = q.eq("agency_id", opts.agencyId);
+  const { data: clients } = await q;
+  const agencies = new Map<string, Agency | null>();
+  for (const c of clients ?? []) {
+    try {
+      if (!agencies.has(c.agency_id)) agencies.set(c.agency_id, await agencyDrive(c.agency_id));
+      const agency = agencies.get(c.agency_id);
+      if (agency) await clientFolder(agency, c);
+    } catch (err) {
+      console.error(`Setting up Drive folders failed for client ${c.id}:`, err);
+    }
+  }
+}
+
 /**
  * Copies any not-yet-synced uploads into Drive. Safe to call repeatedly.
  * Clients without a Drive folder get one made inside the agency's main client
@@ -73,32 +118,23 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
   if (filter.agencyId) q = q.eq("client.agency_id", filter.agencyId);
   const { data: rows } = await q;
 
-  const agencies = new Map<string, { token: string; root: string | null } | null>();
+  const agencies = new Map<string, Agency | null>();
   const clientFolders = new Map<string, string | null>();
   const folders = new Map<string, string>();
   let synced = 0;
   for (const row of rows ?? []) {
     const client = row.client as unknown as { name: string; agency_id: string; drive_folder_id: string | null };
     try {
-      if (!agencies.has(client.agency_id)) {
-        const i = await integration(client.agency_id);
-        agencies.set(client.agency_id, i?.google_refresh_token ? { token: await accessToken(i.google_refresh_token), root: i.drive_root_folder_id ?? null } : null);
-      }
+      if (!agencies.has(client.agency_id)) agencies.set(client.agency_id, await agencyDrive(client.agency_id));
       const agency = agencies.get(client.agency_id);
       if (!agency) continue;
-      // The client's own folder: the one set on their page, or a new one in the main folder.
-      if (!clientFolders.has(row.client_id)) {
-        let folder = client.drive_folder_id;
-        if (!folder && agency.root) {
-          folder = await findOrCreateFolder(agency.token, agency.root, client.name);
-          await admin.from("clients").update({ drive_folder_id: folder }).eq("id", row.client_id);
-        }
-        clientFolders.set(row.client_id, folder);
-      }
-      const clientFolder = clientFolders.get(row.client_id);
-      if (!clientFolder) continue;
-      const key = `${clientFolder}/${row.kind}`;
-      if (!folders.has(key)) folders.set(key, await findOrCreateFolder(agency.token, clientFolder, SUBFOLDER[row.kind] ?? "Uploads"));
+      if (!clientFolders.has(row.client_id)) clientFolders.set(row.client_id, await clientFolder(agency, { id: row.client_id, ...client }));
+      const base = clientFolders.get(row.client_id);
+      if (!base) continue;
+      // Branding and content in their folders; everything else loose in the client's folder.
+      const sub = SUBFOLDER[row.kind];
+      const key = `${base}/${sub ?? ""}`;
+      if (!folders.has(key)) folders.set(key, sub ? await findOrCreateFolder(agency.token, base, sub) : base);
       const { data: signed } = await admin.storage.from("uploads").createSignedUrl(row.storage_path, 60 * 30);
       if (!signed?.signedUrl) continue;
       const fileId = await uploadOne(agency.token, folders.get(key)!, row.file_name, signed.signedUrl);

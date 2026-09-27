@@ -732,7 +732,7 @@ export function DriveSettings({ rootLink, rootName, waiting }: { rootLink: strin
       </form>
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
-      {rootName && !state.ok && <p className="note">Each client gets a folder inside <b>{rootName}</b>, with Branding, Content, Task files and Messages folders in it. A client with its own Drive folder link on their page uses that one instead.</p>}
+      {rootName && !state.ok && <p className="note">Each client gets a folder inside <b>{rootName}</b>, with Branding and Content folders in it. Everything else they send goes straight into their folder. A client with its own Drive folder link on their page uses that one instead.</p>}
       <div className="row" style={{ alignItems: "center" }}>
         <button type="button" className="btn sm line" disabled={syncing} onClick={() => startSync(async () => setSync(await syncDriveNow()))}>
           {syncing ? "Copying…" : "Copy files to Drive now"}

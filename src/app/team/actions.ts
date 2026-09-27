@@ -2,6 +2,8 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { ensureClientFolders } from "@/lib/drive";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
 import { emailClient, sendEmail } from "@/lib/notify";
 import { notifyClient, notifyUser } from "@/lib/notifications";
@@ -334,6 +336,8 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     display_name: contactName,
     email: contactEmail,
   });
+  // Their Drive folder, with Branding and Content inside.
+  after(() => ensureClientFolders({ clientId: client.id }));
   redirect(`/team/clients/${client.id}?created=1`);
 }
 
@@ -480,6 +484,8 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
     })
     .eq("id", clientId);
   if (error) return { error: "Those changes couldn't be saved." };
+  // Branding and Content folders in their Drive folder.
+  if (drive) after(() => ensureClientFolders({ clientId }));
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: "Saved." };
 }
@@ -930,8 +936,10 @@ export async function setDriveRoot(_: Result, form: FormData): Promise<Result> {
     .update({ drive_root_folder_id: id, drive_root_folder_name: name, updated_at: new Date().toISOString() })
     .eq("agency_id", v.agency.id);
   if (error) return { error: "That couldn't be saved." };
+  // Make every active client's folder now, not just when their first file arrives.
+  if (id) after(() => ensureClientFolders({ agencyId: v.agency.id }));
   revalidatePath("/team/settings");
-  return { ok: id ? `Saved. Client folders will be made inside "${name}".` : "Removed." };
+  return { ok: id ? `Saved. Client folders are being made inside "${name}", each with Branding and Content.` : "Removed." };
 }
 
 /** Copy every upload that isn't in Drive yet, right now. */
@@ -939,6 +947,7 @@ export async function syncDriveNow(): Promise<Result> {
   const v = await requireAdmin().catch(() => null);
   if (!v) return { error: "Only admins can do that." };
   const { syncUploadsToDrive } = await import("@/lib/drive");
+  await ensureClientFolders({ agencyId: v.agency.id });
   let total = 0;
   // A few rounds of 25, within the time a page request allows.
   for (let round = 0; round < 4; round++) {
