@@ -602,6 +602,4 @@ td a:hover { text-decoration: underline; }
 .mg-more { font-size: .72rem; color: var(--ink-2); text-decoration: none; padding-left: 4px; }
 .mg-more:hover { text-decoration: underline; }
 .sched.one { min-width: 0; }
-.due-split { display: grid; gap: 18px; }
-.due-now li { border-color: var(--primary); }
-.due-strip li.past { opacity: .6; }
+.rh-this { display: grid; gap: 10px; }
