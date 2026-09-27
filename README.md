@@ -58,16 +58,13 @@ npm test
 
 ### 3. Add the first admin
 
-Invite yourself in **Supabase → Authentication → Users → Invite user**. Then make yourself an admin in the SQL Editor. Everyone else can be invited from **Team** in the workspace after that.
-
-```sql
-insert into agency_members (agency_id, user_id, role, display_name, title, email)
-select a.id, u.id, 'admin', 'Andie', 'CEO', u.email
-from agencies a, auth.users u
-where a.slug = 'cali-ko' and u.email = 'andie@example.com';
+```bash
+node --env-file=.env.local scripts/invite-admin.mjs you@agency.com "Your Name" "CEO"
 ```
 
-After that, add clients from **Clients → Add client** in the team workspace. The client's main contact gets an invitation email to set their password.
+This emails an invite, and the link lets them set a password. After that, admins invite everyone else from **Team** in the workspace.
+
+In **Supabase → Authentication → URL Configuration**, set the Site URL to your portal address. Also add `http://localhost:3000/**` and `https://<your portal>/**` as redirect URLs.
 
 ### 4. Deploy (Vercel)
 

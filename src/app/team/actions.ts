@@ -278,7 +278,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
 
   const admin = createAdminClient();
   const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(contactEmail, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
     data: { display_name: contactName },
   });
   if (inviteErr || !invite.user) {
@@ -313,7 +313,7 @@ export async function inviteTeammate(_: Result, form: FormData): Promise<Result>
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
     data: { display_name: name },
   });
   if (error || !data.user) return { error: "That invite didn't send. Check the email address, or they may already have an account." };

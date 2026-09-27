@@ -20,7 +20,7 @@ export async function sendReset(_: FormState, form: FormData): Promise<FormState
   if (!email) return { error: "Type your email first." };
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
   });
   // Same answer whether or not the email exists, so nobody can probe for accounts.
   return { sent: true };

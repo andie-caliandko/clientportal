@@ -146,7 +146,7 @@ export async function invitePerson(_: { error?: string; ok?: string }, form: For
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/set-password`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
     data: { display_name: name },
   });
   if (error || !data.user) return { error: "We couldn't send that invite. Check the email address and try again." };
