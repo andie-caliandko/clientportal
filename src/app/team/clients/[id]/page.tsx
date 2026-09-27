@@ -122,15 +122,16 @@ export default async function ClientDetail({
         <h2>Tasks</h2>
         {canEdit && <NewTask clients={[{ id: client.id, name: client.name }]} people={taskPeople} clientId={client.id} />}
         {[
-          { key: "client", title: "Client tasks", hint: "Assigned to the client, or waiting on them.", list: openTasks.filter((t) => t.client_assignee_id || t.status === "waiting") },
-          { key: "team", title: "Team tasks", hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id && t.status !== "waiting") },
+          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter((t) => t.client_assignee_id || t.status === "waiting") },
+          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id && t.status !== "waiting") },
         ].map((g) => (
           <div className="task-group" key={g.key}>
             <h3>{g.title} <span>{g.list.length} open · {g.hint}</span></h3>
             {g.list.length ? (
               <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
                 {g.list.map((t) => (
-                  <TaskCard key={t.id} task={t} personName={(uid) => names.get(uid)} timeZone={tz} canEdit={canEdit} />
+                  <TaskCard key={t.id} task={t} clientName={client.name} agencyName={agency.brand.shortName ?? agency.name}
+                    showClientChip={false} personName={(uid) => names.get(uid)} timeZone={tz} canEdit={canEdit} />
                 ))}
               </div>
             ) : (

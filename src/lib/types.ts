@@ -1,4 +1,6 @@
 export type Brand = {
+  /** Short name used in tight spots, like task badges ("Cali & Ko"). */
+  shortName?: string;
   colors?: Partial<Record<"cream" | "sage" | "stone" | "khaki" | "primary" | "accent", string>>;
   fonts?: { heading?: string; label?: string; body?: string };
   logo?: string;

@@ -20,6 +20,7 @@ const CLIENT_ACTIVITY = ["portal", "slack", "dubsado"];
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
+  const agencyShort = agency.brand.shortName ?? agency.name;
   const { who = "all" } = await searchParams;
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
@@ -101,7 +102,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             <div className="col" key={col.key}>
               <h2>{col.label}<span>{items.length}</span></h2>
               {items.map((t) => (
-                <TaskCard key={t.id} task={t} clientName={t.client_id ? clientName[t.client_id] : undefined}
+                <TaskCard key={t.id} task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} agencyName={agencyShort}
                   personName={(id) => names.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
               ))}
               {!items.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}

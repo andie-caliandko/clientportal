@@ -8,9 +8,13 @@ const MOVES: Record<string, { to: string; label: string }[]> = {
   waiting: [{ to: "doing", label: "Back to in progress" }, { to: "done", label: "Done" }],
 };
 
-export function TaskCard({ task: t, clientName, personName, timeZone, canEdit }: {
+export function TaskCard({ task: t, clientName, agencyName, showClientChip = true, personName, timeZone, canEdit }: {
   task: Task;
   clientName?: string;
+  /** Badge for team tasks, e.g. "Cali & Ko". */
+  agencyName: string;
+  /** The board shows which client a task is for; a client's own page doesn't need to. */
+  showClientChip?: boolean;
   personName: (id: string) => string | undefined;
   timeZone: string;
   canEdit: boolean;
@@ -28,12 +32,12 @@ export function TaskCard({ task: t, clientName, personName, timeZone, canEdit }:
   return (
     <article className={`task ${clientFacing ? "client-task" : "team-task"} ${overdue ? "overdue" : ""}`}>
       <span className={`kind ${clientFacing ? "client" : "team"}`}>
-        {client ? `Client task · ${client.split(" ")[0]} sees this` : clientFacing ? "Client task · waiting on client" : "Team task"}
+        {clientFacing ? `${clientName ?? "Client"}${client ? ` · ${client.split(" ")[0]}` : ""}` : agencyName}
       </span>
       <Link className="task-link" href={`/team/tasks/${t.id}`}>{t.title}</Link>
       {t.note && <p className="note" style={{ fontWeight: 400 }}>{t.note}</p>}
       <div className="meta">
-        {clientName && <span className="chip">{clientName}</span>}
+        {showClientChip && !clientFacing && clientName && <span className="chip">{clientName}</span>}
         {due && (overdue ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>)}
         {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
         {t.auto && <span>· auto</span>}

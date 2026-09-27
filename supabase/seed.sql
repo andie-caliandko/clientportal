@@ -7,6 +7,7 @@ values (
   'portal.cali-ko.com',
   'America/New_York',
   '{
+    "shortName": "Cali & Ko",
     "colors": {
       "cream": "#F6F0EA", "sage": "#D0E1DD", "stone": "#B3BDBB",
       "khaki": "#CDCB9F", "primary": "#364E4A", "accent": "#724708"
