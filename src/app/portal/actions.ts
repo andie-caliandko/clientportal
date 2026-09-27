@@ -124,7 +124,7 @@ export async function approveCalendar(form: FormData) {
   await supabase.rpc("approve_calendar", { cal: id });
   await clientActivity(v.client.id, {
     task: `${v.client.name} approved their content calendar`,
-    source: "rella",
+    source: "portal",
     subject: "content calendar approved",
     body: `${v.clientUser.display_name} marked their content calendar approved.`,
   });

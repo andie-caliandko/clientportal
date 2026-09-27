@@ -14,6 +14,9 @@ const COLUMNS = [
   { key: "waiting", label: "Waiting on client" },
 ] as const;
 
+// Tasks created because a client did something (not the new-client checklist).
+const CLIENT_ACTIVITY = ["portal", "slack", "dubsado"];
+
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
@@ -85,8 +88,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <div className="stats">
         <div className="stat"><b>{dueToday}</b><span>Due today</span></div>
         <div className={`stat ${list.some(overdue) ? "crit" : ""}`}><b>{list.filter(overdue).length}</b><span>Overdue</span></div>
-        <div className="stat warn"><b>{list.filter((t) => t.status === "waiting").length}</b><span>Waiting on clients</span></div>
-        <div className="stat"><b>{list.filter((t) => t.auto && t.status === "todo").length}</b><span>New from clients</span></div>
+        <div className="stat warn"><b>{list.filter((t) => t.status === "waiting" || t.client_assignee_id).length}</b><span>Waiting on clients</span></div>
+        <div className="stat"><b>{list.filter((t) => CLIENT_ACTIVITY.includes(t.source) && t.status === "todo").length}</b><span>New from clients</span></div>
       </div>
 
       {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
