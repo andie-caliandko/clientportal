@@ -1,4 +1,4 @@
-import { after, NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { syncUploadsToDrive } from "@/lib/drive";
 import { emailClient } from "@/lib/notify";
 import { notifyClient } from "@/lib/notifications";
@@ -37,10 +37,20 @@ export async function POST(request: NextRequest) {
   }
   if (!event.channel || !event.ts || (!event.text && !event.files?.length)) return NextResponse.json({ ok: true });
 
-  // Answer Slack right away (it retries after 3 seconds), then do the work.
-  after(() => handle(event));
-  return NextResponse.json({ ok: true });
+  // Slack retries if we take more than 3 seconds (big files can). The first
+  // attempt is still working, so just acknowledge the retries.
+  if (request.headers.get("x-slack-retry-num")) return NextResponse.json({ ok: true });
+
+  try {
+    await handle(event);
+  } catch (err) {
+    console.error("Slack event failed", err);
+  }
+  return NextResponse.json({ ok: true }, { headers: { "x-slack-no-retry": "1" } });
 }
+
+// Large files can take a while to copy.
+export const maxDuration = 120;
 
 async function handle(event: SlackEvent) {
   // Ignore what the portal itself posted into the channel.
