@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { googleConfigured, googleStatus, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
 import { ConfirmButton, NewClientTasksEditor } from "../TeamForms";
+import { ROLE_LABEL } from "@/lib/types";
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: "Google is connected. Now choose your due-dates calendar below.",
@@ -21,10 +22,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { agency, member } = await requireTeam();
   if (member.role !== "admin") redirect("/team");
   const supabase = await createClient();
-  const [{ data: members }, { data: steps }, { count: questionCount }] = await Promise.all([
-    supabase.from("agency_members").select("display_name, title, role, email").eq("agency_id", agency.id),
+  const [{ data: members }, { data: steps }, { count: questionCount }, { data: activeClients }, { data: onClients }] = await Promise.all([
+    supabase.from("agency_members").select("user_id, display_name, title, role, email").eq("agency_id", agency.id).order("display_name"),
     supabase.from("onboarding_steps").select("title, kind").eq("agency_id", agency.id).order("position"),
     supabase.from("questions").select("*", { count: "exact", head: true }).eq("agency_id", agency.id),
+    supabase.from("clients").select("id, account_manager_id").eq("agency_id", agency.id).is("archived_at", null),
+    supabase.from("client_team").select("client_id, user_id"),
   ]);
   const colors = Object.entries(agency.brand.colors ?? {});
   const google = await googleStatus(agency.id);
@@ -92,6 +95,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="panel">
           <h2>Team &amp; roles</h2>
           <p className="note">{members?.length ?? 0} teammates. Three roles: Admin, Account manager and Creator.</p>
+          <ul className="people">
+            {(members ?? []).map((m) => {
+              const active = new Set((activeClients ?? []).map((c) => c.id));
+              const mine = new Set([
+                ...(activeClients ?? []).filter((c) => c.account_manager_id === m.user_id).map((c) => c.id),
+                ...(onClients ?? []).filter((t) => t.user_id === m.user_id && active.has(t.client_id)).map((t) => t.client_id),
+              ]);
+              return (
+                <li key={m.user_id}>
+                  <span className="av">{m.display_name[0]}</span>
+                  <span>
+                    <b>{m.display_name}</b>
+                    <span className="note">
+                      {ROLE_LABEL[m.role as keyof typeof ROLE_LABEL]}{m.title ? ` · ${m.title}` : ""}
+                      {" · "}{m.role === "admin" ? "All clients" : `${mine.size} client${mine.size === 1 ? "" : "s"}`}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
           <div><Link className="btn sm line" href="/team/team">Manage team</Link></div>
         </div>
         <div className="panel">
