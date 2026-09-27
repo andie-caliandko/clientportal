@@ -4,7 +4,7 @@ insert into agencies (slug, name, portal_domain, timezone, brand, notify_emails)
 values (
   'cali-ko',
   'Cali & Ko Marketing',
-  'portal.cali-ko.com',
+  'clients.cali-ko.com',
   'America/New_York',
   '{
     "shortName": "Cali & Ko",

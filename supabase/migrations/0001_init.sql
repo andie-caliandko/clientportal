@@ -17,7 +17,7 @@ create table agencies (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique,
   name text not null,
-  portal_domain text unique,               -- e.g. portal.cali-ko.com
+  portal_domain text unique,               -- e.g. clients.cali-ko.com
   brand jsonb not null default '{}'::jsonb, -- colors, fonts, logos
   timezone text not null default 'America/New_York',
   approval_window_hours int not null default 48,
