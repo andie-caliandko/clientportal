@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
   addClientContact,
+  addToClient,
   addTask,
   createClientAccount,
   deleteClient,
@@ -548,37 +550,73 @@ export function ClientLogoForm({ agencyId, clientId, logoUrl }: { agencyId: stri
   );
 }
 
-/** Invite a brand-new teammate straight onto one client's team. */
-export function InviteToClient({ clientId, clientName }: { clientId: string; clientName: string }) {
+/** "+ Add teammate" on a client's page: pick someone on the team, or invite someone new. */
+export function AddTeammate({ clientId, clientName, existing }: {
+  clientId: string;
+  clientName: string;
+  existing: { user_id: string; display_name: string; role: string }[];
+}) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"existing" | "new">(existing.length ? "existing" : "new");
   const [state, action, pending] = useActionState(inviteTeammate, {});
+  const [adding, startAdding] = useTransition();
+  const router = useRouter();
+
   if (!open) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
         {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
-        <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Invite someone new to this account</button></div>
+        <div><button type="button" className="btn sm" onClick={() => setOpen(true)}>＋ Add teammate</button></div>
       </div>
     );
   }
   return (
-    <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
-      <input type="hidden" name="clients" value={clientId} />
-      <div className="row">
-        <div className="field"><label htmlFor={`ic-name-${clientId}`}>Name</label><input className="input" id={`ic-name-${clientId}`} name="name" required /></div>
-        <div className="field"><label htmlFor={`ic-email-${clientId}`}>Email</label><input className="input" id={`ic-email-${clientId}`} name="email" type="email" required /></div>
-        <div className="field"><label htmlFor={`ic-role-${clientId}`}>Role</label>
-          <select className="sel" id={`ic-role-${clientId}`} name="role" defaultValue="account_manager">
-            <option value="account_manager">Account manager</option>
-            <option value="creator">Creator</option>
-          </select></div>
+    <div className="panel" style={{ gap: 12, background: "var(--bg)" }}>
+      <div className="tabs" role="tablist" style={{ margin: 0 }}>
+        {existing.length > 0 && <button type="button" role="tab" aria-selected={mode === "existing"} onClick={() => setMode("existing")}>Someone on the team</button>}
+        <button type="button" role="tab" aria-selected={mode === "new"} onClick={() => setMode("new")}>Invite someone new</button>
       </div>
-      {state.error && <p className="error">{state.error}</p>}
-      {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
-      <div className="row">
-        <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
-        <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
-      </div>
-    </form>
+      {mode === "existing" ? (
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startAdding(async () => {
+              await addToClient(data);
+              setOpen(false);
+              router.refresh();
+            });
+          }}
+        >
+          <input type="hidden" name="client" value={clientId} />
+          <div className="field">
+            <label htmlFor={`at-${clientId}`}>Teammate</label>
+            <select className="sel" id={`at-${clientId}`} name="user">
+              {existing.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name} · {ROLE_NAMES[m.role] ?? m.role}</option>)}
+            </select>
+          </div>
+          <button className="btn sm" disabled={adding}>{adding ? "Adding…" : "Add to this account"}</button>
+        </form>
+      ) : (
+        <form action={action} style={{ display: "grid", gap: 10 }}>
+          <input type="hidden" name="clients" value={clientId} />
+          <div className="row">
+            <div className="field"><label htmlFor={`ic-name-${clientId}`}>Name</label><input className="input" id={`ic-name-${clientId}`} name="name" required /></div>
+            <div className="field"><label htmlFor={`ic-email-${clientId}`}>Email</label><input className="input" id={`ic-email-${clientId}`} name="email" type="email" required /></div>
+            <div className="field"><label htmlFor={`ic-role-${clientId}`}>Role</label>
+              <select className="sel" id={`ic-role-${clientId}`} name="role" defaultValue="account_manager">
+                <option value="account_manager">Account manager</option>
+                <option value="creator">Creator</option>
+              </select></div>
+          </div>
+          {state.error && <p className="error">{state.error}</p>}
+          {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+          <div><button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button></div>
+        </form>
+      )}
+      <div><button type="button" className="linkbtn note" onClick={() => setOpen(false)}>Close</button></div>
+    </div>
   );
 }
 

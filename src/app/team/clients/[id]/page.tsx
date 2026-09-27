@@ -4,8 +4,8 @@ import { formatDue } from "@/lib/approval";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
-import { addToClient, archiveClient, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, ClientInfoForm, ClientLogoForm, InviteToClient, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { archiveClient, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
+import { AddClientContact, AddTeammate, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -358,19 +358,7 @@ export default async function ClientDetail({
           {otherAdmins.length > 0 && (
             <p className="note">Admins with access (not shown to the client): {otherAdmins.map((m) => m.display_name).join(", ")}.</p>
           )}
-          {isAdmin && addable.length > 0 && (
-            <form action={addToClient} className="row">
-              <input type="hidden" name="client" value={client.id} />
-              <div className="field">
-                <label htmlFor="add-member">Add a teammate</label>
-                <select className="sel" id="add-member" name="user">
-                  {addable.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name} · {ROLE_LABEL[m.role]}</option>)}
-                </select>
-              </div>
-              <button className="btn sm">Add to this account</button>
-            </form>
-          )}
-          {isAdmin && <InviteToClient clientId={client.id} clientName={client.name} />}
+          {isAdmin && <AddTeammate clientId={client.id} clientName={client.name} existing={addable} />}
         </div>
 
         {isAdmin && (
