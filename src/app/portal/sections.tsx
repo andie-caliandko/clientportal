@@ -8,6 +8,7 @@ import { ClientTasks, type ClientTask } from "./ClientTasks";
 import { MessageComposer } from "./MessageComposer";
 import { ScrollToLatest } from "./ScrollToLatest";
 import { MessageFiles, signAttachments } from "./MessageFiles";
+import { FilePreview } from "./FilePreview";
 
 /** Everything a portal page needs to know about who's looking. */
 export type PortalCtx = {
@@ -414,7 +415,7 @@ export async function FilesSection(ctx: PortalCtx) {
               <ul className="files">
                 {list.map((f) => (
                   <li key={f.id}>
-                    {urlFor.get(f.storage_path) ? <a href={urlFor.get(f.storage_path)!} target="_blank" rel="noreferrer">{f.file_name}</a> : f.file_name}
+                    {urlFor.get(f.storage_path) ? <FilePreview url={urlFor.get(f.storage_path)!} name={f.file_name} /> : f.file_name}
                     <span className="note">{new Date(f.created_at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric" })}</span>
                   </li>
                 ))}

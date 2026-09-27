@@ -1,0 +1,69 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+const kindOf = (name: string, type?: string | null) => {
+  const t = (type ?? "").toLowerCase();
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (t.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg"].includes(ext)) return "image";
+  if (t === "application/pdf" || ext === "pdf") return "pdf";
+  if (t.startsWith("video/") || ["mp4", "mov", "webm"].includes(ext)) return "video";
+  return "other";
+};
+
+/** A file or image that opens in a preview over the page instead of a new tab. */
+export function FilePreview({ url, name, type, thumbnail = false, className }: {
+  url: string;
+  name: string;
+  type?: string | null;
+  /** Show images as a small preview in place of the file name. */
+  thumbnail?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const kind = kindOf(name, type);
+  // Storage links download (rather than open) when asked to.
+  const downloadUrl = `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(name)}`;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button type="button" className={`file-link ${className ?? ""}`} onClick={() => setOpen(true)} aria-label={`Open ${name}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {thumbnail && kind === "image" ? <img src={url} alt={name} /> : <span>{name}</span>}
+      </button>
+      {open && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label={name} onClick={() => setOpen(false)}>
+          <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
+            <span className="lightbox-name">{name}</span>
+            <a className="btn sm line" href={downloadUrl}>Download</a>
+            <button type="button" className="btn sm" onClick={() => setOpen(false)} autoFocus>Close</button>
+          </div>
+          <div className="lightbox-body" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {kind === "image" && <img src={url} alt={name} />}
+            {kind === "pdf" && <iframe src={`${url}#view=FitH`} title={name} />}
+            {kind === "video" && <video src={url} controls autoPlay />}
+            {kind === "other" && (
+              <div className="lightbox-file">
+                <p><b>{name}</b></p>
+                <p className="note">This kind of file can&apos;t be previewed here. Download it to open it.</p>
+                <a className="btn" href={downloadUrl}>Download</a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

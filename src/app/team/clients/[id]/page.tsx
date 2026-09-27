@@ -14,6 +14,7 @@ import { driveFileUrl } from "@/lib/drive";
 import { MessageComposer } from "@/app/portal/MessageComposer";
 import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
 import { ScrollToLatest } from "@/app/portal/ScrollToLatest";
+import { FilePreview } from "@/app/portal/FilePreview";
 import { TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
@@ -313,7 +314,7 @@ export default async function ClientDetail({
               {uploadRows.map((u) => (
                 <li key={u.id}>
                   <span className="pill info">{u.kind === "task" ? "Task" : u.kind === "branding" ? "Branding" : "Content"}</span>
-                  {uploadLinks.get(u.storage_path) ? <a href={uploadLinks.get(u.storage_path)!} target="_blank" rel="noreferrer">{u.file_name}</a> : u.file_name}
+                  {uploadLinks.get(u.storage_path) ? <FilePreview url={uploadLinks.get(u.storage_path)!} name={u.file_name} /> : u.file_name}
                   <span className="r">
                     {u.drive_file_id ? (
                       <a className="pill ok" href={driveFileUrl(u.drive_file_id)} target="_blank" rel="noreferrer">In Drive</a>

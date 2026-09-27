@@ -232,9 +232,17 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .attach-list li span { color: var(--ink-2); font-size: .78rem; }
 .attach-list li.failed { background: var(--crit-soft); color: var(--crit); }
 .attach-list li button { border: 0; background: transparent; font-size: 1rem; line-height: 1; color: var(--ink-2); }
-.bubble .files-in-msg { display: grid; gap: 6px; margin-top: 8px; }
-.bubble .files-in-msg a { color: inherit; font-weight: 600; font-size: .88rem; }
-.bubble .files-in-msg img { max-width: 240px; max-height: 180px; border-radius: 10px; display: block; }
+.bubble .files-in-msg { display: grid; gap: 6px; margin-top: 8px; justify-items: start; }
+.file-link { border: 0; background: none; padding: 0; color: inherit; font: inherit; font-weight: 600; font-size: .9rem; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
+.file-link img { max-width: 240px; max-height: 180px; border-radius: 10px; display: block; cursor: zoom-in; }
+.lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(12, 18, 17, .82); display: grid; grid-template-rows: auto 1fr; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
+.lightbox-bar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.lightbox-name { margin-right: auto; color: #F6F0EA; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lightbox-bar .btn.line { color: #F6F0EA; }
+.lightbox-body { display: grid; place-items: center; min-height: 0; }
+.lightbox-body img, .lightbox-body video { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+.lightbox-body iframe { width: min(1000px, 100%); height: 100%; border: 0; border-radius: 10px; background: #fff; }
+.lightbox-file { background: var(--surface); border-radius: 18px; padding: 28px; display: grid; gap: 12px; justify-items: start; max-width: 420px; }
 .connect { border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
 .connect-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .later { display: inline-flex; gap: 6px; align-items: center; font-size: .88rem; color: var(--ink-2); }
