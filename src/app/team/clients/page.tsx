@@ -8,7 +8,9 @@ import { RatingPill } from "./[id]/HealthTab";
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ archived?: string; done?: string }> }) {
   const { agency, member } = await requireTeam();
   const sp = await searchParams;
-  const showArchived = sp.archived === "1";
+  const isAdmin = member.role === "admin";
+  // Only admins can see archived clients.
+  const showArchived = isAdmin && sp.archived === "1";
   const supabase = await createClient();
   const [{ data: clients }, { data: steps }, { data: status }, { data: cals }, { data: members }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, archived_at, logo_path").order("name"),
@@ -41,7 +43,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       </div>
       <div className="tabs" role="tablist" aria-label="Which clients">
         <Link href="/team/clients" role="tab" aria-selected={!showArchived}>Active</Link>
-        <Link href="/team/clients?archived=1" role="tab" aria-selected={showArchived}>Archived{archivedCount ? ` (${archivedCount})` : ""}</Link>
+        {isAdmin && <Link href="/team/clients?archived=1" role="tab" aria-selected={showArchived}>Archived{archivedCount ? ` (${archivedCount})` : ""}</Link>}
       </div>
       {sp.done === "archived" && <p className="flash">Client archived. Their portal is closed, and everything is saved here if you ever need it.</p>}
       {showArchived && <p className="note">Archived clients keep all their files, messages and history. Their portal is closed. Open one to restore it.</p>}

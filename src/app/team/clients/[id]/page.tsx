@@ -5,7 +5,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { addToClient, archiveClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { ClientInfoForm, ClientLogoForm, InviteToClient, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -31,6 +31,7 @@ export default async function ClientDetail({
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
   if (!client) notFound();
+  if (client.archived_at && member.role !== "admin") notFound();
 
   const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
@@ -340,6 +341,7 @@ export default async function ClientDetail({
               <button className="btn sm">Add to this account</button>
             </form>
           )}
+          {isAdmin && <InviteToClient clientId={client.id} clientName={client.name} />}
         </div>
 
         {isAdmin && (

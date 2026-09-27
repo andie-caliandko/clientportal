@@ -546,3 +546,37 @@ export function ClientLogoForm({ agencyId, clientId, logoUrl }: { agencyId: stri
     </div>
   );
 }
+
+/** Invite a brand-new teammate straight onto one client's team. */
+export function InviteToClient({ clientId, clientName }: { clientId: string; clientName: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(inviteTeammate, {});
+  if (!open) {
+    return (
+      <div style={{ display: "grid", gap: 8 }}>
+        {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+        <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Invite someone new to this account</button></div>
+      </div>
+    );
+  }
+  return (
+    <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
+      <input type="hidden" name="clients" value={clientId} />
+      <div className="row">
+        <div className="field"><label htmlFor={`ic-name-${clientId}`}>Name</label><input className="input" id={`ic-name-${clientId}`} name="name" required /></div>
+        <div className="field"><label htmlFor={`ic-email-${clientId}`}>Email</label><input className="input" id={`ic-email-${clientId}`} name="email" type="email" required /></div>
+        <div className="field"><label htmlFor={`ic-role-${clientId}`}>Role</label>
+          <select className="sel" id={`ic-role-${clientId}`} name="role" defaultValue="account_manager">
+            <option value="account_manager">Account manager</option>
+            <option value="creator">Creator</option>
+          </select></div>
+      </div>
+      {state.error && <p className="error">{state.error}</p>}
+      {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+      <div className="row">
+        <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
+        <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
+      </div>
+    </form>
+  );
+}
