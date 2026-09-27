@@ -494,7 +494,9 @@ td a:hover { text-decoration: underline; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sched-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .sched { width: 100%; min-width: 900px; border-collapse: collapse; table-layout: fixed; font-size: .85rem; }
-.sched th, .sched td { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 8px; vertical-align: top; text-align: left; }
+.sched th, .sched td { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 8px; vertical-align: top; text-align: left; white-space: normal; overflow: hidden; }
+.sched tbody th { font-family: inherit; font-size: inherit; letter-spacing: normal; text-transform: none; color: var(--ink); background: var(--surface); font-weight: 400; }
+.sched td { min-width: 0; }
 .sched thead th { font-weight: 600; font-size: .8rem; background: var(--surface-2, var(--surface)); }
 .sched thead th small { display: block; font-family: var(--label); text-transform: uppercase; letter-spacing: .1em; font-size: .62rem; opacity: .7; }
 .sched th:first-child { width: 190px; border-left: 0; }

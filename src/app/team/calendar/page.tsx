@@ -68,6 +68,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const onDay = (e: CalEvent, d: string) =>
     e.allDay ? e.start <= d && d < e.end : new Date(e.start).getTime() < dayStart(addDays(d, 1)) && new Date(e.end).getTime() > dayStart(d);
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).replace(":00", "");
+  // Timed events that start or end on another day read "All day", "Until 7 AM" or "From 7 AM".
+  const label = (e: CalEvent, d: string) => {
+    if (e.allDay) return "All day";
+    const s0 = new Date(e.start).getTime(), e0 = new Date(e.end).getTime();
+    const startsBefore = s0 < dayStart(d), endsAfter = e0 > dayStart(addDays(d, 1));
+    if (startsBefore && endsAfter) return "All day";
+    if (startsBefore) return `Until ${time(e.end)}`;
+    if (endsAfter) return `From ${time(e.start)}`;
+    return `${time(e.start)}–${time(e.end)}`;
+  };
   const dayLabel = (d: string, opts: Intl.DateTimeFormatOptions) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", ...opts });
   const outRange = (e: CalEvent) => {
     const first = e.allDay ? e.start : new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(e.start));
@@ -156,7 +166,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                           <div key={e.id} className={`ev ${e.ooo ? "ooo" : ""}`}>
                             {e.ooo ? <b>Out of office</b> : (
                               <>
-                                <span className="ev-time">{e.allDay ? "All day" : `${time(e.start)}–${time(e.end)}`}</span>
+                                <span className="ev-time">{label(e, d)}</span>
                                 <span className="ev-title">{e.title}</span>
                               </>
                             )}
