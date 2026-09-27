@@ -72,6 +72,7 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
           <select className="sel" id="t-who" name="assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
             {contacts.length > 0 && (
               <optgroup label={clientName}>
+                {contacts.length > 1 && <option value="client:all">Everyone at {clientName} (client)</option>}
                 {contacts.map((c) => <option key={c.user_id} value={`client:${c.user_id}`}>{c.display_name} (client)</option>)}
               </optgroup>
             )}
@@ -378,6 +379,7 @@ export function EditTaskForm({ task, clients, people, readOnly }: {
             <select className="sel" id="e-who" name="assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
               {contacts.length > 0 && (
                 <optgroup label={clientName}>
+                  {contacts.length > 1 && <option value="client:all">Everyone at {clientName} (client)</option>}
                   {contacts.map((c) => <option key={c.user_id} value={`client:${c.user_id}`}>{c.display_name} (client)</option>)}
                 </optgroup>
               )}

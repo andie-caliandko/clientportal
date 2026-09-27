@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
 import { emailClient, sendEmail } from "@/lib/notify";
 import { notifyClient, notifyUser } from "@/lib/notifications";
+import { afterMessageFiles, readAttachments } from "@/lib/messageFiles";
 import { weekStart } from "@/lib/health";
 import { driveFolderId, isUrl, slackChannelId } from "@/lib/links";
 import { monthKey } from "@/lib/rhythm";
@@ -34,6 +35,25 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
   const due = String(form.get("due") ?? "");
   const dueAt = due ? dateAtHour(due, 17, v.agency.timezone) : null;
   const supabase = await createClient();
+
+  // Everyone on the client's portal: a Waiting on client task every contact sees.
+  if (kind === "client" && assignee === "all") {
+    if (!clientId) return { error: "Pick the client this task is for." };
+    const { error } = await supabase.from("tasks").insert({
+      agency_id: v.agency.id, client_id: clientId, title, note, due_at: dueAt?.toISOString() ?? null,
+      status: "waiting", source: "manual", created_by: v.userId,
+    });
+    if (error) return { error: "That task couldn't be saved." };
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
+    await emailClient(
+      clientId,
+      `${v.member.display_name} added a task for you`,
+      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(dueAt, v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+    );
+    revalidatePath("/team");
+    revalidatePath(`/team/clients/${clientId}`);
+    return { ok: "Sent to everyone on their portal. They'll each get an email." };
+  }
 
   if (kind === "client") {
     if (!clientId) return { error: "Pick the client this task is for." };
@@ -171,11 +191,16 @@ export async function replyAsTeam(form: FormData) {
   const v = await requireEditor();
   const clientId = String(form.get("client"));
   const body = String(form.get("body") ?? "").trim();
-  if (!body) return;
+  const attachments = readAttachments(form, v.agency.id, clientId);
+  if (!body && !attachments.length) return;
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("id, slack_channel_id").eq("id", clientId).single();
   if (!client) return;
-  const ts = await postToSlack(client.slack_channel_id, `*${v.member.display_name}* (replied from the team workspace):\n${body}`);
+  const ts = body ? await postToSlack(client.slack_channel_id, `*${v.member.display_name}* (replied from the team workspace):\n${body}`) : null;
+  afterMessageFiles({
+    agencyId: v.agency.id, clientId: client.id, userId: v.userId, attachments,
+    slackChannel: client.slack_channel_id, slackComment: body ? undefined : `*${v.member.display_name}* shared a file with the client`,
+  });
   await supabase.from("messages").insert({
     agency_id: v.agency.id,
     client_id: client.id,
@@ -183,11 +208,13 @@ export async function replyAsTeam(form: FormData) {
     author_name: v.member.display_name,
     author_kind: "team",
     body,
+    attachments,
     source: "portal",
     slack_ts: ts,
   });
-  await emailClient(client.id, `New message from ${v.member.display_name}`, body);
-  await notifyClient(client.id, { kind: "message", title: `New message from ${v.member.display_name.split(" ")[0]}`, body: body.slice(0, 160), link: "/portal/messages" });
+  const summary = body || `${v.member.display_name.split(" ")[0]} sent ${attachments.map((a) => a.name).join(", ")}`;
+  await emailClient(client.id, `New message from ${v.member.display_name}`, summary);
+  await notifyClient(client.id, { kind: "message", title: `New message from ${v.member.display_name.split(" ")[0]}`, body: summary.slice(0, 160), link: "/portal/messages" });
   revalidatePath(`/team/clients/${client.id}`);
 }
 
@@ -495,10 +522,13 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
   const id = String(form.get("id"));
   const title = String(form.get("title") ?? "").trim();
   if (!title) return { error: "The task needs a name." };
-  const status = String(form.get("status"));
-  if (!["todo", "doing", "waiting", "done"].includes(status)) return { error: "Pick a status." };
+  const statusIn = String(form.get("status"));
+  if (!["todo", "doing", "waiting", "done"].includes(statusIn)) return { error: "Pick a status." };
   const clientId = String(form.get("client") ?? "") || null;
   const [kind, assignee] = String(form.get("assignee") ?? "").split(":");
+  // "Everyone at the client" is a Waiting on client task every contact sees.
+  const everyone = kind === "client" && assignee === "all";
+  const status = everyone && statusIn !== "done" ? "waiting" : statusIn;
   const due = String(form.get("due") ?? "");
   const note = String(form.get("note") ?? "").trim() || null;
 
@@ -507,7 +537,8 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
   if (!before) return { error: "That task wasn't found." };
 
   let contact: { display_name: string; email: string } | null = null;
-  if (kind === "client") {
+  if (everyone && !clientId) return { error: "Pick the client this task is for." };
+  if (kind === "client" && !everyone) {
     if (!clientId) return { error: "Pick the client this task is for." };
     const { data } = await supabase
       .from("client_users")
@@ -528,7 +559,7 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
       note,
       client_id: clientId,
       assignee_id: kind === "team" ? assignee : null,
-      client_assignee_id: kind === "client" ? assignee : null,
+      client_assignee_id: kind === "client" && !everyone ? assignee : null,
       due_at: dueAt,
       // A new due date or a new person starts the reminder schedule over.
       reminders_sent: dueAt !== before.due_at || assignee !== before.client_assignee_id ? 0 : before.reminders_sent,
@@ -542,7 +573,7 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
       kind: "task", title: `${v.member.display_name.split(" ")[0]} assigned you: ${title}`, body: note, link: `/team/tasks/${id}`,
     }, v.userId);
   }
-  if (clientId && status === "waiting" && before.status !== "waiting" && kind === "team") {
+  if (clientId && status === "waiting" && (before.status !== "waiting" || (everyone && before.client_assignee_id)) && (kind === "team" || everyone)) {
     await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
     await emailClient(
       clientId,

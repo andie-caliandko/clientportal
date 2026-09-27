@@ -38,7 +38,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
   const dueDate = task.due_at
     ? new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(task.due_at))
     : "";
-  const assignee = task.client_assignee_id ? `client:${task.client_assignee_id}` : task.assignee_id ? `team:${task.assignee_id}` : `team:${userId}`;
+  const assignee = task.client_assignee_id
+    ? `client:${task.client_assignee_id}`
+    : task.client_id && task.status === "waiting" && !task.assignee_id
+      ? "client:all"
+      : task.assignee_id ? `team:${task.assignee_id}` : `team:${userId}`;
   const created = new Date(task.created_at).toLocaleString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
   return (

@@ -90,8 +90,11 @@ export type Calendar = {
   resolved_at: string | null;
 };
 
+export type Attachment = { name: string; path: string; size?: number; type?: string };
+
 export type Message = {
   id: string;
+  attachments: Attachment[];
   author_id: string | null;
   author_name: string;
   author_kind: "client" | "team";

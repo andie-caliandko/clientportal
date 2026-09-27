@@ -5,7 +5,7 @@ import { createAdminClient } from "./supabase/server";
 // Files clients upload are stored in the portal first, then copied into the
 // client's Google Drive folder (Branding, Content or Task files subfolder).
 
-const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Content", task: "Task files" };
+const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Content", task: "Task files", message: "Messages" };
 const API = "https://www.googleapis.com/drive/v3";
 
 async function findOrCreateFolder(token: string, parentId: string, name: string) {

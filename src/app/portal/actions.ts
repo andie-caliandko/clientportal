@@ -8,6 +8,7 @@ import { clientActivity } from "@/lib/notify";
 import { postToSlack } from "@/lib/slack";
 import { after } from "next/server";
 import { syncUploadsToDrive } from "@/lib/drive";
+import { afterMessageFiles, readAttachments } from "@/lib/messageFiles";
 
 async function markStep(v: { agency: { id: string }; client: { id: string }; userId: string }, kind: string) {
   const supabase = await createClient();
@@ -103,9 +104,14 @@ export async function confirmBooked() {
 export async function sendMessage(form: FormData) {
   const v = await requireClient();
   const body = String(form.get("body") ?? "").trim();
-  if (!body) return;
+  const attachments = readAttachments(form, v.agency.id, v.client.id);
+  if (!body && !attachments.length) return;
   const supabase = await createClient();
-  const slackTs = await postToSlack(v.client.slack_channel_id, `*${v.clientUser.display_name}* (via portal):\n${body}`);
+  const slackTs = body ? await postToSlack(v.client.slack_channel_id, `*${v.clientUser.display_name}* (via portal):\n${body}`) : null;
+  afterMessageFiles({
+    agencyId: v.agency.id, clientId: v.client.id, userId: v.userId, attachments,
+    slackChannel: v.client.slack_channel_id, slackComment: body ? undefined : `*${v.clientUser.display_name}* (via portal) shared a file`,
+  });
   await supabase.from("messages").insert({
     agency_id: v.agency.id,
     client_id: v.client.id,
@@ -113,14 +119,15 @@ export async function sendMessage(form: FormData) {
     author_name: v.clientUser.display_name,
     author_kind: "client",
     body,
+    attachments,
     source: "portal",
     slack_ts: slackTs,
   });
   await clientActivity(v.client.id, {
-    task: `Reply to ${v.clientUser.display_name.split(" ")[0]}: "${body.slice(0, 60)}${body.length > 60 ? "…" : ""}"`,
+    task: `Reply to ${v.clientUser.display_name.split(" ")[0]}: "${(body || `sent ${attachments.length} file${attachments.length > 1 ? "s" : ""}`).slice(0, 60)}${body.length > 60 ? "…" : ""}"`,
     source: "portal",
     subject: `new message from ${v.clientUser.display_name}`,
-    body,
+    body: body || `${v.clientUser.display_name} sent ${attachments.map((a) => a.name).join(", ")}`,
     notify: "message",
   });
   revalidatePath("/portal");

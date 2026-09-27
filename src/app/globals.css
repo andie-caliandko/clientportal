@@ -226,6 +226,15 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .rail-logo img { max-height: 80px; max-width: 100%; object-fit: contain; }
 .client-logo-sm { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; vertical-align: middle; margin-right: 8px; background: var(--surface); }
 .head-logo { height: 56px; width: auto; max-width: 160px; object-fit: contain; }
+.composer { display: grid; gap: 8px; }
+.attach-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.attach-list li { display: inline-flex; gap: 8px; align-items: center; background: var(--surface-2); border-radius: 999px; padding: .3em .5em .3em .9em; font-size: .85rem; }
+.attach-list li span { color: var(--ink-2); font-size: .78rem; }
+.attach-list li.failed { background: var(--crit-soft); color: var(--crit); }
+.attach-list li button { border: 0; background: transparent; font-size: 1rem; line-height: 1; color: var(--ink-2); }
+.bubble .files-in-msg { display: grid; gap: 6px; margin-top: 8px; }
+.bubble .files-in-msg a { color: inherit; font-weight: 600; font-size: .88rem; }
+.bubble .files-in-msg img { max-width: 240px; max-height: 180px; border-radius: 10px; display: block; }
 .connect { border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
 .connect-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .later { display: inline-flex; gap: 6px; align-items: center; font-size: .88rem; color: var(--ink-2); }

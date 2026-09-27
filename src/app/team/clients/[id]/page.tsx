@@ -11,6 +11,8 @@ import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
 import { clientLogoUrl, driveFolderUrl } from "@/lib/links";
 import { driveFileUrl } from "@/lib/drive";
+import { MessageComposer } from "@/app/portal/MessageComposer";
+import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
 import { TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
@@ -52,6 +54,7 @@ export default async function ClientDetail({
     supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
   ]);
   const uploadRows = uploads.data ?? [];
+  const messageFileUrls = await signAttachments(supabase, (messages.data ?? []) as Message[]);
   const uploadLinks = uploadRows.length
     ? new Map(((await supabase.storage.from("uploads").createSignedUrls(uploadRows.map((u) => u.storage_path), 60 * 60)).data ?? []).map((u) => [u.path, u.signedUrl]))
     : new Map<string | null, string>();
@@ -406,17 +409,14 @@ export default async function ClientDetail({
       <div className="panel">
         <h2>Messages</h2>
         <p className="note">These also appear in the client&apos;s Slack channel. Replies in Slack show up in their portal automatically.</p>
-        {canEdit && <form action={replyAsTeam} className="compose">
-          <input type="hidden" name="client" value={client.id} />
-          <label htmlFor="reply" className="sr">Reply</label>
-          <textarea id="reply" name="body" placeholder={`Reply to ${client.name}…`} required />
-          <button className="btn">Send</button>
-        </form>}
+        {canEdit && (
+          <MessageComposer folder={`${agency.id}/${client.id}/messages`} placeholder={`Reply to ${client.name}…`} send={replyAsTeam} hidden={{ client: client.id }} />
+        )}
         <div className="thread" style={{ maxHeight: 420 }}>
           {((messages.data ?? []) as Message[]).map((m) => (
             <div key={m.id} className={`msg ${m.author_kind === "team" ? "me" : ""}`}>
               <span className="av">{m.author_name[0]}</span>
-              <div className="bubble"><small>{m.author_name} · {short(m.created_at)}</small>{m.body}</div>
+              <div className="bubble"><small>{m.author_name} · {short(m.created_at)}</small>{m.body}<MessageFiles files={m.attachments} urls={messageFileUrls} /></div>
             </div>
           ))}
         </div>

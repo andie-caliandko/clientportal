@@ -3,9 +3,10 @@ import { formatDue } from "@/lib/approval";
 import { getClientMeetings, googleStatus } from "@/lib/google";
 import { createClient } from "@/lib/supabase/server";
 import type { Agency, Calendar, Client, ClientUser, Doc, Message, Step } from "@/lib/types";
-import { approveCalendar, confirmBooked } from "./actions";
+import { approveCalendar, confirmBooked, sendMessage } from "./actions";
 import { ClientTasks, type ClientTask } from "./ClientTasks";
-import { Compose } from "./PortalForms";
+import { MessageComposer } from "./MessageComposer";
+import { MessageFiles, signAttachments } from "./MessageFiles";
 
 /** Everything a portal page needs to know about who's looking. */
 export type PortalCtx = {
@@ -300,6 +301,7 @@ export async function TasksSection(ctx: PortalCtx) {
 export async function MessagesSection(ctx: PortalCtx) {
   const supabase = await createClient();
   const { data } = await supabase.from("messages").select("*").eq("client_id", ctx.client.id).order("created_at").limit(300);
+  const fileUrls = await signAttachments(supabase, (data ?? []) as Message[]);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
   return (
     <>
@@ -317,13 +319,18 @@ export async function MessagesSection(ctx: PortalCtx) {
                     {new Date(m.created_at).toLocaleString("en-US", { timeZone: ctx.agency.timezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </small>
                   {m.body}
+                  <MessageFiles files={m.attachments} urls={fileUrls} />
                 </div>
               </div>
             );
           })}
           {!data?.length && <p className="note">Say hello! Your whole team will see it.</p>}
         </div>
-        {ctx.preview ? <p className="note">Clients type their messages here.</p> : <Compose agencyName={short} />}
+        {ctx.preview ? (
+          <p className="note">Clients type their messages and attach files here.</p>
+        ) : (
+          <MessageComposer folder={`${ctx.agency.id}/${ctx.client.id}/messages`} placeholder={`Write to your ${short} team…`} send={sendMessage} />
+        )}
       </section>
     </>
   );

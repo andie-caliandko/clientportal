@@ -37,3 +37,54 @@ export async function slackUserName(userId: string) {
   const p = data.user?.profile;
   return (p?.display_name || p?.real_name || "Your team") as string;
 }
+
+let botUser: string | null | undefined;
+/** The portal app's own Slack user, so we can ignore messages and files we posted ourselves. */
+export async function slackBotUserId() {
+  if (botUser !== undefined) return botUser;
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return (botUser = null);
+  const res = await fetch("https://slack.com/api/auth.test", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  return (botUser = data.ok ? (data.user_id as string) : null);
+}
+
+/**
+ * Shares a file from portal storage into a Slack channel (Slack's current
+ * upload flow: get an upload URL, send the bytes, then complete the upload).
+ * Needs the files:write scope.
+ */
+export async function uploadFileToSlack(channel: string | null, name: string, sourceUrl: string, comment?: string) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token || !channel) return false;
+  const source = await fetch(sourceUrl);
+  if (!source.ok) return false;
+  const bytes = new Uint8Array(await source.arrayBuffer());
+  const start = await fetch("https://slack.com/api/files.getUploadURLExternal", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ filename: name, length: String(bytes.byteLength) }),
+  }).then((r) => r.json());
+  if (!start.ok) {
+    console.error("Slack upload URL failed", start.error);
+    return false;
+  }
+  const put = await fetch(start.upload_url, { method: "POST", body: bytes });
+  if (!put.ok) return false;
+  const done = await fetch("https://slack.com/api/files.completeUploadExternal", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ files: [{ id: start.file_id, title: name }], channel_id: channel, ...(comment ? { initial_comment: comment } : {}) }),
+  }).then((r) => r.json());
+  if (!done.ok) console.error("Slack upload failed", done.error);
+  return !!done.ok;
+}
+
+/** Downloads a file someone shared in Slack. Needs the files:read scope. */
+export async function downloadSlackFile(url: string) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return null;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  return { data: await res.arrayBuffer(), type: res.headers.get("content-type") ?? "application/octet-stream" };
+}
