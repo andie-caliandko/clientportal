@@ -696,3 +696,20 @@ export async function saveNewClientTasks(_: Result, form: FormData): Promise<Res
   revalidatePath("/team/settings");
   return { ok: `Saved ${list.length} tasks. New clients from now on get this list.` };
 }
+
+/** Account managers and admins can set the client's contract link from the onboarding panel. */
+export async function setContractLink(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const clientId = String(form.get("client"));
+  const url = String(form.get("contract") ?? "").trim();
+  if (url && !isUrl(url)) return { error: "Paste the full contract link, starting with https://" };
+  const supabase = await createClient();
+  // RLS limits client edits to admins, so confirm access, then save just this field.
+  const { data: ok } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!ok) return { error: "You don't have access to change this client." };
+  const { error } = await createAdminClient().from("clients").update({ dubsado_project_url: url || null }).eq("id", clientId);
+  if (error) return { error: "The link couldn't be saved." };
+  revalidatePath(`/team/clients/${clientId}`);
+  return { ok: url ? "Saved. The client now sees an Open contract button." : "Removed." };
+}

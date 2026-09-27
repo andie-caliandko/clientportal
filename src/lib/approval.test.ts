@@ -18,8 +18,9 @@ describe("approvalDueAt", () => {
     expect(approvalDueAt(ny("2026-09-25T14:00"), { timeZone: NY })).toEqual(ny("2026-09-29T14:00"));
   });
 
-  it("starts the clock Monday for a link sent on the weekend", () => {
-    expect(approvalDueAt(ny("2026-09-26T09:00"), { timeZone: NY })).toEqual(ny("2026-09-30T00:00"));
+  it("starts the clock Monday at 9 AM for a link sent on the weekend", () => {
+    expect(approvalDueAt(ny("2026-09-26T09:00"), { timeZone: NY })).toEqual(ny("2026-09-30T09:00"));
+    expect(approvalDueAt(ny("2026-09-27T22:30"), { timeZone: NY })).toEqual(ny("2026-09-30T09:00"));
   });
 
   it("keeps wall-clock time across the fall DST change", () => {

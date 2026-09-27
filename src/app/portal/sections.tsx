@@ -57,7 +57,8 @@ async function loadCore(ctx: PortalCtx) {
       .from("tasks")
       .select("id, title, note, due_at, created_by, client_assignee_id")
       .eq("client_id", client.id)
-      .not("client_assignee_id", "is", null)
+      // Assigned to a contact, or the team is waiting on the client (approval reminders excluded: that's the approval card).
+      .or("client_assignee_id.not.is.null,and(status.eq.waiting,source.neq.rella)")
       .neq("status", "done")
       .order("due_at", { ascending: true, nullsFirst: false }),
   ]);
@@ -74,7 +75,9 @@ async function loadCore(ctx: PortalCtx) {
     due: t.due_at ? new Date(t.due_at).toLocaleDateString("en-US", { timeZone: agency.timezone, weekday: "short", month: "short", day: "numeric" }) : null,
     overdue: !!t.due_at && new Date(t.due_at).getTime() < Date.now(),
     from: t.created_by === client.account_manager_id ? amName : agency.brand.shortName ?? agency.name,
-    forName: t.client_assignee_id === ctx.userId && !ctx.preview ? "you" : byId.get(t.client_assignee_id) ?? "your team",
+    forName: !t.client_assignee_id
+      ? client.name
+      : t.client_assignee_id === ctx.userId && !ctx.preview ? "you" : byId.get(t.client_assignee_id) ?? client.name,
   }));
   return {
     supabase,

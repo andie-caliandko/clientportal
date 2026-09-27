@@ -8,6 +8,7 @@ import {
   deleteClient,
   editCalendar,
   saveNewClientTasks,
+  setContractLink,
   updateTeammate,
   inviteTeammate,
   sendCalendar,
@@ -485,5 +486,22 @@ export function CopyButton({ text, label, done = "Copied" }: { text: string; lab
     }}>
       {copied ? done : label}
     </button>
+  );
+}
+
+export function ContractLinkForm({ clientId, url }: { clientId: string; url: string | null }) {
+  const [state, action, pending] = useActionState(setContractLink, {});
+  return (
+    <form action={action} className="row">
+      <input type="hidden" name="client" value={clientId} />
+      <div className="field">
+        <label htmlFor="contract-link">Contract link</label>
+        <input className="input" id="contract-link" name="contract" defaultValue={url ?? ""} placeholder="Paste the contract link from Dubsado" />
+      </div>
+      <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+      {state.error && <p className="error" style={{ flexBasis: "100%" }}>{state.error}</p>}
+      {state.ok && <p className="flash" style={{ flexBasis: "100%" }}>{state.ok}</p>}
+      {!state.ok && !state.error && <p className="note" style={{ flexBasis: "100%" }}>Shows as the client&apos;s Open contract button on their first step.</p>}
+    </form>
   );
 }
