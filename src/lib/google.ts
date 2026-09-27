@@ -149,8 +149,6 @@ export const getDueDates = (agencyId: string, fromIso: string, toIso: string) =>
     { revalidate: 900, tags: [`due-dates-${agencyId}`] },
   )();
 
-export type Meeting = { id: string; title: string; start: string; end: string; allDay: boolean; meetLink: string | null };
-
 // ---------------------------------------------------------------------------
 // Each teammate's own calendar
 // ---------------------------------------------------------------------------
@@ -319,37 +317,22 @@ export async function createOutOfOffice(userId: string, input: { start: string; 
 }
 
 /**
- * A client's calls: events on their team's calendars that include one of the
- * client's contacts. Cached for 5 minutes.
+ * One event on a teammate's calendar, as it is in Google right now. Null when
+ * it was cancelled or deleted; undefined when we couldn't check.
  */
-export const getClientMeetings = (agencyId: string, hostIds: string[], emails: string[]) =>
-  unstable_cache(
-    async (): Promise<Meeting[]> => {
-      const wanted = new Set(emails.map((e) => e.toLowerCase()));
-      if (!wanted.size) return [];
-      const now = Date.now();
-      const from = new Date(now - 90 * 86_400_000).toISOString();
-      const to = new Date(now + 120 * 86_400_000).toISOString();
-      const seen = new Map<string, Meeting>();
-      for (const host of [...new Set(hostIds)]) {
-        try {
-          const auth = await memberAuth(host);
-          if (!auth) continue;
-          const params = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
-          const data = await gcal<{ items?: GEvent[] }>(auth.token, `/calendars/primary/events?${params}`);
-          for (const e of data.items ?? []) {
-            if (e.status === "cancelled" || !(e.attendees ?? []).some((a) => a.email && wanted.has(a.email.toLowerCase()))) continue;
-            const ev = toCalEvent(e);
-            // The same call can be on several teammates' calendars; show it once.
-            const key = `${ev.start}|${ev.title}`;
-            if (!seen.has(key)) seen.set(key, { id: ev.id, title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay, meetLink: ev.meetLink });
-          }
-        } catch (err) {
-          console.error("Couldn't load a teammate's calendar", err);
-        }
-      }
-      return [...seen.values()].sort((a, b) => a.start.localeCompare(b.start));
-    },
-    ["client-meetings-v2", agencyId, ...hostIds, ...emails],
-    { revalidate: 300, tags: [`meetings-${agencyId}`] },
-  )();
+export async function memberEvent(userId: string, eventId: string): Promise<CalEvent | null | undefined> {
+  try {
+    const auth = await memberAuth(userId);
+    if (!auth) return undefined;
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+      cache: "no-store",
+    });
+    if (res.status === 404 || res.status === 410) return null;
+    if (!res.ok) return undefined;
+    const e = (await res.json()) as GEvent;
+    return e.status === "cancelled" ? null : toCalEvent(e);
+  } catch {
+    return undefined;
+  }
+}

@@ -2,8 +2,7 @@ import { Avatar } from "@/app/Avatar";
 import { cache } from "react";
 import Link from "next/link";
 import { formatDue } from "@/lib/approval";
-import { getClientMeetings } from "@/lib/google";
-import { requestSlots, type CallRequest } from "@/lib/calls";
+import { bookedMeetings, requestSlots, type CallRequest } from "@/lib/calls";
 import { SlotPicker } from "./SlotPicker";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Agency, Calendar, Client, ClientUser, Doc, Message, Step } from "@/lib/types";
@@ -517,10 +516,8 @@ export async function MeetingsSection(ctx: PortalCtx) {
     Promise.all(d.openCalls.map((c) => requestSlots(c, ctx.agency.timezone).catch(() => [] as string[]))),
   ]);
   const hostName = new Map((hosts ?? []).map((h) => [h.user_id, h.display_name]));
-  const meetings = await getClientMeetings(ctx.agency.id, [...d.teamIds, ...hostIds], d.contacts.map((c) => c.email));
-  const now = Date.now();
-  const upcoming = meetings.filter((m) => new Date(m.end).getTime() >= now);
-  const past = meetings.filter((m) => new Date(m.end).getTime() < now).reverse().slice(0, 10);
+  // Only calls they booked here; other events with their email on it stay private.
+  const { upcoming, past } = await bookedMeetings(ctx.client.id);
   const tz = ctx.agency.timezone;
   const day = (iso: string) => {
     const dt = new Date(iso);
@@ -530,9 +527,9 @@ export async function MeetingsSection(ctx: PortalCtx) {
       mo: dt.toLocaleDateString("en-US", { timeZone: tz, month: "short" }),
     };
   };
-  const time = (m: (typeof meetings)[number]) =>
-    m.allDay ? "All day" : `${new Date(m.start).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })} – ${new Date(m.end).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}`;
-  const row = (m: (typeof meetings)[number], future: boolean) => {
+  const time = (m: (typeof upcoming)[number]) =>
+    `${new Date(m.start).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })} – ${new Date(m.end).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}`;
+  const row = (m: (typeof upcoming)[number], future: boolean) => {
     const x = day(m.start);
     return (
       <li key={m.id} className="meet">
