@@ -84,12 +84,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       <div className="top">
         <div>
           <p className="eyebrow">{isAdmin ? "Everyone's week" : "Your week"} · from Google Calendar</p>
-          <h1 style={{ marginTop: 6 }}>Schedule</h1>
+          <h1 style={{ marginTop: 6 }}>Calendar</h1>
         </div>
         <div className="row" style={{ alignItems: "center" }}>
-          <Link className="btn sm line" href={`/team/schedule?week=${addDays(monday, -7)}`} aria-label="Previous week">←</Link>
-          <Link className="btn sm line" href="/team/schedule">This week</Link>
-          <Link className="btn sm line" href={`/team/schedule?week=${addDays(monday, 7)}`} aria-label="Next week">→</Link>
+          <Link className="btn sm line" href={`/team/calendar?week=${addDays(monday, -7)}`} aria-label="Previous week">←</Link>
+          <Link className="btn sm line" href="/team/calendar">This week</Link>
+          <Link className="btn sm line" href={`/team/calendar?week=${addDays(monday, 7)}`} aria-label="Next week">→</Link>
         </div>
       </div>
       {google && GOOGLE_MESSAGES[google] && <p className={google === "connected" ? "flash" : "readonly"}>{GOOGLE_MESSAGES[google]}</p>}

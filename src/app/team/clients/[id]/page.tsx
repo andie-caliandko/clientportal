@@ -1,7 +1,7 @@
 import { connectedMembers } from "@/lib/google";
 import type { CallRequest } from "@/lib/calls";
-import { CallRequestForm } from "../../schedule/CallRequestForm";
-import { cancelCallRequest } from "../../schedule/actions";
+import { CallRequestForm } from "../../calendar/CallRequestForm";
+import { cancelCallRequest } from "../../calendar/actions";
 import { memberColors } from "@/lib/memberColors";
 import { Avatar } from "@/app/Avatar";
 import Link from "next/link";

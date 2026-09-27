@@ -18,7 +18,7 @@ const minutes = (t: string) => {
 };
 const nextDay = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-/** A teammate adds something to their own Google Calendar from the Schedule page. */
+/** A teammate adds something to their own Google Calendar from the Calendar page. */
 export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
   const title = String(form.get("title") ?? "").trim();
@@ -41,7 +41,7 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
     console.error("Adding an event failed", err);
     return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
   }
-  revalidatePath("/team/schedule");
+  revalidatePath("/team/calendar");
   return { ok: "Added to your Google Calendar." };
 }
 
@@ -65,7 +65,7 @@ export async function addMyOutOfOffice(_: Result, form: FormData): Promise<Resul
     console.error("Adding out of office failed", err);
     return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
   }
-  revalidatePath("/team/schedule");
+  revalidatePath("/team/calendar");
   return { ok: "You're marked out of office. Google will decline new meetings for those days." };
 }
 
@@ -83,7 +83,7 @@ export async function saveBookingHours(_: Result, form: FormData): Promise<Resul
     .eq("user_id", v.userId)
     .eq("agency_id", v.agency.id);
   if (error) return { error: "Your hours couldn't be saved." };
-  revalidatePath("/team/schedule");
+  revalidatePath("/team/calendar");
   return { ok: "Saved. Clients only see open times inside these hours." };
 }
 
@@ -91,7 +91,7 @@ export async function disconnectMyGoogle() {
   const v = await requireTeam();
   await createAdminClient().from("member_google").delete().eq("user_id", v.userId);
   revalidateTag(`meetings-${v.agency.id}`);
-  revalidatePath("/team/schedule");
+  revalidatePath("/team/calendar");
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ export async function sendCallRequest(_: Result, form: FormData): Promise<Result
     admin.from("clients").select("name").eq("id", clientId).maybeSingle(),
   ]);
   if (!host || !client) return { error: "Pick who's hosting the call." };
-  if (!linked) return { error: `${host.display_name.split(" ")[0]} needs to connect their Google Calendar on the Schedule page first.` };
+  if (!linked) return { error: `${host.display_name.split(" ")[0]} needs to connect their Google Calendar on the Calendar page first.` };
 
   const { error } = await supabase.from("call_requests").insert({
     agency_id: v.agency.id, client_id: clientId, host_id: hostId, title, note,

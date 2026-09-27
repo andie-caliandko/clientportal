@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const purpose = state?.startsWith("member.") ? "member" : "agency";
   const done = (status: string) => {
-    const res = NextResponse.redirect(new URL(`${purpose === "member" ? "/team/schedule" : "/team/settings"}?google=${status}`, request.url));
+    const res = NextResponse.redirect(new URL(`${purpose === "member" ? "/team/calendar" : "/team/settings"}?google=${status}`, request.url));
     res.cookies.delete("google_oauth_state");
     return res;
   };

@@ -54,7 +54,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="note" style={{ maxWidth: "64ch" }}>
             Connect the agency&apos;s Google account and choose the calendar that holds your monthly due dates. Those
             dates show above Tasks every week, and client uploads are filed in Google Drive. This also connects your own
-            calendar for the Schedule page. Each teammate connects their own calendar on the Schedule page.
+            calendar for the Calendar page. Each teammate connects their own calendar on the Calendar page.
           </p>
           {!googleConfigured() && <p className="readonly">Waiting on server setup: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.</p>}
           {google.connected ? (
