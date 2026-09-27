@@ -60,23 +60,6 @@ export function RhythmPanel({ rhythm, current, ranges, checks, canEdit, dueDates
           ))}
         </div>
       </div>
-      {calendarName && (
-        <div className="due-strip" aria-label="Coming up">
-          <p className="eyebrow">Coming up · from {calendarName}</p>
-          {upcoming.length ? (
-            <ul>
-              {upcoming.map((d) => (
-                <li key={d.id} className={d.daysAway <= 3 ? "soon" : ""}>
-                  <b>{d.title}</b>
-                  <span>{d.label} · {when(d.daysAway)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="note">Nothing due in the next few weeks.</p>
-          )}
-        </div>
-      )}
       <div className="rh-this">
         <p className="eyebrow">{week === current ? "This week" : `Week ${week}`} · {ranges[week]}</p>
       <p className="note">Your checklist. Check things off as you go; it&apos;s just for you{teamProgress ? ", and you can see everyone's progress below" : ", and admins can see your progress"}.</p>
@@ -105,6 +88,23 @@ export function RhythmPanel({ rhythm, current, ranges, checks, canEdit, dueDates
         })}
       </ul>
       </div>
+      {calendarName && (
+        <div className="due-strip" aria-label="Coming up">
+          <p className="eyebrow">Coming up · from {calendarName}</p>
+          {upcoming.length ? (
+            <ul>
+              {upcoming.map((d) => (
+                <li key={d.id} className={d.daysAway <= 3 ? "soon" : ""}>
+                  <b>{d.title}</b>
+                  <span>{d.label} · {when(d.daysAway)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="note">Nothing due in the next few weeks.</p>
+          )}
+        </div>
+      )}
       {teamProgress && teamProgress.length > 0 && (
         <div className="team-progress">
           <p className="eyebrow">Team progress · week {current}</p>
