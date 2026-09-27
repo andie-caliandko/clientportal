@@ -89,11 +89,12 @@ export const getPublicAgency = cache(async (): Promise<Pick<Agency, "name" | "br
     .eq("portal_domain", host)
     .maybeSingle();
   if (byDomain) return byDomain;
-  const { data } = await admin
+  const { data, error } = await admin
     .from("agencies")
     .select("name, brand, slug")
-    .eq("slug", process.env.DEFAULT_AGENCY_SLUG ?? "")
+    .eq("slug", process.env.DEFAULT_AGENCY_SLUG?.trim() ?? "")
     .maybeSingle();
+  if (error) console.error("Couldn't load agency branding:", error.message);
   return data;
 });
 
