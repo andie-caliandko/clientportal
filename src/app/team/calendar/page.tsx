@@ -7,6 +7,8 @@ import { Avatar } from "@/app/Avatar";
 import { ConfirmButton } from "../TeamForms";
 import { disconnectMyGoogle } from "./actions";
 import { AddToSchedule, BookingHours } from "./ScheduleForms";
+import { TogetherWeek, type WeekItem } from "./TogetherWeek";
+import { memberColors } from "@/lib/memberColors";
 
 const DAY = 86_400_000;
 const GOOGLE_MESSAGES: Record<string, string> = {
@@ -22,9 +24,10 @@ const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:
 
 type Person = { user_id: string; display_name: string; title: string | null; role: string; avatar_path: string | null; book_start: number; book_end: number; book_days: number[] };
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ week?: string; google?: string }> }) {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ week?: string; google?: string; view?: string }> }) {
   const { agency, member, userId } = await requireTeam();
-  const { week, google } = await searchParams;
+  const { week, google, view: viewParam } = await searchParams;
+  const view = viewParam === "people" ? "people" : "together";
   const tz = agency.timezone;
   const isAdmin = member.role === "admin";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -86,6 +89,31 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     const f = (d: string) => dayLabel(d, { weekday: "short", month: "short", day: "numeric" });
     return first === last ? f(first) : `${f(first)} – ${f(last)}`;
   };
+  // One grid for everyone: all-day items on top, timed ones placed by the hour.
+  const colors = memberColors(everyone.map((p) => p.user_id));
+  const together: Record<string, WeekItem[]> = Object.fromEntries(days.map((d) => [d, []]));
+  for (const p of people) {
+    for (const e of cal.get(p.user_id)?.week ?? []) {
+      for (const d of days) {
+        if (!onDay(e, d)) continue;
+        const s0 = new Date(e.start).getTime(), e0 = new Date(e.end).getTime();
+        const d0 = dayStart(d), d1 = dayStart(addDays(d, 1));
+        const whole = e.allDay || (s0 <= d0 && e0 >= d1);
+        together[d].push({
+          key: `${p.user_id}-${e.id}-${d}`,
+          title: e.title,
+          who: p.user_id === userId ? "You" : p.display_name.split(" ")[0],
+          color: colors.get(p.user_id) ?? 0,
+          ooo: e.ooo,
+          timeLabel: label(e, d),
+          ...(whole ? {} : { start: (Math.max(s0, d0) - d0) / 60_000, end: (Math.min(e0, d1) - d0) / 60_000 }),
+        });
+      }
+    }
+  }
+  const legend = people.filter((p) => connected.has(p.user_id)).map((p) => ({ name: p.user_id === userId ? "You" : p.display_name, color: colors.get(p.user_id) ?? 0 }));
+  const q = (params: Record<string, string>) => `/team/calendar?${new URLSearchParams({ ...(week ? { week: monday } : {}), ...(view === "people" ? { view } : {}), ...params })}`;
+
   const whosOut = everyone.flatMap((p) => (cal.get(p.user_id)?.out ?? []).map((e) => ({ p, e }))).sort((a, b) => a.e.start.localeCompare(b.e.start));
   const iAmConnected = connected.has(userId);
 
@@ -97,9 +125,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <h1 style={{ marginTop: 6 }}>Calendar</h1>
         </div>
         <div className="row" style={{ alignItems: "center" }}>
-          <Link className="btn sm line" href={`/team/calendar?week=${addDays(monday, -7)}`} aria-label="Previous week">←</Link>
-          <Link className="btn sm line" href="/team/calendar">This week</Link>
-          <Link className="btn sm line" href={`/team/calendar?week=${addDays(monday, 7)}`} aria-label="Next week">→</Link>
+          {isAdmin && (
+            <nav className="view-switch" aria-label="View">
+              <Link href={q({ view: "together" })} aria-current={view === "together" ? "page" : undefined}>Together</Link>
+              <Link href={q({ view: "people" })} aria-current={view === "people" ? "page" : undefined}>By person</Link>
+            </nav>
+          )}
+          <Link className="btn sm line" href={q({ week: addDays(monday, -7) })} aria-label="Previous week">←</Link>
+          <Link className="btn sm line" href={q({ week: today })}>This week</Link>
+          <Link className="btn sm line" href={q({ week: addDays(monday, 7) })} aria-label="Next week">→</Link>
         </div>
       </div>
       {google && GOOGLE_MESSAGES[google] && <p className={google === "connected" ? "flash" : "readonly"}>{GOOGLE_MESSAGES[google]}</p>}
@@ -131,6 +165,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       {iAmConnected && <AddToSchedule today={today} />}
 
+      {view === "together" ? (
+        <TogetherWeek
+          days={days.map((d) => ({ date: d, weekday: dayLabel(d, { weekday: "short" }), label: dayLabel(d, { month: "short", day: "numeric" }) }))}
+          today={today}
+          items={together}
+          legend={legend}
+        />
+      ) : (
       <div className="sched-wrap">
         <table className="sched">
           <thead>
@@ -181,6 +223,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           </tbody>
         </table>
       </div>
+      )}
 
       {iAmConnected && (
         <div className="cgrid">
