@@ -186,6 +186,10 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .task-link { color: inherit; text-decoration: none; font-weight: 600; font-size: .95rem; line-height: 1.35; }
 .task-link::after { content: ""; position: absolute; inset: 0; border-radius: 14px; }
 .task-actions { position: relative; z-index: 1; }
+.teammate { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr auto; gap: 10px; align-items: end; padding: 14px 0; border-top: 1px solid var(--line); }
+.teammate:first-of-type { border-top: 0; }
+.task-row { display: grid; grid-template-columns: 80px 1fr 200px auto; gap: 10px; align-items: end; }
+@media (max-width: 780px) { .teammate, .task-row { grid-template-columns: 1fr; } }
 .connect { border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
 .connect-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .later { display: inline-flex; gap: 6px; align-items: center; font-size: .88rem; color: var(--ink-2); }

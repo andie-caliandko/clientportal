@@ -231,6 +231,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (missing.length) return { error: `Almost there: ${missing.join(", ")}, or tick "Set up later" for it.` };
 
   const website = get("website");
+  const extraTeam = form.getAll("team").map(String).filter((id) => id && id !== am);
   const slug = name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const supabase = await createClient();
   const { data: client, error } = await supabase
@@ -251,6 +252,9 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     .select("id")
     .single();
   if (error || !client) return { error: "That client couldn't be created. Is there already a client with that name?" };
+  if (extraTeam.length) {
+    await supabase.from("client_team").insert(extraTeam.map((user_id) => ({ client_id: client.id, user_id })));
+  }
 
   // The agency's new-client checklist, plus a task for anything set up later.
   const today = new Date();
@@ -335,14 +339,33 @@ export async function inviteTeammate(_: Result, form: FormData): Promise<Result>
   return { ok: `Invite sent to ${name}.` };
 }
 
-export async function changeRole(form: FormData) {
-  const v = await requireAdmin();
+/** Change a teammate's name, job title or role. Admins can edit anyone, including themselves. */
+export async function updateTeammate(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role !== "admin") return { error: "Only admins can change roles." };
   const userId = String(form.get("user"));
   const role = String(form.get("role")) as (typeof ROLES)[number];
-  if (userId === v.userId || !ROLES.includes(role)) return;
+  const name = String(form.get("name") ?? "").trim();
+  const title = String(form.get("title") ?? "").trim() || null;
+  if (!ROLES.includes(role)) return { error: "Pick a role." };
+  if (!name) return { error: "Add their name." };
+
   const supabase = await createClient();
-  await supabase.from("agency_members").update({ role }).eq("agency_id", v.agency.id).eq("user_id", userId);
-  revalidatePath("/team/team");
+  if (role !== "admin") {
+    // Never leave the agency without an admin.
+    const { data: admins } = await supabase.from("agency_members").select("user_id").eq("agency_id", v.agency.id).eq("role", "admin");
+    if ((admins ?? []).every((a) => a.user_id === userId)) {
+      return { error: "There has to be at least one admin. Make someone else an admin first." };
+    }
+  }
+  const { error } = await supabase
+    .from("agency_members")
+    .update({ role, display_name: name, title })
+    .eq("agency_id", v.agency.id)
+    .eq("user_id", userId);
+  if (error) return { error: "That change couldn't be saved." };
+  revalidatePath("/team", "layout");
+  return { ok: "Saved." };
 }
 
 export async function removeTeammate(form: FormData) {
@@ -654,4 +677,21 @@ export async function saveScorecard(_: Result, form: FormData): Promise<Result> 
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/clients");
   return { ok: "Scorecard saved." };
+}
+
+export async function saveNewClientTasks(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role !== "admin") return { error: "Only admins can change this list." };
+  const titles = form.getAll("title").map((t) => String(t).trim());
+  const days = form.getAll("days").map((d) => Math.max(0, Math.min(365, Math.round(Number(d) || 0))));
+  const assignees = form.getAll("assignee").map(String);
+  const list = titles
+    .map((title, i) => ({ title, days: days[i] ?? 0, assignee: assignees[i] === "me" ? "me" : "account_manager" }))
+    .filter((t) => t.title)
+    .sort((a, b) => a.days - b.days);
+  const supabase = await createClient();
+  const { error } = await supabase.from("agencies").update({ new_client_tasks: list }).eq("id", v.agency.id);
+  if (error) return { error: "The list couldn't be saved." };
+  revalidatePath("/team/settings");
+  return { ok: `Saved ${list.length} tasks. New clients from now on get this list.` };
 }

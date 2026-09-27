@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { ROLE_LABEL, type Role } from "@/lib/types";
-import { changeRole, removeTeammate } from "../actions";
-import { AutoSubmitSelect, ConfirmButton, InviteTeammateForm } from "../TeamForms";
+import { removeTeammate } from "../actions";
+import { ConfirmButton, InviteTeammateForm, TeammateRow } from "../TeamForms";
 
 export default async function TeamPage() {
   const { agency, member: me } = await requireTeam();
@@ -43,40 +42,27 @@ export default async function TeamPage() {
 
       <InviteTeammateForm clients={clients ?? []} />
 
-      <div className="tablewrap">
-        <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Client portals</th><th /></tr></thead>
-          <tbody>
-            {(members ?? []).map((m) => {
-              const self = m.user_id === me.user_id;
-              return (
-                <tr key={m.user_id}>
-                  <td><b>{m.display_name}</b><br /><span className="note">{m.title ?? m.email}</span></td>
-                  <td>
-                    {self ? (
-                      <span className="note">{ROLE_LABEL[m.role as Role]} (you)</span>
-                    ) : (
-                      <form action={changeRole}>
-                        <input type="hidden" name="user" value={m.user_id} />
-                        <AutoSubmitSelect name="role" defaultValue={m.role} label={`Role for ${m.display_name}`}
-                          options={Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }))} />
-                      </form>
-                    )}
-                  </td>
-                  <td>{m.role === "admin" ? "All clients" : `${count.get(m.user_id) ?? 0} client${count.get(m.user_id) === 1 ? "" : "s"}`}</td>
-                  <td>
-                    {!self && (
-                      <form action={removeTeammate}>
-                        <input type="hidden" name="user" value={m.user_id} />
-                        <ConfirmButton label="Remove" confirmLabel={`Remove ${m.display_name.split(" ")[0]}?`} />
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="panel">
+        <h2>Your team</h2>
+        {(members ?? []).map((m) => {
+          const self = m.user_id === me.user_id;
+          return (
+            <div key={m.user_id} style={{ display: "grid", gap: 6 }}>
+              <TeammateRow member={m} isMe={self} />
+              <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+                <span className="note">
+                  {m.email} · {m.role === "admin" ? "All clients" : `${count.get(m.user_id) ?? 0} client${count.get(m.user_id) === 1 ? "" : "s"}`}
+                </span>
+                {!self && (
+                  <form action={removeTeammate}>
+                    <input type="hidden" name="user" value={m.user_id} />
+                    <ConfirmButton label="Remove from team" confirmLabel={`Remove ${m.display_name.split(" ")[0]}?`} />
+                  </form>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <p className="note">Add account managers and creators to specific clients from each client&apos;s page.</p>
     </section>

@@ -12,7 +12,7 @@ export default async function NewClientPage() {
     .from("agency_members")
     .select("user_id, display_name, role")
     .eq("agency_id", agency.id)
-    .eq("role", "account_manager");
+    .order("display_name");
   return (
     <section style={{ display: "grid", gap: 16 }}>
       <Link href="/team/clients" className="note">← All clients</Link>

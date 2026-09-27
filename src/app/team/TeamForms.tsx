@@ -7,6 +7,8 @@ import {
   createClientAccount,
   deleteClient,
   editCalendar,
+  saveNewClientTasks,
+  updateTeammate,
   inviteTeammate,
   sendCalendar,
   registerDocument,
@@ -14,7 +16,8 @@ import {
   updateTask,
 } from "./actions";
 
-type Opt = { id?: string; user_id?: string; name?: string; display_name?: string };
+type Opt = { id?: string; user_id?: string; name?: string; display_name?: string; role?: string };
+const ROLE_NAMES: Record<string, string> = { admin: "Admin", account_manager: "Account manager", creator: "Creator" };
 
 export type TaskPeople = {
   me: string;
@@ -167,6 +170,8 @@ export function NewClientForm({ members }: { members: Opt[] }) {
   const [state, action, pending] = useActionState(createClientAccount, {});
   const [later, setLater] = useState<Record<string, boolean>>({});
   const set = (k: string) => (v: boolean) => setLater({ ...later, [k]: v });
+  const [am, setAm] = useState("");
+  const others = members.filter((m) => m.user_id !== am && m.role !== "admin");
   const f = (id: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="field"><label htmlFor={id}>{label}</label><input className="input" id={id} name={id} {...props} /></div>
   );
@@ -176,12 +181,23 @@ export function NewClientForm({ members }: { members: Opt[] }) {
       <div className="row">{f("name", "Business name", { required: true })}{f("website", "Website", { placeholder: "bloomfloralstudio.com" })}</div>
       <div className="row">
         <div className="field"><label htmlFor="account_manager">Account manager</label>
-          <select className="sel" id="account_manager" name="account_manager" required defaultValue="">
+          <select className="sel" id="account_manager" name="account_manager" required value={am} onChange={(e) => setAm(e.target.value)}>
             <option value="" disabled>Choose one</option>
-            {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
-          </select></div>
+            {members.filter((m) => m.role !== "creator").map((m) => (
+              <option key={m.user_id} value={m.user_id}>{m.display_name} · {ROLE_NAMES[m.role ?? ""]}</option>
+            ))}
+          </select>
+          <span className="note">The client sees this person in their portal.</span></div>
         {f("start_date", "Start date", { type: "date" })}
       </div>
+
+      <fieldset className="checks">
+        <legend>Anyone else from the team on this account?</legend>
+        {others.map((m) => (
+          <label key={m.user_id}><input type="checkbox" name="team" value={m.user_id} /> {m.display_name} · {ROLE_NAMES[m.role ?? ""]}</label>
+        ))}
+        {!others.length && <p className="note">No one else to add yet. Admins can already see every account.</p>}
+      </fieldset>
 
       <h2>Main contact</h2>
       <p className="note">They get an email invite to create their portal password. They can add one more person themselves.</p>
@@ -212,21 +228,6 @@ export function NewClientForm({ members }: { members: Opt[] }) {
       {state.error && <p className="error">{state.error}</p>}
       <div><button className="btn" disabled={pending}>{pending ? "Creating…" : "Create client and send invite"}</button></div>
     </form>
-  );
-}
-
-/** A select that saves as soon as it changes. */
-export function AutoSubmitSelect({ name, defaultValue, options, label }: {
-  name: string;
-  defaultValue: string;
-  options: { value: string; label: string }[];
-  label: string;
-}) {
-  return (
-    <select className="sel" name={name} defaultValue={defaultValue} aria-label={label}
-      onChange={(e) => e.currentTarget.form?.requestSubmit()}>
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
   );
 }
 
@@ -406,6 +407,54 @@ export function EditCalendar({ id, month, url }: { id: string; month: string; ur
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
       <div className="row"><button className="btn sm" disabled={pending}>Save</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
+    </form>
+  );
+}
+
+export function TeammateRow({ member, isMe }: {
+  member: { user_id: string; display_name: string; title: string | null; role: string; email: string };
+  isMe: boolean;
+}) {
+  const [state, action, pending] = useActionState(updateTeammate, {});
+  const id = member.user_id;
+  return (
+    <form action={action} className="teammate">
+      <input type="hidden" name="user" value={id} />
+      <div className="field"><label htmlFor={`tm-n-${id}`}>Name{isMe ? " (you)" : ""}</label><input className="input" id={`tm-n-${id}`} name="name" defaultValue={member.display_name} required /></div>
+      <div className="field"><label htmlFor={`tm-t-${id}`}>Job title</label><input className="input" id={`tm-t-${id}`} name="title" defaultValue={member.title ?? ""} placeholder="Director of Ops" /></div>
+      <div className="field"><label htmlFor={`tm-r-${id}`}>Role</label>
+        <select className="sel" id={`tm-r-${id}`} name="role" defaultValue={member.role}>
+          <option value="admin">Admin</option><option value="account_manager">Account manager</option><option value="creator">Creator</option>
+        </select></div>
+      <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+      {state.error && <p className="error" style={{ gridColumn: "1 / -1" }}>{state.error}</p>}
+      {state.ok && <p className="flash" style={{ gridColumn: "1 / -1" }}>{state.ok}</p>}
+    </form>
+  );
+}
+
+export function NewClientTasksEditor({ tasks }: { tasks: { title: string; days?: number; assignee?: string }[] }) {
+  const [rows, setRows] = useState(tasks.map((t, i) => ({ key: i, ...t })));
+  const [state, action, pending] = useActionState(saveNewClientTasks, {});
+  return (
+    <form action={action} style={{ display: "grid", gap: 10 }}>
+      {rows.map((r, i) => (
+        <div className="task-row" key={r.key}>
+          <div className="field"><label htmlFor={`nct-d-${r.key}`}>Day</label><input className="input" id={`nct-d-${r.key}`} name="days" type="number" min={0} defaultValue={r.days ?? 0} /></div>
+          <div className="field"><label htmlFor={`nct-t-${r.key}`}>Task</label><input className="input" id={`nct-t-${r.key}`} name="title" defaultValue={r.title} /></div>
+          <div className="field"><label htmlFor={`nct-a-${r.key}`}>Goes to</label>
+            <select className="sel" id={`nct-a-${r.key}`} name="assignee" defaultValue={r.assignee ?? "account_manager"}>
+              <option value="account_manager">Account manager</option><option value="me">Admin who adds the client</option>
+            </select></div>
+          <button type="button" className="btn sm line" onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <div className="row">
+        <button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: "", days: 0, assignee: "account_manager" }])}>Add a task</button>
+        <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save list"}</button>
+      </div>
+      {state.error && <p className="error">{state.error}</p>}
+      {state.ok && <p className="flash">{state.ok}</p>}
     </form>
   );
 }

@@ -47,8 +47,10 @@ update agencies set new_client_tasks = '[
   {"title": "Send the portal welcome email and confirm they can sign in", "days": 1, "assignee": "account_manager"},
   {"title": "Schedule the kickoff call on Google Meet", "days": 2, "assignee": "account_manager"},
   {"title": "Review brand assets and content once uploaded", "days": 7, "assignee": "account_manager"},
+  {"title": "Write their full content strategy", "days": 10, "assignee": "account_manager"},
   {"title": "Set KPIs and Good / Better / Best goals on the Account health tab", "days": 10, "assignee": "account_manager"},
-  {"title": "Plan the first content calendar", "days": 14, "assignee": "account_manager"}
+  {"title": "Create their content calendar", "days": 14, "assignee": "account_manager"},
+  {"title": "Set up the strategy review call", "days": 14, "assignee": "account_manager"}
 ]'::jsonb
 where slug = 'cali-ko';
 

@@ -224,7 +224,7 @@ export default async function ClientDetail({
                 <span className="note">{ROLE_LABEL[m.role]}{m.role === "admin" ? " · all clients" : ""}</span>
                 <span className="r">
                   {m.user_id === client.account_manager_id && <span className="pill ok">Client sees this person</span>}
-                  {isAdmin && m.role === "account_manager" && m.user_id !== client.account_manager_id && (
+                  {isAdmin && m.role !== "creator" && m.user_id !== client.account_manager_id && (
                     <form action={setAccountManager}>
                       <input type="hidden" name="client" value={client.id} />
                       <input type="hidden" name="user" value={m.user_id} />

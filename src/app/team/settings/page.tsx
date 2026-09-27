@@ -5,7 +5,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { googleConfigured, googleStatus, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
-import { ConfirmButton } from "../TeamForms";
+import { ConfirmButton, NewClientTasksEditor } from "../TeamForms";
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: "Google is connected. Now choose your due-dates calendar below.",
@@ -101,14 +101,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </ul>
           <p className="note">{questionCount ?? 0} questionnaire questions. Every new client gets this checklist and questionnaire automatically.</p>
         </div>
-        <div className="panel">
+        <div className="panel" style={{ gridColumn: "1 / -1" }}>
           <h2>New-client tasks</h2>
           <p className="note">Created for the team whenever an admin adds a client. Days count from the day the client is added.</p>
-          <ul className="list">
-            {(agency.new_client_tasks ?? []).map((t, i) => (
-              <li key={i}>{t.title}<span className="r note">Day {t.days ?? 0}</span></li>
-            ))}
-          </ul>
+          <NewClientTasksEditor tasks={agency.new_client_tasks ?? []} />
         </div>
         <div className="panel">
           <h2>Content approvals</h2>
