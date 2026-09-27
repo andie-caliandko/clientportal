@@ -67,10 +67,18 @@ export default async function ClientDetail({
     connectedMembers(agency.id),
   ]);
   const uploadRows = uploads.data ?? [];
-  const messageFileUrls = await signAttachments(supabase, (messages.data ?? []) as Message[]);
-  const uploadLinks = uploadRows.length
-    ? new Map(((await supabase.storage.from("uploads").createSignedUrls(uploadRows.map((u) => u.storage_path), 60 * 60)).data ?? []).map((u) => [u.path, u.signedUrl]))
-    : new Map<string | null, string>();
+  const calls = (callRows.data ?? []) as CallRequest[];
+  // File links and invite replies from Google, all at once.
+  const [messageFileUrls, signedUploads, replyList] = await Promise.all([
+    signAttachments(supabase, (messages.data ?? []) as Message[]),
+    uploadRows.length ? supabase.storage.from("uploads").createSignedUrls(uploadRows.map((u) => u.storage_path), 60 * 60) : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] }),
+    Promise.all(
+      calls.filter((c) => c.kind === "invite" && c.status === "booked" && c.event_end && new Date(c.event_end).getTime() > Date.now())
+        .map(async (c) => [c.id, await inviteReplies(c)] as const),
+    ),
+  ]);
+  const uploadLinks = new Map<string | null, string>((signedUploads.data ?? []).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl as string]));
+  const replies = new Map(replyList);
   const names = new Map<string, string>(members0(allMembers.data));
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
   const allTasks = (tasks.data ?? []) as Task[];
@@ -92,12 +100,6 @@ export default async function ClientDetail({
     .filter((m) => m.role !== "creator" && (m.role === "admin" || onTeam.has(m.user_id) || m.user_id === client.account_manager_id))
     .map((m) => ({ user_id: m.user_id, display_name: m.display_name, connected: linked.has(m.user_id) }));
   const defaultHost = (client.account_manager_id && hosts.find((h) => h.user_id === client.account_manager_id && h.connected)?.user_id) || hosts.find((h) => h.connected)?.user_id || userId;
-  const calls = (callRows.data ?? []) as CallRequest[];
-  // Replies from Google for invites that haven't happened yet.
-  const replies = new Map(await Promise.all(
-    calls.filter((c) => c.kind === "invite" && c.status === "booked" && c.event_end && new Date(c.event_end).getTime() > Date.now())
-      .map(async (c) => [c.id, await inviteReplies(c)] as const),
-  ));
   const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date());
   const plusDays = (n: number) => new Date(Date.parse(`${todayStr}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const answerBy = Object.fromEntries((answers.data ?? []).map((a) => [a.question_id, a.body]));
