@@ -70,7 +70,7 @@ In **Supabase → Authentication → URL Configuration**, set the Site URL to yo
 
 1. Import the GitHub repo in Vercel and add every variable from `.env.example`.
 2. In **Domains**, add `clients.cali-ko.com`. Then add the CNAME record Vercel shows you at your domain provider.
-3. `vercel.json` schedules two jobs: approval reminders and auto-approvals every hour, and client task reminders every morning at 10 AM Eastern (2 days, 5 days and 1 week overdue). The hourly job needs a Vercel Pro plan, because the free plan only runs jobs once a day.
+3. `vercel.json` runs two jobs each morning: approval reminders and auto-approvals at 9 AM Eastern, and client task reminders at 10 AM. Vercel's free plan allows jobs once a day. On the Pro plan, you can change the approvals job to `0 * * * *` so deadlines are checked hourly.
 
 ### 5. Slack (two-way messages)
 

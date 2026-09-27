@@ -3,8 +3,8 @@ import { clientActivity, emailClient } from "@/lib/notify";
 import { formatDue } from "@/lib/approval";
 import { createAdminClient } from "@/lib/supabase/server";
 
-// Runs every hour (see vercel.json):
-// - reminds clients 12 hours before an approval is due
+// Runs on the schedule in vercel.json (daily on Vercel's free plan, hourly on Pro):
+// - reminds clients when an approval is due within the next day
 // - approves calendars nobody responded to, and flags that the client didn't approve in time
 export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
   }
   const admin = createAdminClient();
   const now = new Date();
-  const soon = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  // A day ahead, so a once-a-day run never skips a reminder.
+  const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   const { data: reminders } = await admin
     .from("content_calendars")
