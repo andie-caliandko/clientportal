@@ -1,3 +1,4 @@
+import { memberColors } from "@/lib/memberColors";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { loadTaskPeople } from "@/lib/taskPeople";
@@ -18,7 +19,6 @@ const COLUMNS = [
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
-  const agencyShort = agency.brand.shortName ?? agency.name;
   const { who = "all" } = await searchParams;
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
@@ -56,6 +56,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
   const clientName = Object.fromEntries((clients ?? []).map((c) => [c.id, c.name]));
   const names = new Map<string, string>((members ?? []).map((m) => [m.user_id, m.display_name]));
+  const colors = memberColors((members ?? []).map((m) => m.user_id));
   Object.values(people.contacts).flat().forEach((c) => names.set(c.user_id, c.display_name));
   // Archived clients drop off the board.
   const list = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
@@ -121,8 +122,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               <h2>{col.label}<span>{items.length}</span></h2>
               {items.map((t) => (
                 <DragCard id={t.id} key={t.id}>
-                  <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} agencyName={agencyShort}
-                    personName={(id) => names.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
+                  <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} 
+                    personName={(id) => names.get(id)} colorOf={(id) => colors.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
                 </DragCard>
               ))}
               {!items.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}

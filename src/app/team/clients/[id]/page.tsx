@@ -1,3 +1,4 @@
+import { memberColors } from "@/lib/memberColors";
 import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -68,6 +69,7 @@ export default async function ClientDetail({
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
   const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role; avatar_path: string | null }[];
+  const colors = memberColors(members.map((m) => m.user_id));
   const photoOf = (m: Message) => members.find((x) => x.user_id === m.author_id)?.avatar_path ?? (m.author_kind === "team" ? members.find((x) => x.display_name === m.author_name)?.avatar_path : null);
   // Account managers and creators added here show to the client; admins never do
   // (unless an admin is the account manager). Admins can open every account anyway.
@@ -163,8 +165,8 @@ export default async function ClientDetail({
             {g.list.length ? (
               <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
                 {g.list.map((t) => (
-                  <TaskCard key={t.id} task={t} clientName={client.name} agencyName={agency.brand.shortName ?? agency.name}
-                    showClientChip={false} personName={(uid) => names.get(uid)} timeZone={tz} canEdit={canEdit} />
+                  <TaskCard key={t.id} task={t} clientName={client.name}
+                    showClientChip={false} personName={(uid) => names.get(uid)} colorOf={(uid) => colors.get(uid)} timeZone={tz} canEdit={canEdit} />
                 ))}
               </div>
             ) : (

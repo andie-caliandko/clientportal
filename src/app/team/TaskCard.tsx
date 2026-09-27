@@ -8,14 +8,14 @@ const MOVES: Record<string, { to: string; label: string }[]> = {
   waiting: [{ to: "doing", label: "Back to in progress" }, { to: "done", label: "Done" }],
 };
 
-export function TaskCard({ task: t, clientName, agencyName, showClientChip = true, personName, timeZone, canEdit }: {
+export function TaskCard({ task: t, clientName, showClientChip = true, personName, colorOf, timeZone, canEdit }: {
   task: Task;
   clientName?: string;
-  /** Badge for team tasks, e.g. "Cali & Ko". */
-  agencyName: string;
   /** The board shows which client a task is for; a client's own page doesn't need to. */
   showClientChip?: boolean;
   personName: (id: string) => string | undefined;
+  /** Each teammate's badge color (0–7). */
+  colorOf: (id: string) => number | undefined;
   timeZone: string;
   canEdit: boolean;
 }) {
@@ -28,21 +28,28 @@ export function TaskCard({ task: t, clientName, agencyName, showClientChip = tru
   const clientFacing = !!client || t.status === "waiting";
   // Client tasks are finished by the client; the team can still close or reopen them.
   const moves = client ? [{ to: "done", label: "Mark done for them" }] : MOVES[t.status] ?? [];
+  // Team tasks wear the creator's name in their color; automatic ones stay the default color.
+  const automated = t.auto || !t.created_by;
+  const creator = t.created_by ? personName(t.created_by) ?? "Former teammate" : null;
+  const badge = clientFacing
+    ? { cls: "client", text: `${clientName ?? "Client"}${client ? ` · ${client.split(" ")[0]}` : ""}` }
+    : automated
+      ? { cls: "team", text: "Automated" }
+      : { cls: `who-${colorOf(t.created_by!) ?? 0}`, text: creator! };
 
   return (
     <article className={`task ${clientFacing ? "client-task" : "team-task"} ${overdue ? "overdue" : ""}`}>
-      <span className={`kind ${clientFacing ? "client" : "team"}`}>
-        {clientFacing ? `${clientName ?? "Client"}${client ? ` · ${client.split(" ")[0]}` : ""}` : agencyName}
-      </span>
+      <span className={`kind ${badge.cls}`}>{badge.text}</span>
       <Link className="task-link" href={`/team/tasks/${t.id}`}>{t.title}</Link>
       {t.note && <p className="note" style={{ fontWeight: 400 }}>{t.note}</p>}
       <div className="meta">
         {showClientChip && !clientFacing && clientName && <span className="chip">{clientName}</span>}
         {due && (overdue ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>)}
         {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
-        {t.auto && <span>· auto</span>}
       </div>
-      <p className="task-by">{t.created_by ? `Created by ${personName(t.created_by) ?? "a former teammate"}` : "Created automatically"}</p>
+      {(clientFacing || automated) && (
+        <p className="task-by">{automated ? "Created automatically" : `Created by ${creator}`}</p>
+      )}
       {canEdit && (
         <div className="task-actions">
           {moves.map((m) => (

@@ -450,3 +450,35 @@ td a:hover { text-decoration: underline; }
 .crop-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgb(12 18 17 / .55); border: 2px solid rgb(255 255 255 / .85); pointer-events: none; }
 .crop-zoom { display: flex; gap: 10px; align-items: center; width: 100%; }
 .crop-zoom input { flex: 1; accent-color: var(--primary); }
+
+/* Teammate colors on task badges (who created it). Automated tasks keep .kind.team. */
+:root {
+  --who-0: #E4DDF2; --who-0-ink: #4B3A78;
+  --who-1: #F4D9DC; --who-1-ink: #8A2F3E;
+  --who-2: #DDE8C9; --who-2-ink: #3F5A1E;
+  --who-3: #F2E8B0; --who-3-ink: #665400;
+  --who-4: #EBD5E8; --who-4-ink: #6E2F66;
+  --who-5: #F9D3C7; --who-5-ink: #8C3520;
+  --who-6: #DCDFE6; --who-6-ink: #394150;
+  --who-7: #DCDDF7; --who-7-ink: #36398A;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --who-0: #3A3155; --who-0-ink: #D9CFF5;
+    --who-1: #4A2A31; --who-1-ink: #F5C7CE;
+    --who-2: #2F3D22; --who-2-ink: #D2E6B5;
+    --who-3: #443C16; --who-3-ink: #F0E08F;
+    --who-4: #452B42; --who-4-ink: #F0C9EA;
+    --who-5: #4B2B22; --who-5-ink: #F8C6B6;
+    --who-6: #33373F; --who-6-ink: #D8DCE5;
+    --who-7: #2C2D55; --who-7-ink: #CFD0F7;
+  }
+}
+.kind.who-0 { background: var(--who-0); color: var(--who-0-ink); }
+.kind.who-1 { background: var(--who-1); color: var(--who-1-ink); }
+.kind.who-2 { background: var(--who-2); color: var(--who-2-ink); }
+.kind.who-3 { background: var(--who-3); color: var(--who-3-ink); }
+.kind.who-4 { background: var(--who-4); color: var(--who-4-ink); }
+.kind.who-5 { background: var(--who-5); color: var(--who-5-ink); }
+.kind.who-6 { background: var(--who-6); color: var(--who-6-ink); }
+.kind.who-7 { background: var(--who-7); color: var(--who-7-ink); }
