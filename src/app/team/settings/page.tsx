@@ -77,7 +77,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             googleConfigured() && <div><a className="btn sm" href="/api/google/connect">Connect Google</a></div>
           )}
         </div>
-        <div className="panel">
+        <div className="panel" style={{ alignSelf: "stretch" }}>
           <h2>Brand</h2>
           <div><Logo brand={agency.brand} name={agency.name} height={44} /></div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -93,7 +93,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <dt>Time zone</dt><dd>{agency.timezone}</dd>
           </dl>
         </div>
-        <div className="panel">
+        <div className="panel" style={{ alignSelf: "stretch" }}>
           <h2>Team &amp; roles</h2>
           <p className="note">{members?.length ?? 0} teammates. Three roles: Admin, Account manager and Creator.</p>
           <ul className="people">
@@ -119,25 +119,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </ul>
           <div><Link className="btn sm line" href="/team/team">Manage team</Link></div>
         </div>
-        <div className="panel">
-          <h2>Onboarding</h2>
-          <ul className="list">
-            {(steps ?? []).map((s) => <li key={s.title}>{s.title}</li>)}
-          </ul>
-          <p className="note">{questionCount ?? 0} questionnaire questions. Every new client gets this checklist and questionnaire automatically.</p>
+        {/* Left column stacks Onboarding and Content approvals beside the longer New-client tasks list. */}
+        <div style={{ display: "grid", gap: 18, alignContent: "start" }}>
+          <div className="panel">
+            <h2>Onboarding</h2>
+            <ul className="list">
+              {(steps ?? []).map((s) => <li key={s.title}>{s.title}</li>)}
+            </ul>
+            <p className="note">{questionCount ?? 0} questionnaire questions. Every new client gets this checklist and questionnaire automatically.</p>
+          </div>
+          <div className="panel">
+            <h2>Content approvals</h2>
+            <dl className="kv">
+              <dt>Window</dt><dd>{agency.approval_window_hours} hours</dd>
+              <dt>Weekends</dt><dd>{agency.approval_skip_weekends ? "Not counted" : "Counted"}</dd>
+              <dt>No reply</dt><dd>Approved automatically and flagged</dd>
+            </dl>
+          </div>
         </div>
         <div className="panel">
           <h2>New-client tasks</h2>
           <p className="note">Created for the team whenever an admin adds a client. Days count from the day the client is added.</p>
           <NewClientTasksEditor tasks={agency.new_client_tasks ?? []} />
-        </div>
-        <div className="panel">
-          <h2>Content approvals</h2>
-          <dl className="kv">
-            <dt>Window</dt><dd>{agency.approval_window_hours} hours</dd>
-            <dt>Weekends</dt><dd>{agency.approval_skip_weekends ? "Not counted" : "Counted"}</dd>
-            <dt>No reply</dt><dd>Approved automatically and flagged</dd>
-          </dl>
         </div>
       </div>
       <p className="note">Editing these from this page is coming next. For now they&apos;re changed in the database.</p>
