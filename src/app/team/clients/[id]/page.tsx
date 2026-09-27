@@ -4,8 +4,8 @@ import { formatDue } from "@/lib/approval";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
-import { addToClient, archiveClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { ClientInfoForm, ClientLogoForm, InviteToClient, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { addToClient, archiveClient, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
+import { AddClientContact, ClientInfoForm, ClientLogoForm, InviteToClient, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -62,8 +62,10 @@ export default async function ClientDetail({
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
   const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role }[];
-  const accountTeam = members.filter((m) => m.role === "admin" || onTeam.has(m.user_id));
-  const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
+  // People added to this account are shown to the client. Admins not added still have access.
+  const accountTeam = members.filter((m) => onTeam.has(m.user_id));
+  const otherAdmins = members.filter((m) => m.role === "admin" && !onTeam.has(m.user_id));
+  const addable = members.filter((m) => !onTeam.has(m.user_id));
 
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at]));
   const answerBy = Object.fromEntries((answers.data ?? []).map((a) => [a.question_id, a.body]));
@@ -261,6 +263,28 @@ export default async function ClientDetail({
         </div>
 
         <div className="panel">
+          <h2>People on their portal</h2>
+          <ul className="list">
+            {((people.data ?? []) as ClientUser[]).map((p) => (
+              <li key={p.user_id}>
+                <span><b>{p.display_name}</b><br /><span className="note">{p.email}</span></span>
+                <span className="r">
+                  <span className="pill info">{p.role === "owner" ? "Owner" : "Team member"}</span>
+                  {canEdit && p.role !== "owner" && (
+                    <form action={removeClientContact}>
+                      <input type="hidden" name="client" value={client.id} />
+                      <input type="hidden" name="user" value={p.user_id} />
+                      <ConfirmButton label="Remove" confirmLabel="Remove access?" />
+                    </form>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {canEdit && <AddClientContact clientId={client.id} />}
+        </div>
+
+        <div className="panel">
           <h2>Client logo</h2>
           {canEdit ? (
             <ClientLogoForm agencyId={agency.id} clientId={client.id} logoUrl={logo} />
@@ -303,14 +327,14 @@ export default async function ClientDetail({
 
         <div className="panel" style={{ gridColumn: "1 / -1" }}>
           <h2>Team on this account</h2>
-          <p className="note">The client only sees their account manager. Admins can always see every account.</p>
+          <p className="note">Everyone added here shows in the client&apos;s Members panel. Admins can open every account either way.</p>
           <ul className="list">
             {accountTeam.map((m) => (
               <li key={m.user_id}>
                 <b>{m.display_name}</b>
-                <span className="note">{ROLE_LABEL[m.role]}{m.role === "admin" ? " · all clients" : ""}</span>
+                <span className="note">{m.user_id === client.account_manager_id ? "Account manager" : ROLE_LABEL[m.role]}</span>
                 <span className="r">
-                  {m.user_id === client.account_manager_id && <span className="pill ok">Client sees this person</span>}
+                  <span className="pill ok">Client sees them</span>
                   {isAdmin && m.role !== "creator" && m.user_id !== client.account_manager_id && (
                     <form action={setAccountManager}>
                       <input type="hidden" name="client" value={client.id} />
@@ -318,7 +342,7 @@ export default async function ClientDetail({
                       <button className="btn sm line">Make account manager</button>
                     </form>
                   )}
-                  {isAdmin && m.role !== "admin" && (
+                  {isAdmin && (
                     <form action={removeFromClient}>
                       <input type="hidden" name="client" value={client.id} />
                       <input type="hidden" name="user" value={m.user_id} />
@@ -329,6 +353,10 @@ export default async function ClientDetail({
               </li>
             ))}
           </ul>
+          {!accountTeam.length && <p className="note">No one added yet.</p>}
+          {otherAdmins.length > 0 && (
+            <p className="note">Also has access, not shown to the client: {otherAdmins.map((m) => m.display_name).join(", ")} (admin).</p>
+          )}
           {isAdmin && addable.length > 0 && (
             <form action={addToClient} className="row">
               <input type="hidden" name="client" value={client.id} />

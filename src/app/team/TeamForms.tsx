@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import {
+  addClientContact,
   addTask,
   createClientAccount,
   deleteClient,
@@ -573,6 +574,34 @@ export function InviteToClient({ clientId, clientName }: { clientId: string; cli
       </div>
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+      <div className="row">
+        <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
+        <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
+      </div>
+    </form>
+  );
+}
+
+export function AddClientContact({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(addClientContact, {});
+  if (!open) {
+    return (
+      <div style={{ display: "grid", gap: 8 }}>
+        {state.ok && <p className="flash">{state.ok}</p>}
+        <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Add a person to their portal</button></div>
+      </div>
+    );
+  }
+  return (
+    <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
+      <input type="hidden" name="client" value={clientId} />
+      <div className="row">
+        <div className="field"><label htmlFor={`cc-name-${clientId}`}>Name</label><input className="input" id={`cc-name-${clientId}`} name="name" required /></div>
+        <div className="field"><label htmlFor={`cc-email-${clientId}`}>Email</label><input className="input" id={`cc-email-${clientId}`} name="email" type="email" required /></div>
+      </div>
+      {state.error && <p className="error">{state.error}</p>}
+      {state.ok && <p className="flash">{state.ok}</p>}
       <div className="row">
         <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
         <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>

@@ -13,14 +13,18 @@ import { openCount, type PortalCtx, type Section } from "./sections";
 /** Three columns: page menu on the left, the page, and Members on the right. */
 export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; section: Section; children: React.ReactNode }) {
   const supabase = await createClient();
-  const [{ data: am }, { data: people }, open] = await Promise.all([
-    ctx.client.account_manager_id
-      ? supabase.from("agency_members").select("display_name, title").eq("user_id", ctx.client.account_manager_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+  const [{ data: teamRows }, { data: people }, open] = await Promise.all([
+    supabase.from("client_team").select("user_id, added_at").eq("client_id", ctx.client.id).order("added_at"),
     supabase.from("client_users").select("*").eq("client_id", ctx.client.id).order("created_at"),
     openCount(ctx),
   ]);
   const contacts = (people ?? []) as ClientUser[];
+  // Everyone the agency put on this account, account manager first.
+  const teamIds = [...new Set([ctx.client.account_manager_id, ...(teamRows ?? []).map((t) => t.user_id)].filter(Boolean))] as string[];
+  const { data: teamPeople } = teamIds.length
+    ? await supabase.from("agency_members").select("user_id, display_name, title").in("user_id", teamIds)
+    : { data: [] as { user_id: string; display_name: string; title: string | null }[] };
+  const team = teamIds.map((id) => (teamPeople ?? []).find((p) => p.user_id === id)).filter(Boolean) as { user_id: string; display_name: string; title: string | null }[];
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
@@ -65,10 +69,16 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
           <div className="rail-group">
             <p className="rail-label">{short} team</p>
             <ul className="people">
-              <li>
-                <span className="av warm">{(am?.display_name ?? "?")[0]}</span>
-                <span><b>{am?.display_name ?? "Your team"}</b><span className="note">Account manager</span></span>
-              </li>
+              {team.map((p) => (
+                <li key={p.user_id}>
+                  <span className="av warm">{p.display_name[0]}</span>
+                  <span>
+                    <b>{p.display_name}</b>
+                    <span className="note">{p.user_id === ctx.client.account_manager_id ? "Account manager" : p.title ?? "Your team"}</span>
+                  </span>
+                </li>
+              ))}
+              {!team.length && <li><span className="note">Your team will show here.</span></li>}
             </ul>
           </div>
           <div className="rail-group">

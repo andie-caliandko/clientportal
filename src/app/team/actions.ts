@@ -792,3 +792,35 @@ export async function setTaskStatus(id: string, status: string) {
   revalidatePath("/team");
   if (before.client_id) revalidatePath(`/team/clients/${before.client_id}`);
 }
+
+/** Team adds another person to a client's portal (no limit for the team). */
+export async function addClientContact(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const clientId = String(form.get("client"));
+  const name = String(form.get("name") ?? "").trim();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  if (!name || !email) return { error: "Add their name and email." };
+  const supabase = await createClient();
+  const { data: ok } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!ok) return { error: "You don't have access to change this client." };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
+    data: { display_name: name },
+  });
+  if (error || !data.user) return { error: "That invite didn't send. Check the email address, or they may already have an account." };
+  const { error: linkErr } = await admin.from("client_users").insert({ client_id: clientId, user_id: data.user.id, role: "member", display_name: name, email });
+  if (linkErr) return { error: "They were invited but couldn't be added to this portal. Try again." };
+  revalidatePath(`/team/clients/${clientId}`);
+  return { ok: `Invite sent to ${name}. They'll get an email to create a password.` };
+}
+
+export async function removeClientContact(form: FormData) {
+  await requireEditor();
+  const clientId = String(form.get("client"));
+  const supabase = await createClient();
+  await supabase.from("client_users").delete().eq("client_id", clientId).eq("user_id", String(form.get("user")));
+  revalidatePath(`/team/clients/${clientId}`);
+}
