@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { dateAtHour, dateAtMinute } from "@/lib/approval";
-import { createMemberEvent, createOutOfOffice, deleteMemberEvent, updateMemberEvent } from "@/lib/google";
+import { calendarChanged, createMemberEvent, createOutOfOffice, deleteMemberEvent, updateMemberEvent } from "@/lib/google";
 import { emailClient } from "@/lib/notify";
 import { notifyClient } from "@/lib/notifications";
 import { requireTeam } from "@/lib/session";
@@ -44,6 +44,7 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
     console.error("Adding an event failed", err);
     return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
   }
+  calendarChanged(v.userId);
   revalidatePath("/team/calendar");
   return { ok: guests.ok.length ? `Added to your Google Calendar and invited ${guests.ok.length} ${guests.ok.length === 1 ? "person" : "people"}.` : "Added to your Google Calendar." };
 }
@@ -68,6 +69,7 @@ export async function addMyOutOfOffice(_: Result, form: FormData): Promise<Resul
     console.error("Adding out of office failed", err);
     return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
   }
+  calendarChanged(v.userId);
   revalidatePath("/team/calendar");
   return { ok: "You're marked out of office. Google will decline new meetings for those days." };
 }
@@ -127,6 +129,7 @@ export async function editCalendarEvent(_: Result, form: FormData): Promise<Resu
     console.error("Editing an event failed", err);
     return { error: "Google Calendar didn't accept that change. You may only be able to edit this one in Google." };
   }
+  calendarChanged(owner);
   revalidateTag(`meetings-${v.agency.id}`);
   revalidatePath("/team/calendar");
   return { ok: "Saved to Google Calendar." };
@@ -141,6 +144,7 @@ export async function deleteCalendarEvent(owner: string, eventId: string): Promi
     console.error("Deleting an event failed", err);
     return { error: "Google Calendar didn't let us delete that. Try deleting it in Google." };
   }
+  calendarChanged(owner);
   revalidateTag(`meetings-${v.agency.id}`);
   revalidatePath("/team/calendar");
   return { ok: "Deleted." };
@@ -282,6 +286,7 @@ export async function sendCallInvite(_: Result, form: FormData): Promise<Result>
     guests: attendees, created_by: v.userId, booked_at: new Date().toISOString(),
   });
   if (error) console.error("Saving the invite failed", error.message);
+  calendarChanged(hostId);
   revalidateTag(`meetings-${v.agency.id}`);
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/calendar");

@@ -63,14 +63,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const people = isAdmin ? [me, ...everyone.filter((p) => p.user_id !== userId)] : [me];
 
   // Everyone's calendar is read for "Who's out", but only admins see other people's events.
-  const outHorizon = new Date(Date.now() + 45 * DAY).toISOString();
+  // Whole days, so the same look-ahead is reused between page loads.
+  const outFrom = dateAtHour(today, 0, tz).toISOString();
+  const outHorizon = dateAtHour(addDays(today, 45), 0, tz).toISOString();
   const loaded = await Promise.all(
     everyone.map(async (p) => {
       if (!connected.has(p.user_id)) return [p.user_id, { week: null, out: [] as CalEvent[] }] as const;
       try {
         const [wk, ahead] = await Promise.all([
           people.some((x) => x.user_id === p.user_id) ? memberEvents(p.user_id, from, to) : Promise.resolve(null),
-          memberEvents(p.user_id, new Date().toISOString(), outHorizon),
+          memberEvents(p.user_id, outFrom, outHorizon).then((list) => list?.filter((e) => new Date(e.end).getTime() > Date.now()) ?? null),
         ]);
         return [p.user_id, { week: wk, out: (ahead ?? []).filter((e) => e.ooo) }] as const;
       } catch (err) {

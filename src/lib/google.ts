@@ -1,5 +1,6 @@
 import "server-only";
-import { unstable_cache } from "next/cache";
+import { cache } from "react";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "./supabase/server";
 
 // Calendar: read due dates and schedules, and add events (client calls, time
@@ -72,14 +73,15 @@ export async function accessToken(refreshToken: string) {
   return data.access_token;
 }
 
-export async function integration(agencyId: string) {
+/** The agency's Google connection. Looked up once per page. */
+export const integration = cache(async (agencyId: string) => {
   const { data } = await createAdminClient()
     .from("agency_integrations")
     .select("google_email, google_refresh_token, deadlines_calendar_id, deadlines_calendar_name")
     .eq("agency_id", agencyId)
     .maybeSingle();
   return data;
-}
+});
 
 export async function googleStatus(agencyId: string) {
   const i = await integration(agencyId);
@@ -159,11 +161,12 @@ export async function connectedMembers(agencyId: string): Promise<Map<string, st
   return new Map((data ?? []).map((r) => [r.user_id, r.google_email]));
 }
 
-async function memberAuth(userId: string) {
+// Looked up once per page, however many calendar calls it makes.
+const memberAuth = cache(async (userId: string) => {
   const { data } = await createAdminClient().from("member_google").select("refresh_token, google_email").eq("user_id", userId).maybeSingle();
   if (!data) return null;
   return { token: await accessToken(data.refresh_token), email: data.google_email as string | null };
-}
+});
 
 async function gcal<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
@@ -248,8 +251,7 @@ export async function deleteMemberEvent(userId: string, eventId: string) {
   await gcal<null>(auth.token, `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: "DELETE" });
 }
 
-/** A teammate's events between two times, from their main Google Calendar. Null if not connected. */
-export async function memberEvents(userId: string, fromIso: string, toIso: string): Promise<CalEvent[] | null> {
+async function fetchMemberEvents(userId: string, fromIso: string, toIso: string): Promise<CalEvent[] | null> {
   const auth = await memberAuth(userId);
   if (!auth) return null;
   const params = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime", maxResults: "2500" });
@@ -261,8 +263,7 @@ export async function memberEvents(userId: string, fromIso: string, toIso: strin
     .map(toCalEvent);
 }
 
-/** When a teammate is busy (their main calendar), for offering open times to clients. */
-export async function memberBusy(userId: string, fromIso: string, toIso: string) {
+async function fetchMemberBusy(userId: string, fromIso: string, toIso: string) {
   const auth = await memberAuth(userId);
   if (!auth) return null;
   const data = await gcal<{ calendars: Record<string, { busy?: { start: string; end: string }[] }> }>(auth.token, "/freeBusy", {
@@ -323,7 +324,7 @@ export async function createOutOfOffice(userId: string, input: { start: string; 
  * One event on a teammate's calendar, as it is in Google right now. Null when
  * it was cancelled or deleted; undefined when we couldn't check.
  */
-export async function memberEvent(userId: string, eventId: string): Promise<CalEvent | null | undefined> {
+async function fetchMemberEvent(userId: string, eventId: string): Promise<CalEvent | null | undefined> {
   try {
     const auth = await memberAuth(userId);
     if (!auth) return undefined;
@@ -339,3 +340,39 @@ export async function memberEvent(userId: string, eventId: string): Promise<CalE
     return undefined;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Google reads are kept for a minute or two so pages load fast. Anything the
+// portal changes on someone's calendar clears their copy right away.
+// ---------------------------------------------------------------------------
+
+const calTag = (userId: string) => `gcal-${userId}`;
+
+/** Call after adding, editing or deleting something on a teammate's calendar. */
+export function calendarChanged(userId: string) {
+  revalidateTag(calTag(userId));
+}
+
+/** A teammate's events between two times, from their main Google Calendar. Null if not connected. */
+export const memberEvents = (userId: string, fromIso: string, toIso: string) =>
+  unstable_cache(() => fetchMemberEvents(userId, fromIso, toIso), ["gcal-events", userId, fromIso, toIso], { revalidate: 120, tags: [calTag(userId)] })();
+
+/** Busy times straight from Google, for the final check before booking. */
+export const memberBusyNow = (userId: string, fromIso: string, toIso: string) => fetchMemberBusy(userId, fromIso, toIso);
+
+/** When a teammate is busy (their main calendar), for offering open times to clients. */
+export const memberBusy = (userId: string, fromIso: string, toIso: string) =>
+  unstable_cache(() => fetchMemberBusy(userId, fromIso, toIso), ["gcal-busy", userId, fromIso, toIso], { revalidate: 60, tags: [calTag(userId)] })();
+
+/** One event as it is in Google now: null when cancelled or deleted, undefined when we couldn't check. */
+export const memberEvent = (userId: string, eventId: string) =>
+  unstable_cache(
+    async () => {
+      const found = await fetchMemberEvent(userId, eventId);
+      // "Couldn't check" isn't kept, so the next look tries Google again.
+      if (found === undefined) throw new Error("Couldn't reach Google Calendar");
+      return found;
+    },
+    ["gcal-event", userId, eventId],
+    { revalidate: 60, tags: [calTag(userId)] },
+  )().catch((): undefined => undefined);

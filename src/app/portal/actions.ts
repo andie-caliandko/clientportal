@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { requestSlots, type CallRequest } from "@/lib/calls";
-import { createMemberEvent } from "@/lib/google";
+import { calendarChanged, createMemberEvent } from "@/lib/google";
 import { notifyUser } from "@/lib/notifications";
 import { sendEmail } from "@/lib/notify";
 import { redirect } from "next/navigation";
@@ -232,7 +232,7 @@ export async function bookCall(requestId: string, start: string): Promise<{ erro
   const tz = v.agency.timezone;
   let slots: string[];
   try {
-    slots = await requestSlots(req, tz);
+    slots = await requestSlots(req, tz, { fresh: true });
   } catch {
     return { error: "We couldn't check the calendar just now. Try again in a minute." };
   }
@@ -280,6 +280,7 @@ export async function bookCall(requestId: string, start: string): Promise<{ erro
   if (host?.email) {
     await sendEmail([host.email], `${v.client.name} booked your ${req.title}`, `${v.clientUser.display_name} picked ${when}.\n\nIt's on your Google Calendar with a Google Meet link, and they've been sent the invite.`);
   }
+  calendarChanged(req.host_id);
   revalidateTag(`meetings-${v.agency.id}`);
   revalidatePath("/portal/meetings");
   revalidatePath("/portal");

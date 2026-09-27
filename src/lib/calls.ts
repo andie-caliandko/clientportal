@@ -1,6 +1,6 @@
 import "server-only";
 import { dateAtHour } from "./approval";
-import { memberBusy, memberEvent } from "./google";
+import { memberBusy, memberBusyNow, memberEvent } from "./google";
 import { openSlots } from "./slots";
 import { createAdminClient } from "./supabase/server";
 
@@ -18,7 +18,7 @@ export type CallRequest = {
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 /** Open times for a call request, from the host's bookable hours and Google free/busy. */
-export async function requestSlots(req: CallRequest, timeZone: string): Promise<string[]> {
+export async function requestSlots(req: CallRequest, timeZone: string, opts: { fresh?: boolean } = {}): Promise<string[]> {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const from = req.window_start > today ? req.window_start : today;
   // Never look more than 5 weeks out.
@@ -30,7 +30,7 @@ export async function requestSlots(req: CallRequest, timeZone: string): Promise<
     .eq("user_id", req.host_id)
     .maybeSingle();
   if (!host) return [];
-  const busy = await memberBusy(req.host_id, dateAtHour(from, 0, timeZone).toISOString(), dateAtHour(addDays(to, 1), 0, timeZone).toISOString());
+  const busy = await (opts.fresh ? memberBusyNow : memberBusy)(req.host_id, dateAtHour(from, 0, timeZone).toISOString(), dateAtHour(addDays(to, 1), 0, timeZone).toISOString());
   if (!busy) return [];
   return openSlots(
     { from, to, timeZone, days: host.book_days, startHour: host.book_start, endHour: host.book_end, durationMin: req.duration_min, stepMin: 30, noticeHours: 12 },
