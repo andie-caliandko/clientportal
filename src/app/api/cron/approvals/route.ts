@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clientActivity, emailClient } from "@/lib/notify";
 import { formatDue } from "@/lib/approval";
+import { syncUploadsToDrive } from "@/lib/drive";
 import { createAdminClient } from "@/lib/supabase/server";
 
 // Runs every hour (see vercel.json; needs Vercel Pro):
@@ -57,5 +58,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ reminded: reminders?.length ?? 0, autoApproved: expired?.length ?? 0 });
+  // Catch up on any uploads that didn't make it into Google Drive yet.
+  const synced = await syncUploadsToDrive({ limit: 25 });
+
+  return NextResponse.json({ reminded: reminders?.length ?? 0, autoApproved: expired?.length ?? 0, driveSynced: synced });
 }

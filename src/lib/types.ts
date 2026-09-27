@@ -56,6 +56,7 @@ export type Client = {
   website: string | null;
   start_date: string | null;
   archived_at: string | null;
+  logo_path: string | null;
 };
 
 export type ClientUser = {

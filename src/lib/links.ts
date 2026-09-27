@@ -24,3 +24,7 @@ export const driveFolderUrl = (id: string) => `https://drive.google.com/drive/fo
 export function isUrl(input: string) {
   return /^https?:\/\/\S+\.\S+/.test(input.trim());
 }
+
+/** Public address of a client's logo in storage. */
+export const clientLogoUrl = (path: string | null | undefined) =>
+  path ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logos/${path}` : null;

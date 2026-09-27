@@ -8,6 +8,7 @@ import {
   deleteClient,
   editCalendar,
   saveNewClientTasks,
+  setClientLogo,
   setContractLink,
   updateTeammate,
   inviteTeammate,
@@ -503,5 +504,45 @@ export function ContractLinkForm({ clientId, url }: { clientId: string; url: str
       {state.ok && <p className="flash" style={{ flexBasis: "100%" }}>{state.ok}</p>}
       {!state.ok && !state.error && <p className="note" style={{ flexBasis: "100%" }}>Shows as the client&apos;s Open contract button on their first step.</p>}
     </form>
+  );
+}
+
+export function ClientLogoForm({ agencyId, clientId, logoUrl }: { agencyId: string; clientId: string; logoUrl: string | null }) {
+  const [url, setUrl] = useState(logoUrl);
+  const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
+  const [pending, startTransition] = useTransition();
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div className="logo-box">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {url ? <img src={url} alt="Client logo" /> : <span className="note">No logo yet</span>}
+      </div>
+      <div className="row" style={{ alignItems: "center" }}>
+        <label className="btn sm line" htmlFor={`logo-${clientId}`}>{pending ? "Uploading…" : url ? "Replace logo" : "Upload logo"}</label>
+        <input id={`logo-${clientId}`} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) return setMsg({ error: "Use an image under 5 MB." });
+          startTransition(async () => {
+            const path = `${agencyId}/${clientId}/logo-${Date.now()}.${file.name.split(".").pop()?.toLowerCase() ?? "png"}`;
+            const { error } = await createClient().storage.from("logos").upload(path, file, { contentType: file.type });
+            if (error) return setMsg({ error: "The logo didn't upload. Try again." });
+            const res = await setClientLogo({ clientId, path });
+            setMsg(res);
+            if (res.ok) setUrl(URL.createObjectURL(file));
+          });
+        }} />
+        {url && (
+          <button type="button" className="linkbtn note" onClick={() => startTransition(async () => {
+            const res = await setClientLogo({ clientId, path: null });
+            setMsg(res);
+            if (res.ok) setUrl(null);
+          })}>Remove</button>
+        )}
+      </div>
+      {msg.error && <p className="error">{msg.error}</p>}
+      {msg.ok && <p className="flash">{msg.ok}</p>}
+      <p className="note">PNG, JPG, SVG or WebP. It shows at the top right of their portal.</p>
+    </div>
   );
 }

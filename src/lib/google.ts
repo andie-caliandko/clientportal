@@ -2,7 +2,14 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "./supabase/server";
 
-const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly", "openid", "email"];
+// Calendar (read only) for due dates and meetings; Drive to file client uploads
+// into each client's folder.
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/drive",
+  "openid",
+  "email",
+];
 
 export const googleConfigured = () => !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 const redirectUri = () => `${process.env.NEXT_PUBLIC_SITE_URL}/api/google/callback`;
@@ -39,7 +46,7 @@ export async function exchangeCode(code: string) {
   return { refreshToken: data.refresh_token ?? null, email: email as string | null };
 }
 
-async function accessToken(refreshToken: string) {
+export async function accessToken(refreshToken: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -55,7 +62,7 @@ async function accessToken(refreshToken: string) {
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-async function integration(agencyId: string) {
+export async function integration(agencyId: string) {
   const { data } = await createAdminClient()
     .from("agency_integrations")
     .select("google_email, google_refresh_token, deadlines_calendar_id, deadlines_calendar_name")

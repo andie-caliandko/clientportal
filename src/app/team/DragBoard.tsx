@@ -1,0 +1,69 @@
+"use client";
+
+import { createContext, useContext, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { setTaskStatus } from "./actions";
+
+// Drag task cards between columns (To do, In progress, Waiting on client) or
+// onto Done. The buttons on each card still work for phones and keyboards.
+
+type Ctx = { dragging: string | null; setDragging: (id: string | null) => void; enabled: boolean; drop: (status: string) => void };
+const DragCtx = createContext<Ctx | null>(null);
+
+export function DragBoard({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const drop = (status: string) => {
+    const id = dragging;
+    setDragging(null);
+    if (!id) return;
+    startTransition(async () => {
+      await setTaskStatus(id, status);
+      router.refresh();
+    });
+  };
+  return (
+    <DragCtx.Provider value={{ dragging, setDragging, enabled, drop }}>
+      <div className={pending ? "board saving" : "board"}>{children}</div>
+      {enabled && dragging && <DoneZone />}
+    </DragCtx.Provider>
+  );
+}
+
+function DoneZone() {
+  const ctx = useContext(DragCtx)!;
+  const [over, setOver] = useState(false);
+  return (
+    <div className={`done-zone ${over ? "over" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); ctx.drop("done"); }}>
+      Drop here to mark done
+    </div>
+  );
+}
+
+export function DropColumn({ status, children }: { status: string; children: React.ReactNode }) {
+  const ctx = useContext(DragCtx)!;
+  const [over, setOver] = useState(false);
+  return (
+    <div className={`col ${over ? "drop-over" : ""}`}
+      onDragOver={(e) => { if (ctx.enabled && ctx.dragging) { e.preventDefault(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); ctx.drop(status); }}>
+      {children}
+    </div>
+  );
+}
+
+export function DragCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const ctx = useContext(DragCtx)!;
+  return (
+    <div draggable={ctx.enabled} className={ctx.dragging === id ? "dragging" : undefined}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id); ctx.setDragging(id); }}
+      onDragEnd={() => ctx.setDragging(null)}>
+      {children}
+    </div>
+  );
+}

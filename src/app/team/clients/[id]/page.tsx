@@ -5,11 +5,12 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { addToClient, archiveClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { ClientInfoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
-import { driveFolderUrl } from "@/lib/links";
+import { clientLogoUrl, driveFolderUrl } from "@/lib/links";
+import { driveFileUrl } from "@/lib/drive";
 import { TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
@@ -31,7 +32,7 @@ export default async function ClientDetail({
   const { data: client } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
   if (!client) notFound();
 
-  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople] = await Promise.all([
+  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", id),
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
@@ -47,7 +48,12 @@ export default async function ClientDetail({
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50),
     loadTaskPeople(supabase, agency.id, userId),
+    supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
   ]);
+  const uploadRows = uploads.data ?? [];
+  const uploadLinks = uploadRows.length
+    ? new Map(((await supabase.storage.from("uploads").createSignedUrls(uploadRows.map((u) => u.storage_path), 60 * 60)).data ?? []).map((u) => [u.path, u.signedUrl]))
+    : new Map<string | null, string>();
   const names = new Map<string, string>(members0(allMembers.data));
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
   const allTasks = (tasks.data ?? []) as Task[];
@@ -65,8 +71,11 @@ export default async function ClientDetail({
   const monthName = (m: string) => new Date(`${m}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
   const portalLink = `${process.env.NEXT_PUBLIC_SITE_URL}/login?client=${client.slug}`;
+  const logo = clientLogoUrl(client.logo_path);
   const headActions = (
     <div className="head-actions">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {logo && <img className="head-logo" src={logo} alt={`${client.name} logo`} />}
       <CopyButton text={portalLink} label="Copy portal link" done="Link copied" />
       <Link className="btn sm" href={`/preview/${client.id}`}>View their portal</Link>
     </div>
@@ -248,6 +257,47 @@ export default async function ClientDetail({
             <dt>Client logins</dt>
             <dd>{((people.data ?? []) as ClientUser[]).map((p) => `${p.display_name}${p.role === "owner" ? " (owner)" : ""}`).join(" · ") || "None"}</dd>
           </dl>
+        </div>
+
+        <div className="panel">
+          <h2>Client logo</h2>
+          {canEdit ? (
+            <ClientLogoForm agencyId={agency.id} clientId={client.id} logoUrl={logo} />
+          ) : (
+            <div className="logo-box">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {logo ? <img src={logo} alt="Client logo" /> : <span className="note">No logo yet</span>}
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <h2>Files from the client</h2>
+          <p className="note">
+            {client.drive_folder_id
+              ? "Everything they upload is also copied into their Google Drive folder."
+              : "Add their Google Drive folder under Client info, and uploads will be copied there."}
+          </p>
+          {uploadRows.length ? (
+            <ul className="list">
+              {uploadRows.map((u) => (
+                <li key={u.id}>
+                  <span className="pill info">{u.kind === "task" ? "Task" : u.kind === "branding" ? "Branding" : "Content"}</span>
+                  {uploadLinks.get(u.storage_path) ? <a href={uploadLinks.get(u.storage_path)!} target="_blank" rel="noreferrer">{u.file_name}</a> : u.file_name}
+                  <span className="r">
+                    {u.drive_file_id ? (
+                      <a className="pill ok" href={driveFileUrl(u.drive_file_id)} target="_blank" rel="noreferrer">In Drive</a>
+                    ) : client.drive_folder_id ? (
+                      <span className="pill warn">Copying to Drive</span>
+                    ) : null}
+                    <span className="note">{short(u.created_at)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="note">Nothing uploaded yet.</p>
+          )}
         </div>
 
         <div className="panel" style={{ gridColumn: "1 / -1" }}>

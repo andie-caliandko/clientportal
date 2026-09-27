@@ -6,6 +6,7 @@ import { getDueDates, googleStatus } from "@/lib/google";
 import { describeDueDates, monthKey, weekOfMonth, weekRange } from "@/lib/rhythm";
 import { RhythmPanel } from "./RhythmPanel";
 import { TaskCard } from "./TaskCard";
+import { DragBoard, DragCard, DropColumn } from "./DragBoard";
 import { NewTask } from "./TeamForms";
 
 const COLUMNS = [
@@ -94,21 +95,24 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
       {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
 
-      <div className="board">
+      {canEdit && <p className="note">Drag a card to another column to change its status, or onto Done to finish it.</p>}
+      <DragBoard enabled={canEdit}>
         {COLUMNS.map((col) => {
           const items = list.filter((t) => t.status === col.key);
           return (
-            <div className="col" key={col.key}>
+            <DropColumn status={col.key} key={col.key}>
               <h2>{col.label}<span>{items.length}</span></h2>
               {items.map((t) => (
-                <TaskCard key={t.id} task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} agencyName={agencyShort}
-                  personName={(id) => names.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
+                <DragCard id={t.id} key={t.id}>
+                  <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} agencyName={agencyShort}
+                    personName={(id) => names.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
+                </DragCard>
               ))}
               {!items.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}
-            </div>
+            </DropColumn>
           );
         })}
-      </div>
+      </DragBoard>
     </section>
   );
 }

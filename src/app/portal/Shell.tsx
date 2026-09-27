@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { ClientUser } from "@/lib/types";
 import { signOut } from "../login/actions";
 import { PortalNav } from "./PortalNav";
+import { Bell } from "../notifications/Bell";
+import { loadNotifications } from "@/lib/notificationsList";
 import { RailPeople } from "./PortalForms";
+import { clientLogoUrl } from "@/lib/links";
 import { openCount, type PortalCtx, type Section } from "./sections";
 
 /** Three columns: page menu on the left, the page, and Members on the right. */
@@ -18,6 +21,7 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
     openCount(ctx),
   ]);
   const contacts = (people ?? []) as ClientUser[];
+  const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
 
@@ -31,7 +35,10 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
       )}
       <div className="cp">
         <aside className="side cp-side">
-          <div className="brand"><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={58} /></div>
+          <div className="side-top">
+            <div className="brand" style={{ padding: 0 }}><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={52} /></div>
+            {!ctx.preview && notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
+          </div>
           <PortalNav base={ctx.base} current={section} openTasks={open} />
           <div className="me">
             <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{(me?.display_name ?? ctx.firstName)[0]}</span>
@@ -48,6 +55,12 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
         </main>
 
         <aside className="side cp-rail" aria-labelledby="h-members">
+          {clientLogoUrl(ctx.client.logo_path) && (
+            <div className="rail-logo">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={clientLogoUrl(ctx.client.logo_path)!} alt={ctx.client.name} />
+            </div>
+          )}
           <p className="eyebrow" id="h-members">Members</p>
           <div className="rail-group">
             <p className="rail-label">{short} team</p>

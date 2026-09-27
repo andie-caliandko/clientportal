@@ -6,6 +6,8 @@ import { requireClient } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { clientActivity } from "@/lib/notify";
 import { postToSlack } from "@/lib/slack";
+import { after } from "next/server";
+import { syncUploadsToDrive } from "@/lib/drive";
 
 async function markStep(v: { agency: { id: string }; client: { id: string }; userId: string }, kind: string) {
   const supabase = await createClient();
@@ -59,16 +61,22 @@ export async function finishUploads(kind: "branding" | "content", files: { name:
   const v = await requireClient();
   if (!files.length) return;
   const supabase = await createClient();
-  await supabase.from("uploads").insert(
-    files.map((f) => ({
-      agency_id: v.agency.id,
-      client_id: v.client.id,
-      kind,
-      file_name: f.name,
-      storage_path: f.path,
-      created_by: v.userId,
-    })),
-  );
+  const { data: saved } = await supabase
+    .from("uploads")
+    .insert(
+      files.map((f) => ({
+        agency_id: v.agency.id,
+        client_id: v.client.id,
+        kind,
+        file_name: f.name,
+        storage_path: f.path,
+        created_by: v.userId,
+      })),
+    )
+    .select("id");
+  // Copy into their Google Drive folder after the page has responded.
+  const ids = (saved ?? []).map((u) => u.id);
+  if (ids.length) after(() => syncUploadsToDrive({ uploadIds: ids }));
   await markStep(v, kind === "branding" ? "upload_branding" : "upload_content");
   await clientActivity(v.client.id, {
     task: `Review ${files.length} ${kind} file${files.length > 1 ? "s" : ""} from ${v.client.name}`,
@@ -113,6 +121,7 @@ export async function sendMessage(form: FormData) {
     source: "portal",
     subject: `new message from ${v.clientUser.display_name}`,
     body,
+    notify: "message",
   });
   revalidatePath("/portal");
 }
@@ -177,6 +186,21 @@ export async function completeClientTask(input: { id: string; comment: string; f
   });
   if (error) return { error: "That didn't save. Try again." };
   const comment = input.comment.trim();
+  if (input.filePath) {
+    const { data: up } = await supabase
+      .from("uploads")
+      .insert({
+        agency_id: v.agency.id,
+        client_id: v.client.id,
+        kind: "task",
+        file_name: input.filePath.split("/").pop()!.replace(/^\d+-/, ""),
+        storage_path: input.filePath,
+        created_by: v.userId,
+      })
+      .select("id")
+      .single();
+    if (up) after(() => syncUploadsToDrive({ uploadIds: [up.id] }));
+  }
   await clientActivity(v.client.id, {
     task: `${v.clientUser.display_name.split(" ")[0]} finished: ${task.title}`,
     source: "portal",

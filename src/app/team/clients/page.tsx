@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { loadHealth } from "@/lib/healthData";
+import { clientLogoUrl } from "@/lib/links";
 import { RatingPill } from "./[id]/HealthTab";
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ archived?: string; done?: string }> }) {
@@ -10,7 +11,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const showArchived = sp.archived === "1";
   const supabase = await createClient();
   const [{ data: clients }, { data: steps }, { data: status }, { data: cals }, { data: members }] = await Promise.all([
-    supabase.from("clients").select("id, name, account_manager_id, archived_at").order("name"),
+    supabase.from("clients").select("id, name, account_manager_id, archived_at, logo_path").order("name"),
     supabase.from("onboarding_steps").select("id").eq("agency_id", agency.id),
     supabase.from("client_step_status").select("client_id"),
     supabase.from("content_calendars").select("client_id, status, month").order("month", { ascending: false }),
@@ -52,7 +53,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               const done = doneBy.get(c.id) ?? 0;
               return (
                 <tr key={c.id}>
-                  <td><Link href={`/team/clients/${c.id}`}>{c.name}</Link></td>
+                  <td>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {c.logo_path && <img className="client-logo-sm" src={clientLogoUrl(c.logo_path)!} alt="" />}
+                    <Link href={`/team/clients/${c.id}`}>{c.name}</Link>
+                  </td>
                   <td>{health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
                   <td><span className="bar"><i style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>{done} of {total}</td>

@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
 import { emailClient, sendEmail } from "@/lib/notify";
+import { notifyClient, notifyUser } from "@/lib/notifications";
 import { weekStart } from "@/lib/health";
 import { driveFolderId, isUrl, slackChannelId } from "@/lib/links";
 import { monthKey } from "@/lib/rhythm";
@@ -55,6 +56,7 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
       created_by: v.userId,
     });
     if (error) return { error: "That task couldn't be saved." };
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" }, [assignee]);
     await sendEmail(
       [contact.email],
       `${v.member.display_name} added a task for you`,
@@ -65,7 +67,7 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
     return { ok: `Sent to ${contact.display_name.split(" ")[0]}. They'll get an email and see it in their portal.` };
   }
 
-  const { error } = await supabase.from("tasks").insert({
+  const { data: created, error } = await supabase.from("tasks").insert({
     agency_id: v.agency.id,
     client_id: clientId,
     assignee_id: assignee,
@@ -74,8 +76,11 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
     due_at: dueAt?.toISOString() ?? null,
     source: "manual",
     created_by: v.userId,
-  });
+  }).select("id").single();
   if (error) return { error: "That task couldn't be saved. Is that teammate on this client?" };
+  await notifyUser(v.agency.id, clientId, assignee, {
+    kind: "task", title: `${v.member.display_name.split(" ")[0]} assigned you: ${title}`, body: note, link: `/team/tasks/${created!.id}`,
+  }, v.userId);
   revalidatePath("/team");
   if (clientId) revalidatePath(`/team/clients/${clientId}`);
   return { ok: "Task added." };
@@ -124,6 +129,7 @@ export async function sendCalendar(_: Result, form: FormData): Promise<Result> {
   });
 
   const dueText = formatDue(due, v.agency.timezone);
+  await notifyClient(client.id, { kind: "approval", title: `Your ${monthLabel} content is ready for approval`, body: `Please approve by ${dueText}.`, link: "/portal" });
   await emailClient(
     client.id,
     `Your ${monthLabel} content is ready for approval`,
@@ -181,6 +187,7 @@ export async function replyAsTeam(form: FormData) {
     slack_ts: ts,
   });
   await emailClient(client.id, `New message from ${v.member.display_name}`, body);
+  await notifyClient(client.id, { kind: "message", title: `New message from ${v.member.display_name.split(" ")[0]}`, body: body.slice(0, 160), link: "/portal/messages" });
   revalidatePath(`/team/clients/${client.id}`);
 }
 
@@ -522,7 +529,16 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
     .eq("id", id);
   if (error) return { error: "Those changes couldn't be saved. Is that teammate on this client?" };
 
+  if (kind === "team" && assignee !== before.assignee_id && status !== "done") {
+    await notifyUser(v.agency.id, clientId, assignee, {
+      kind: "task", title: `${v.member.display_name.split(" ")[0]} assigned you: ${title}`, body: note, link: `/team/tasks/${id}`,
+    }, v.userId);
+  }
+  if (clientId && status === "waiting" && before.status !== "waiting" && kind === "team") {
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
+  }
   if (contact && assignee !== before.client_assignee_id && status !== "done") {
+    await notifyClient(clientId!, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" }, [assignee]);
     await sendEmail(
       [contact.email],
       `${v.member.display_name} added a task for you`,
@@ -675,8 +691,17 @@ export async function saveScorecard(_: Result, form: FormData): Promise<Result> 
   if (note) await supabase.from("scorecard_notes").upsert({ client_id: clientId, week, note, updated_by: v.userId, updated_at: new Date().toISOString() });
   else await supabase.from("scorecard_notes").delete().eq("client_id", clientId).eq("week", week);
 
+  // Saving a scorecard checks off that client's "update this week's scorecard" task.
+  await supabase
+    .from("tasks")
+    .update({ status: "done", completed_at: new Date().toISOString() })
+    .eq("client_id", clientId)
+    .eq("source", "scorecard")
+    .neq("status", "done");
+
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/clients");
+  revalidatePath("/team");
   return { ok: "Scorecard saved." };
 }
 
@@ -725,4 +750,37 @@ export async function archiveClient(form: FormData) {
     .eq("id", clientId);
   revalidatePath("/team", "layout");
   redirect(archive ? "/team/clients?archived=1&done=archived" : `/team/clients/${clientId}?restored=1`);
+}
+
+/** Saves (or clears) the client's logo after the browser uploaded it to storage. */
+export async function setClientLogo(input: { clientId: string; path: string | null }): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const supabase = await createClient();
+  const { data: ok } = await supabase.rpc("can_edit_client", { c: input.clientId });
+  if (!ok) return { error: "You don't have access to change this client." };
+  if (input.path && !input.path.startsWith(`${v.agency.id}/${input.clientId}/`)) return { error: "That file is in the wrong place. Try again." };
+  const { error } = await createAdminClient().from("clients").update({ logo_path: input.path }).eq("id", input.clientId);
+  if (error) return { error: "The logo couldn't be saved." };
+  revalidatePath(`/team/clients/${input.clientId}`);
+  revalidatePath("/team/clients");
+  return { ok: input.path ? "Logo saved. It now shows on their portal." : "Logo removed." };
+}
+
+/** Drag and drop on the task board. Moving a team task to Waiting on client tells the client. */
+export async function setTaskStatus(id: string, status: string) {
+  await requireEditor();
+  if (!["todo", "doing", "waiting", "done"].includes(status)) return;
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("tasks").select("status, client_id, client_assignee_id, title, note").eq("id", id).maybeSingle();
+  if (!before || before.status === status) return;
+  await supabase
+    .from("tasks")
+    .update({ status, completed_at: status === "done" ? new Date().toISOString() : null })
+    .eq("id", id);
+  if (status === "waiting" && before.client_id && !before.client_assignee_id) {
+    await notifyClient(before.client_id, { kind: "task", title: `New task: ${before.title}`, body: before.note, link: "/portal/tasks" });
+  }
+  revalidatePath("/team");
+  if (before.client_id) revalidatePath(`/team/clients/${before.client_id}`);
 }

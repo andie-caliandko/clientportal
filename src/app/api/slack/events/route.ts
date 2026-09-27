@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { emailClient } from "@/lib/notify";
+import { notifyClient } from "@/lib/notifications";
 import { slackUserName, verifySlackSignature } from "@/lib/slack";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
     .select("id");
 
   // Slack retries deliveries; only email the first time we see a message.
-  if (inserted?.length) await emailClient(client.id, `New message from ${name}`, event.text);
+  if (inserted?.length) {
+    await emailClient(client.id, `New message from ${name}`, event.text);
+    await notifyClient(client.id, { kind: "message", title: `New message from ${name.split(" ")[0]}`, body: event.text.slice(0, 160), link: "/portal/messages" });
+  }
   return NextResponse.json({ ok: true });
 }
