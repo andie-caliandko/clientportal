@@ -438,3 +438,15 @@ td a:hover { text-decoration: underline; }
 .photo-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .photo-btn .av-edit { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; background: rgb(0 0 0 / .45); color: #fff; font-size: .62rem; font-weight: 600; opacity: 0; transition: opacity .15s; }
 .photo-btn:hover .av-edit, .photo-btn:focus-visible .av-edit { opacity: 1; }
+
+/* Photo cropper */
+.lightbox:has(.cropper) { display: grid; place-items: center; grid-template-rows: none; }
+.cropper { background: var(--surface); border-radius: 22px; padding: 24px; display: grid; gap: 14px; justify-items: center; max-width: 100%; }
+.cropper h2 { justify-self: start; }
+.crop-stage { position: relative; overflow: hidden; border-radius: 16px; background: #1b2221; cursor: grab; touch-action: none; user-select: none; max-width: 100%; }
+.crop-stage:active { cursor: grabbing; }
+.crop-stage:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.crop-stage img { position: absolute; max-width: none; pointer-events: none; }
+.crop-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgb(12 18 17 / .55); border: 2px solid rgb(255 255 255 / .85); pointer-events: none; }
+.crop-zoom { display: flex; gap: 10px; align-items: center; width: 100%; }
+.crop-zoom input { flex: 1; accent-color: var(--primary); }

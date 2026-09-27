@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { avatarUrl } from "@/app/Avatar";
+import { PhotoCropper } from "@/app/PhotoCropper";
 import {
   addClientContact,
   addToClient,
@@ -673,6 +674,7 @@ export function AddClientContact({ clientId }: { clientId: string }) {
 /** Your own circle in the sidebar: click it to add or change your photo. */
 export function MyPhoto({ userId, name, path }: { userId: string; name: string; path: string | null }) {
   const [current, setCurrent] = useState(path);
+  const [picked, setPicked] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const url = current?.startsWith("blob:") ? current : avatarUrl(current);
@@ -683,24 +685,30 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {url ? <img src={url} alt="" /> : name[0]}
         </span>
-        <span className="av-edit" aria-hidden="true">{pending ? "…" : current ? "Change" : "Add"}</span>
+        <span className="av-edit" aria-hidden="true">{current ? "Change" : "Add"}</span>
       </label>
-      <input id="my-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Your photo" onChange={(e) => {
+      <input id="my-photo" type="file" accept="image/*" hidden aria-label="Your photo" onChange={(e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) return setError("Use a photo under 5 MB.");
         setError(null);
-        startTransition(async () => {
-          const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-          const filePath = `${userId}/photo-${Date.now()}.${ext}`;
-          const { error: upErr } = await createClient().storage.from("avatars").upload(filePath, file, { contentType: file.type });
-          if (upErr) return setError("Your photo didn't upload. Try again.");
-          const res = await setMyPhoto(filePath);
-          if (res.error) return setError(res.error);
-          setCurrent(URL.createObjectURL(file));
-        });
+        if (file) setPicked(file);
       }} />
+      {picked && (
+        <PhotoCropper
+          file={picked}
+          saving={pending}
+          onCancel={() => setPicked(null)}
+          onSave={(blob) => startTransition(async () => {
+            const filePath = `${userId}/photo-${Date.now()}.jpg`;
+            const { error: upErr } = await createClient().storage.from("avatars").upload(filePath, blob, { contentType: "image/jpeg" });
+            if (upErr) return setError("Your photo didn't upload. Try again.");
+            const res = await setMyPhoto(filePath);
+            if (res.error) return setError(res.error);
+            setCurrent(URL.createObjectURL(blob));
+            setPicked(null);
+          })}
+        />
+      )}
       {error && <p className="error" style={{ fontSize: ".75rem" }}>{error}</p>}
     </div>
   );
