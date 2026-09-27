@@ -50,9 +50,12 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     <section style={{ display: "grid", gap: 18, maxWidth: 760 }}>
       <Link href="/team" className="note">← All tasks</Link>
       <div>
-        <p className="eyebrow">{task.auto ? "Created automatically · " : ""}{SOURCE[task.source] ?? task.source} · {created}</p>
+        <p className="eyebrow">{SOURCE[task.source] ?? task.source} · {created}</p>
         <h1 style={{ fontSize: "2.4rem", marginTop: 6 }}>{task.title}</h1>
       </div>
+      <p className="note">
+        {task.created_by ? <>Created by <b>{names.get(task.created_by) ?? "a former teammate"}</b></> : "Created automatically"}
+      </p>
       {!canEdit && <p className="readonly">View only. Creators can see tasks but can&apos;t change them.</p>}
       {task.client_assignee_id && (
         <p className="note">

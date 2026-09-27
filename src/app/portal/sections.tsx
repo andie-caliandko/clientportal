@@ -52,7 +52,7 @@ const loadCore = (ctx: Omit<PortalCtx, "params">) => coreFor(ctx.agency, ctx.cli
 const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["client"], userId: string | null, preview: boolean) => {
   const supabase = await createClient();
   const ctx = { userId, preview };
-  const [steps, status, calendars, manager, people, tasks] = await Promise.all([
+  const [steps, status, calendars, manager, people, tasks, teamRows] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", client.id),
     supabase.from("content_calendars").select("*").eq("client_id", client.id).order("month", { ascending: false }),
@@ -68,7 +68,14 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
       .or("client_assignee_id.not.is.null,and(status.eq.waiting,source.neq.rella)")
       .neq("status", "done")
       .order("due_at", { ascending: true, nullsFirst: false }),
+    supabase.from("client_team").select("user_id").eq("client_id", client.id),
   ]);
+  // Teammates this client can see (admins only when they're the account manager), for "From <name>".
+  const teamIds = (teamRows.data ?? []).map((r) => r.user_id);
+  const { data: teamPeople } = teamIds.length
+    ? await supabase.from("agency_members").select("user_id, display_name, role").in("user_id", teamIds)
+    : { data: [] as { user_id: string; display_name: string; role: string }[] };
+  const visibleTeam = new Map((teamPeople ?? []).filter((p) => p.role !== "admin").map((p) => [p.user_id, p.display_name]));
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at as string]));
   const allSteps = (steps.data ?? []) as Step[];
   const cals = (calendars.data ?? []) as Calendar[];
@@ -81,7 +88,7 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
     note: t.note,
     due: t.due_at ? new Date(t.due_at).toLocaleDateString("en-US", { timeZone: agency.timezone, weekday: "short", month: "short", day: "numeric" }) : null,
     overdue: !!t.due_at && new Date(t.due_at).getTime() < Date.now(),
-    from: t.created_by === client.account_manager_id ? amName : agency.brand.shortName ?? agency.name,
+    from: t.created_by === client.account_manager_id ? amName : (t.created_by && visibleTeam.get(t.created_by)) || (agency.brand.shortName ?? agency.name),
     forName: !t.client_assignee_id
       ? client.name
       : t.client_assignee_id === ctx.userId && !ctx.preview ? "you" : byId.get(t.client_assignee_id) ?? client.name,

@@ -106,6 +106,8 @@ export type Doc = { id: string; kind: "strategy" | "report"; title: string; stor
 
 export type Task = {
   id: string;
+  /** Who added it; empty for tasks the system made. */
+  created_by: string | null;
   client_id: string | null;
   title: string;
   source: string;

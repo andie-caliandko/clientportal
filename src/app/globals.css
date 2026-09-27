@@ -431,3 +431,4 @@ td a:hover { text-decoration: underline; }
 .sk-block.short { height: 90px; width: 70%; }
 @keyframes sk-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .skeleton span { animation: none; } }
+.task-by { font-size: .78rem; opacity: .7; margin: 0; }

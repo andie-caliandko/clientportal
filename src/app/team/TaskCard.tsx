@@ -42,6 +42,7 @@ export function TaskCard({ task: t, clientName, agencyName, showClientChip = tru
         {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
         {t.auto && <span>· auto</span>}
       </div>
+      <p className="task-by">{t.created_by ? `Created by ${personName(t.created_by) ?? "a former teammate"}` : "Created automatically"}</p>
       {canEdit && (
         <div className="task-actions">
           {moves.map((m) => (
