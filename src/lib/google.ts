@@ -252,7 +252,7 @@ export async function deleteMemberEvent(userId: string, eventId: string) {
 export async function memberEvents(userId: string, fromIso: string, toIso: string): Promise<CalEvent[] | null> {
   const auth = await memberAuth(userId);
   if (!auth) return null;
-  const params = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+  const params = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime", maxResults: "2500" });
   const data = await gcal<{ items?: GEvent[] }>(auth.token, `/calendars/primary/events?${params}`);
   return (data.items ?? [])
     .filter((e) => e.status !== "cancelled" && e.eventType !== "workingLocation")

@@ -8,6 +8,7 @@ import { ConfirmButton } from "../TeamForms";
 import { disconnectMyGoogle } from "./actions";
 import { AddToSchedule, BookingHours } from "./ScheduleForms";
 import { TogetherWeek, type WeekItem } from "./TogetherWeek";
+import { MonthGrid } from "./MonthGrid";
 import { EventChip, type EventInfo } from "./EventDialog";
 import { memberColors } from "@/lib/memberColors";
 
@@ -25,19 +26,31 @@ const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:
 
 type Person = { user_id: string; display_name: string; title: string | null; role: string; avatar_path: string | null; book_start: number; book_end: number; book_days: number[] };
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ week?: string; google?: string; view?: string }> }) {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ date?: string; week?: string; google?: string; view?: string; range?: string }> }) {
   const { agency, member, userId } = await requireTeam();
-  const { week, google, view: viewParam } = await searchParams;
-  const view = viewParam === "people" ? "people" : "together";
+  const { date: dateParam, week, google, view: viewParam, range: rangeParam } = await searchParams;
+  const range = rangeParam === "day" || rangeParam === "month" ? rangeParam : "week";
+  // Month is one shared grid; By person is for a day or a week.
+  const view = viewParam === "people" && range !== "month" ? "people" : "together";
   const tz = agency.timezone;
   const isAdmin = member.role === "admin";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  // Weeks run Monday to Sunday.
-  const anchor = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? week : today;
-  const monday = addDays(anchor, -((new Date(`${anchor}T00:00:00Z`).getUTCDay() + 6) % 7));
-  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const from = dateAtHour(monday, 0, tz).toISOString();
-  const to = dateAtHour(addDays(monday, 7), 0, tz).toISOString();
+  const picked = dateParam ?? week;
+  const anchor = picked && /^\d{4}-\d{2}-\d{2}$/.test(picked) ? picked : today;
+  // Weeks run Monday to Sunday; a month shows the full weeks it touches.
+  const mondayOf = (d: string) => addDays(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
+  const monthFirst = `${anchor.slice(0, 7)}-01`;
+  const monthNext = new Date(Date.UTC(+anchor.slice(0, 4), +anchor.slice(5, 7), 1)).toISOString().slice(0, 10);
+  const monthPrev = new Date(Date.UTC(+anchor.slice(0, 4), +anchor.slice(5, 7) - 2, 1)).toISOString().slice(0, 10);
+  const first = range === "day" ? anchor : range === "week" ? mondayOf(anchor) : mondayOf(monthFirst);
+  const count = range === "day" ? 1 : range === "week" ? 7 : (Date.parse(mondayOf(addDays(monthNext, 6))) - Date.parse(first)) / DAY;
+  const days = Array.from({ length: count }, (_, i) => addDays(first, i));
+  const from = dateAtHour(first, 0, tz).toISOString();
+  const to = dateAtHour(addDays(first, count), 0, tz).toISOString();
+  const step = {
+    prev: range === "day" ? addDays(anchor, -1) : range === "week" ? addDays(first, -7) : monthPrev,
+    next: range === "day" ? addDays(anchor, 1) : range === "week" ? addDays(first, 7) : monthNext,
+  };
 
   const supabase = await createClient();
   const [{ data: rows }, connected] = await Promise.all([
@@ -132,7 +145,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     }
   }
   const legend = people.filter((p) => connected.has(p.user_id)).map((p) => ({ name: p.user_id === userId ? "You" : p.display_name, color: colors.get(p.user_id) ?? 0 }));
-  const q = (params: Record<string, string>) => `/team/calendar?${new URLSearchParams({ ...(week ? { week: monday } : {}), ...(view === "people" ? { view } : {}), ...params })}`;
+  const q = (params: Record<string, string>) =>
+    `/team/calendar?${new URLSearchParams({ ...(picked ? { date: anchor } : {}), ...(view === "people" ? { view } : {}), ...(range !== "week" ? { range } : {}), ...params })}`;
+  const heading = range === "day"
+    ? dayLabel(anchor, { weekday: "long", month: "long", day: "numeric" })
+    : range === "week"
+      ? `${dayLabel(days[0], { month: "short", day: "numeric" })} – ${dayLabel(days[6], { month: days[0].slice(5, 7) === days[6].slice(5, 7) ? undefined : "short", day: "numeric" })}`
+      : dayLabel(monthFirst, { month: "long", year: "numeric" });
 
   const whosOut = everyone.flatMap((p) => (cal.get(p.user_id)?.out ?? []).map((e) => ({ p, e }))).sort((a, b) => a.e.start.localeCompare(b.e.start));
   const iAmConnected = connected.has(userId);
@@ -141,19 +160,24 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     <section style={{ display: "grid", gap: 20 }}>
       <div className="top">
         <div>
-          <p className="eyebrow">{isAdmin ? "Everyone's week" : "Your week"} · from Google Calendar</p>
+          <p className="eyebrow">{isAdmin ? "Everyone" : "Your calendar"} · {heading}</p>
           <h1 style={{ marginTop: 6 }}>Calendar</h1>
         </div>
         <div className="row" style={{ alignItems: "center" }}>
-          {isAdmin && (
+          <nav className="view-switch" aria-label="Range">
+            <Link href={q({ range: "day" })} aria-current={range === "day" ? "page" : undefined}>Day</Link>
+            <Link href={q({ range: "week" })} aria-current={range === "week" ? "page" : undefined}>Week</Link>
+            <Link href={q({ range: "month" })} aria-current={range === "month" ? "page" : undefined}>Month</Link>
+          </nav>
+          {isAdmin && range !== "month" && (
             <nav className="view-switch" aria-label="View">
               <Link href={q({ view: "together" })} aria-current={view === "together" ? "page" : undefined}>Together</Link>
               <Link href={q({ view: "people" })} aria-current={view === "people" ? "page" : undefined}>By person</Link>
             </nav>
           )}
-          <Link className="btn sm line" href={q({ week: addDays(monday, -7) })} aria-label="Previous week">←</Link>
-          <Link className="btn sm line" href={q({ week: today })}>This week</Link>
-          <Link className="btn sm line" href={q({ week: addDays(monday, 7) })} aria-label="Next week">→</Link>
+          <Link className="btn sm line" href={q({ date: step.prev })} aria-label={`Previous ${range}`}>←</Link>
+          <Link className="btn sm line" href={q({ date: today })}>Today</Link>
+          <Link className="btn sm line" href={q({ date: step.next })} aria-label={`Next ${range}`}>→</Link>
         </div>
       </div>
       {google && GOOGLE_MESSAGES[google] && <p className={google === "connected" ? "flash" : "readonly"}>{GOOGLE_MESSAGES[google]}</p>}
@@ -185,7 +209,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       {iAmConnected && <AddToSchedule today={today} />}
 
-      {view === "together" ? (
+      {range === "month" ? (
+        <MonthGrid
+          days={days}
+          month={anchor.slice(0, 7)}
+          today={today}
+          items={together}
+          legend={legend}
+          dayHref={(d) => q({ date: d, range: "day" })}
+        />
+      ) : view === "together" ? (
         <TogetherWeek
           days={days.map((d) => ({ date: d, weekday: dayLabel(d, { weekday: "short" }), label: dayLabel(d, { month: "short", day: "numeric" }) }))}
           today={today}
@@ -194,7 +227,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         />
       ) : (
       <div className="sched-wrap">
-        <table className="sched">
+        <table className={`sched ${days.length === 1 ? "one" : ""}`}>
           <thead>
             <tr>
               <th scope="col"><span className="sr-only">Person</span></th>

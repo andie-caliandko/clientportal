@@ -36,7 +36,7 @@ export function TogetherWeek({ days, today, items, legend }: {
         {legend.map((l) => <li key={l.name}><i className={`who-${l.color}`} aria-hidden="true" />{l.name}</li>)}
       </ul>
       <div className="tw-scroll">
-        <div className="tw-grid" style={{ "--tw-hours": hours.length, "--tw-hour": `${HOUR}px` } as React.CSSProperties}>
+        <div className="tw-grid" style={{ "--tw-hours": hours.length, "--tw-hour": `${HOUR}px`, "--tw-days": days.length } as React.CSSProperties}>
           <div className="tw-corner" />
           {days.map((d) => (
             <div key={d.date} className={`tw-head ${d.date === today ? "today" : ""}`}><small>{d.weekday}</small> {d.label}</div>

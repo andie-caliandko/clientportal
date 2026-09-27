@@ -544,7 +544,7 @@ td a:hover { text-decoration: underline; }
 .tw-legend i.who-6 { background: var(--who-6); border-color: var(--who-6-ink); }
 .tw-legend i.who-7 { background: var(--who-7); border-color: var(--who-7-ink); }
 .tw-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
-.tw-grid { display: grid; grid-template-columns: 64px repeat(7, minmax(160px, 1fr)); min-width: 1184px; }
+.tw-grid { display: grid; grid-template-columns: 64px repeat(var(--tw-days, 7), minmax(160px, 1fr)); min-width: calc(64px + var(--tw-days, 7) * 160px); }
 .tw-corner, .tw-head { padding: 10px 8px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: .8rem; font-weight: 600; }
 .tw-head { border-left: 1px solid var(--line); }
 .tw-head small { display: block; font-family: var(--label); text-transform: uppercase; letter-spacing: .1em; font-size: .62rem; opacity: .7; font-weight: 500; }
@@ -583,3 +583,22 @@ td a:hover { text-decoration: underline; }
 .tw-ev.timed.ev-btn { width: auto; }
 .tw-ev.shared.ev-btn { border-left-width: 3px; }
 .ev.ev-btn { border: 0; color: inherit; }
+
+/* Calendar: month */
+.mg { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); min-width: 910px; }
+.mg-wd { padding: 8px; font-family: var(--label); text-transform: uppercase; letter-spacing: .1em; font-size: .64rem; background: var(--surface-2); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); }
+.mg-wd:first-child, .mg-day:nth-child(7n + 8) { border-left: 0; }
+.mg-day { min-height: 118px; padding: 6px; display: grid; gap: 3px; align-content: start; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.mg-day.other { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.mg-day.other .mg-num { opacity: .5; }
+.mg-day.today { background: color-mix(in srgb, var(--hi) 18%, transparent); }
+.mg-num { justify-self: start; font-weight: 600; font-size: .82rem; text-decoration: none; color: var(--ink); padding: 1px 6px; border-radius: 999px; }
+.mg-day.today .mg-num { background: var(--primary); color: var(--bg); }
+.mg-num:hover { background: var(--soft); }
+.mg-ev { padding: 2px 5px; font-size: .7rem; border-left-width: 3px; }
+.tw-ev.mg-ev.ev-btn { border-left-width: 3px; }
+.mg-ev b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-ev .mg-time { display: inline; font-size: inherit; font-variant-numeric: tabular-nums; opacity: .8; }
+.mg-more { font-size: .72rem; color: var(--ink-2); text-decoration: none; padding-left: 4px; }
+.mg-more:hover { text-decoration: underline; }
+.sched.one { min-width: 0; }
