@@ -605,3 +605,14 @@ td a:hover { text-decoration: underline; }
 .sched.one { min-width: 0; }
 .rh-this { display: grid; gap: 10px; }
 .task-actions a { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: .2em .6em; font-size: .75rem; text-decoration: none; color: inherit; }
+
+/* Today, in every calendar view */
+.tw-head.today, .sched thead th.today { background: var(--primary); color: var(--bg); }
+.tw-head.today small, .sched thead th.today small { opacity: .9; }
+.tw-allday.today, .tw-day.today, .sched td.today { background-color: color-mix(in srgb, var(--hi) 32%, transparent); }
+.tw-day.today { box-shadow: inset 2px 0 0 var(--primary), inset -2px 0 0 var(--primary); }
+.tw-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--crit); z-index: 2; pointer-events: none; }
+.tw-now::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--crit); }
+.mg-day.today { background: color-mix(in srgb, var(--hi) 32%, transparent); box-shadow: inset 0 0 0 2px var(--primary); }
+.mg-top { display: flex; align-items: center; gap: 6px; }
+.mg-today { font-family: var(--label); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--primary); font-weight: 600; }

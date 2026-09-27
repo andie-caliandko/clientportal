@@ -29,7 +29,10 @@ export function MonthGrid({ days, month, today, items, legend, dayHref }: {
             const more = list.length - SHOW;
             return (
               <div key={d} className={`mg-day ${d.slice(0, 7) === month ? "" : "other"} ${d === today ? "today" : ""}`}>
-                <Link className="mg-num" href={dayHref(d)} aria-label={`Open ${d}`}>{+d.slice(8)}</Link>
+                <span className="mg-top">
+                  <Link className="mg-num" href={dayHref(d)} aria-label={`Open ${d}`} aria-current={d === today ? "date" : undefined}>{+d.slice(8)}</Link>
+                  {d === today && <span className="mg-today">Today</span>}
+                </span>
                 {list.slice(0, more > 0 ? SHOW - 1 : SHOW).map((i) => (
                   <EventChip key={i.key} info={i.info} className={`tw-ev mg-ev who-${i.color} ${i.ooo ? "ooo" : ""}`} title={`${i.who} · ${i.timeLabel} · ${i.title}`}>
                     <b>{i.start !== undefined && <span className="mg-time">{i.timeLabel.split("–")[0]} </span>}{i.ooo ? `${i.who} out` : i.title}</b>

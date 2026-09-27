@@ -17,9 +17,11 @@ export type WeekItem = {
 };
 
 /** Everyone's week on one grid, each person in their own color; overlaps sit side by side. */
-export function TogetherWeek({ days, today, items, legend }: {
+export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
   days: { date: string; weekday: string; label: string }[];
   today: string;
+  /** Minutes after midnight right now, in the agency's time zone, for the "now" line. */
+  nowMinutes: number;
   /** date → that day's events */
   items: Record<string, WeekItem[]>;
   legend: { name: string; color: number }[];
@@ -39,7 +41,9 @@ export function TogetherWeek({ days, today, items, legend }: {
         <div className="tw-grid" style={{ "--tw-hours": hours.length, "--tw-hour": `${HOUR}px`, "--tw-days": days.length } as React.CSSProperties}>
           <div className="tw-corner" />
           {days.map((d) => (
-            <div key={d.date} className={`tw-head ${d.date === today ? "today" : ""}`}><small>{d.weekday}</small> {d.label}</div>
+            <div key={d.date} className={`tw-head ${d.date === today ? "today" : ""}`} aria-current={d.date === today ? "date" : undefined}>
+              <small>{d.date === today ? `Today · ${d.weekday}` : d.weekday}</small> {d.label}
+            </div>
           ))}
 
           <div className="tw-gutter tw-allday-label">All day</div>
@@ -60,6 +64,9 @@ export function TogetherWeek({ days, today, items, legend }: {
             const placed = layoutDay((items[d.date] ?? []).filter((i) => i.start !== undefined).map((i) => ({ ...i, start: i.start!, end: i.end! })));
             return (
               <div key={d.date} className={`tw-day ${d.date === today ? "today" : ""}`}>
+                {d.date === today && nowMinutes >= first * 60 && nowMinutes <= last * 60 && (
+                  <div className="tw-now" style={{ top: ((nowMinutes - first * 60) / 60) * HOUR }} aria-hidden="true" />
+                )}
                 {placed.map((i) => {
                   const top = ((i.start - first * 60) / 60) * HOUR;
                   const height = Math.max(22, ((i.end - i.start) / 60) * HOUR - 2);

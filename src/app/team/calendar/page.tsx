@@ -35,6 +35,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const tz = agency.timezone;
   const isAdmin = member.role === "admin";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [nowH, nowM] = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()).split(":").map(Number);
+  const nowMinutes = nowH * 60 + nowM;
   const picked = dateParam ?? week;
   const anchor = picked && /^\d{4}-\d{2}-\d{2}$/.test(picked) ? picked : today;
   // Weeks run Monday to Sunday; a month shows the full weeks it touches.
@@ -224,6 +226,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <TogetherWeek
           days={days.map((d) => ({ date: d, weekday: dayLabel(d, { weekday: "short" }), label: dayLabel(d, { month: "short", day: "numeric" }) }))}
           today={today}
+          nowMinutes={nowMinutes}
           items={together}
           legend={legend}
         />
@@ -234,8 +237,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             <tr>
               <th scope="col"><span className="sr-only">Person</span></th>
               {days.map((d) => (
-                <th scope="col" key={d} className={d === today ? "today" : ""}>
-                  <small>{dayLabel(d, { weekday: "short" })}</small> {dayLabel(d, { month: "short", day: "numeric" })}
+                <th scope="col" key={d} className={d === today ? "today" : ""} aria-current={d === today ? "date" : undefined}>
+                  <small>{d === today ? `Today · ${dayLabel(d, { weekday: "short" })}` : dayLabel(d, { weekday: "short" })}</small> {dayLabel(d, { month: "short", day: "numeric" })}
                 </th>
               ))}
             </tr>
