@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { avatarUrl } from "@/app/Avatar";
 import {
   addClientContact,
   addToClient,
@@ -12,6 +13,7 @@ import {
   editCalendar,
   saveNewClientTasks,
   setClientLogo,
+  setMyPhoto,
   setContractLink,
   updateTeammate,
   inviteTeammate,
@@ -665,5 +667,41 @@ export function AddClientContact({ clientId }: { clientId: string }) {
         <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
       </div>
     </form>
+  );
+}
+
+/** Your own circle in the sidebar: click it to add or change your photo. */
+export function MyPhoto({ userId, name, path }: { userId: string; name: string; path: string | null }) {
+  const [current, setCurrent] = useState(path);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const url = current?.startsWith("blob:") ? current : avatarUrl(current);
+  return (
+    <div style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+      <label className="photo-btn" htmlFor="my-photo" title={current ? "Change your photo" : "Add your photo"}>
+        <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {url ? <img src={url} alt="" /> : name[0]}
+        </span>
+        <span className="av-edit" aria-hidden="true">{pending ? "…" : current ? "Change" : "Add"}</span>
+      </label>
+      <input id="my-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Your photo" onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) return setError("Use a photo under 5 MB.");
+        setError(null);
+        startTransition(async () => {
+          const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+          const filePath = `${userId}/photo-${Date.now()}.${ext}`;
+          const { error: upErr } = await createClient().storage.from("avatars").upload(filePath, file, { contentType: file.type });
+          if (upErr) return setError("Your photo didn't upload. Try again.");
+          const res = await setMyPhoto(filePath);
+          if (res.error) return setError(res.error);
+          setCurrent(URL.createObjectURL(file));
+        });
+      }} />
+      {error && <p className="error" style={{ fontSize: ".75rem" }}>{error}</p>}
+    </div>
   );
 }

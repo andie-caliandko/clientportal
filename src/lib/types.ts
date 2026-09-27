@@ -39,6 +39,8 @@ export type Member = {
   display_name: string;
   title: string | null;
   email: string;
+  /** Their photo in the avatars bucket, if they've added one. */
+  avatar_path: string | null;
 };
 
 export type Client = {

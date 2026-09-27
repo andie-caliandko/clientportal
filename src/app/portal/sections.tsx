@@ -1,3 +1,4 @@
+import { Avatar } from "@/app/Avatar";
 import { cache } from "react";
 import Link from "next/link";
 import { formatDue } from "@/lib/approval";
@@ -35,7 +36,6 @@ const DONE_MESSAGES: Record<string, string> = {
 };
 
 const monthName = (m: string) => new Date(`${m}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-const initials = (name: string) => name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 
 function greeting(tz: string) {
   const h = +new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(new Date());
@@ -316,7 +316,13 @@ export async function MessagesSection(ctx: PortalCtx) {
   // The newest 300, shown oldest to newest so the latest sits at the bottom.
   const { data: newest } = await supabase.from("messages").select("*").eq("client_id", ctx.client.id).order("created_at", { ascending: false }).limit(300);
   const data = (newest ?? []).reverse();
-  const fileUrls = await signAttachments(supabase, (data ?? []) as Message[]);
+  // Teammates' photos next to their messages (Slack replies match by name).
+  const [fileUrls, { data: photos }] = await Promise.all([
+    signAttachments(supabase, (data ?? []) as Message[]),
+    supabase.from("agency_members").select("user_id, display_name, avatar_path").eq("agency_id", ctx.agency.id).not("avatar_path", "is", null),
+  ]);
+  const photoOf = (m: Message) =>
+    m.author_kind !== "team" ? null : (photos ?? []).find((p) => p.user_id === m.author_id || (!m.author_id && p.display_name === m.author_name))?.avatar_path;
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
   return (
     <>
@@ -327,7 +333,7 @@ export async function MessagesSection(ctx: PortalCtx) {
             const mine = ctx.preview ? m.author_kind === "client" : m.author_id === ctx.userId;
             return (
               <div key={m.id} className={`msg ${mine ? "me" : ""}`}>
-                <span className="av">{initials(m.author_name)}</span>
+                <Avatar name={m.author_name} path={photoOf(m)} initials={2} />
                 <div className="bubble">
                   <small>
                     {mine && !ctx.preview ? "You" : m.author_name} ·{" "}

@@ -1,3 +1,4 @@
+import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
 import { Logo } from "@/lib/brand";
 import { redirect } from "next/navigation";
@@ -23,7 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (member.role !== "admin") redirect("/team");
   const supabase = await createClient();
   const [{ data: members }, { data: steps }, { count: questionCount }, { data: activeClients }, { data: onClients }] = await Promise.all([
-    supabase.from("agency_members").select("user_id, display_name, title, role, email").eq("agency_id", agency.id).order("display_name"),
+    supabase.from("agency_members").select("user_id, display_name, title, role, email, avatar_path").eq("agency_id", agency.id).order("display_name"),
     supabase.from("onboarding_steps").select("title, kind").eq("agency_id", agency.id).order("position"),
     supabase.from("questions").select("*", { count: "exact", head: true }).eq("agency_id", agency.id),
     supabase.from("clients").select("id, account_manager_id").eq("agency_id", agency.id).is("archived_at", null),
@@ -104,7 +105,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               ]);
               return (
                 <li key={m.user_id}>
-                  <span className="av">{m.display_name[0]}</span>
+                  <Avatar name={m.display_name} path={m.avatar_path} />
                   <span>
                     <b>{m.display_name}</b>
                     <span className="note">

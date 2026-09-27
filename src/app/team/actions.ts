@@ -867,3 +867,17 @@ export async function removeClientContact(form: FormData) {
   await supabase.from("client_users").delete().eq("client_id", clientId).eq("user_id", String(form.get("user")));
   revalidatePath(`/team/clients/${clientId}`);
 }
+
+/** A teammate adds, replaces or removes their own photo. */
+export async function setMyPhoto(path: string | null): Promise<Result> {
+  const v = await requireTeam();
+  if (path && !path.startsWith(`${v.userId}/`)) return { error: "That photo is in the wrong place. Try again." };
+  const { error } = await createAdminClient()
+    .from("agency_members")
+    .update({ avatar_path: path })
+    .eq("user_id", v.userId)
+    .eq("agency_id", v.agency.id);
+  if (error) return { error: "Your photo couldn't be saved." };
+  revalidatePath("/", "layout");
+  return { ok: path ? "Photo saved." : "Photo removed." };
+}

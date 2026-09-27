@@ -1,3 +1,4 @@
+import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatDue } from "@/lib/approval";
@@ -50,7 +51,7 @@ export default async function ClientDetail({
       ? supabase.from("agency_members").select("display_name").eq("user_id", client.account_manager_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("client_team").select("user_id").eq("client_id", id),
-    supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
+    supabase.from("agency_members").select("user_id, display_name, role, avatar_path").eq("agency_id", agency.id).order("display_name"),
     supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50),
     loadTaskPeople(supabase, agency.id, userId),
     supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
@@ -66,7 +67,8 @@ export default async function ClientDetail({
   const openTasks = allTasks.filter((t) => t.status !== "done");
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
-  const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role }[];
+  const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role; avatar_path: string | null }[];
+  const photoOf = (m: Message) => members.find((x) => x.user_id === m.author_id)?.avatar_path ?? (m.author_kind === "team" ? members.find((x) => x.display_name === m.author_name)?.avatar_path : null);
   // Account managers and creators added here show to the client; admins never do
   // (unless an admin is the account manager). Admins can open every account anyway.
   const accountTeam = members.filter((m) => onTeam.has(m.user_id) && (m.role !== "admin" || m.user_id === client.account_manager_id));
@@ -337,6 +339,7 @@ export default async function ClientDetail({
           <ul className="list">
             {accountTeam.map((m) => (
               <li key={m.user_id}>
+                <Avatar name={m.display_name} path={m.avatar_path} style={{ width: 32, height: 32 }} />
                 <b>{m.display_name}</b>
                 <span className="note">{m.user_id === client.account_manager_id ? "Account manager" : ROLE_LABEL[m.role]}</span>
                 <span className="r">
@@ -414,7 +417,7 @@ export default async function ClientDetail({
         <ScrollToLatest className="thread" style={{ maxHeight: 460 }} latest={messages.data?.[0]?.id}>
           {[...((messages.data ?? []) as Message[])].reverse().map((m) => (
             <div key={m.id} className={`msg ${m.author_kind === "team" ? "me" : ""}`}>
-              <span className="av">{m.author_name[0]}</span>
+              <Avatar name={m.author_name} path={photoOf(m)} />
               <div className="bubble"><small>{m.author_name} · {short(m.created_at)}</small>{m.body}<MessageFiles files={m.attachments} urls={messageFileUrls} /></div>
             </div>
           ))}

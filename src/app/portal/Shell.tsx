@@ -1,3 +1,4 @@
+import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
 import { Logo } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +12,8 @@ import { clientLogoUrl } from "@/lib/links";
 import { openCount } from "./sections";
 import type { PortalBase } from "./context";
 
+type TeamPerson = { user_id: string; display_name: string; title: string | null; role: string; avatar_path: string | null };
+
 /** Three columns: page menu on the left, the page, and Members on the right. */
 export async function PortalShell({ ctx, children }: { ctx: PortalBase; children: React.ReactNode }) {
   const supabase = await createClient();
@@ -23,12 +26,12 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
   // Everyone the agency put on this account, account manager first.
   const teamIds = [...new Set([ctx.client.account_manager_id, ...(teamRows ?? []).map((t) => t.user_id)].filter(Boolean))] as string[];
   const { data: teamPeople } = teamIds.length
-    ? await supabase.from("agency_members").select("user_id, display_name, title, role").in("user_id", teamIds)
-    : { data: [] as { user_id: string; display_name: string; title: string | null; role: string }[] };
+    ? await supabase.from("agency_members").select("user_id, display_name, title, role, avatar_path").in("user_id", teamIds)
+    : { data: [] as TeamPerson[] };
   // Admins stay hidden from clients unless they're this client's account manager.
   const team = teamIds
     .map((id) => (teamPeople ?? []).find((p) => p.user_id === id))
-    .filter((p): p is { user_id: string; display_name: string; title: string | null; role: string } => !!p && (p.role !== "admin" || p.user_id === ctx.client.account_manager_id));
+    .filter((p): p is TeamPerson => !!p && (p.role !== "admin" || p.user_id === ctx.client.account_manager_id));
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
@@ -75,7 +78,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
             <ul className="people">
               {team.map((p) => (
                 <li key={p.user_id}>
-                  <span className="av warm">{p.display_name[0]}</span>
+                  <Avatar className="warm" name={p.display_name} path={p.avatar_path} />
                   <span>
                     <b>{p.display_name}</b>
                     <span className="note">{p.user_id === ctx.client.account_manager_id ? "Account manager" : p.title ?? "Your team"}</span>

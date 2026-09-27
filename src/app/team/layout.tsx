@@ -3,6 +3,7 @@ import { requireTeam } from "@/lib/session";
 import { ROLE_LABEL } from "@/lib/types";
 import { signOut } from "../login/actions";
 import { TeamNav } from "./TeamNav";
+import { MyPhoto } from "./TeamForms";
 import { Bell } from "../notifications/Bell";
 import { loadNotifications } from "@/lib/notificationsList";
 
@@ -19,10 +20,11 @@ export default async function TeamLayout({ children }: { children: React.ReactNo
         </div>
         <TeamNav isAdmin={member.role === "admin"} />
         <div className="me">
-          <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{member.display_name[0]}</span>
+          <MyPhoto userId={member.user_id} name={member.display_name} path={member.avatar_path} />
           <div>
             <b>{member.display_name}</b>
             <p className="note">{ROLE_LABEL[member.role]}{member.role === "admin" ? " · all clients" : member.role === "creator" ? " · view only" : ""}</p>
+            {!member.avatar_path && <label htmlFor="my-photo" className="linkbtn note" style={{ cursor: "pointer" }}>Add your photo</label>}
             <form action={signOut}><button className="linkbtn note">Sign out</button></form>
           </div>
         </div>
