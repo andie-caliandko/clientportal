@@ -42,7 +42,10 @@ export function RhythmPanel({ rhythm, current, ranges, checks, canEdit, dueDates
   const currentItems = rhythm.find((w) => w.week === current)?.items ?? [];
   const r = rhythm.find((w) => w.week === week);
   if (!rhythm.length && !dueDates.length) return null;
-  const upcoming = dueDates.filter((d) => d.daysAway >= 0).slice(0, 4);
+  // This rhythm week of this month (including days already passed), then what's after it.
+  const inCurrent = (d: DueItem) => d.week === current;
+  const dueNow = dueDates.filter(inCurrent);
+  const upcoming = dueDates.filter((d) => d.daysAway >= 0 && !inCurrent(d)).slice(0, 4);
   const thisWeek = dueDates.filter((d) => d.week === week);
 
   return (
@@ -62,23 +65,40 @@ export function RhythmPanel({ rhythm, current, ranges, checks, canEdit, dueDates
         </div>
       </div>
       {calendarName && (
-        <div className="due-strip" aria-label="Coming up">
-          <p className="eyebrow">Coming up · from {calendarName}</p>
-          {upcoming.length ? (
-            <ul>
-              {upcoming.map((d) => (
-                <li key={d.id} className={d.daysAway <= 3 ? "soon" : ""}>
-                  <b>{d.title}</b>
-                  <span>{d.label} · {when(d.daysAway)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="note">Nothing due in the next few weeks.</p>
-          )}
+        <div className="due-split">
+          <div className="due-strip due-now" aria-label="Due this week">
+            <p className="eyebrow">Due this week · {ranges[current]}</p>
+            {dueNow.length ? (
+              <ul>
+                {dueNow.map((d) => (
+                  <li key={d.id} className={d.daysAway < 0 ? "past" : d.daysAway <= 3 ? "soon" : ""}>
+                    <b>{d.title}</b>
+                    <span>{d.label} · {when(d.daysAway)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="note">Nothing from {calendarName} is due this week.</p>
+            )}
+          </div>
+          <div className="due-strip" aria-label="Coming up">
+            <p className="eyebrow">Coming up after this week</p>
+            {upcoming.length ? (
+              <ul>
+                {upcoming.map((d) => (
+                  <li key={d.id}>
+                    <b>{d.title}</b>
+                    <span>{d.label} · {when(d.daysAway)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="note">Nothing else due in the next few weeks.</p>
+            )}
+          </div>
         </div>
       )}
-      {thisWeek.length > 0 && (
+      {week !== current && thisWeek.length > 0 && (
         <p className="note">
           <b>Due in week {week}:</b> {thisWeek.map((d) => `${d.title} (${d.label})`).join(" · ")}
         </p>
