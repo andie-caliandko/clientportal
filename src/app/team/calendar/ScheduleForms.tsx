@@ -35,8 +35,8 @@ export function AddToSchedule({ today }: { today: string }) {
           <div className="field"><label htmlFor="ev-title">What</label><input className="input" id="ev-title" name="title" placeholder="Content shoot at Harris office" required /></div>
           <div className="row">
             <div className="field"><label htmlFor="ev-date">Date</label><input className="input" id="ev-date" name="date" type="date" defaultValue={today} required /></div>
-            <div className="field"><label htmlFor="ev-start">Starts</label><input className="input" id="ev-start" name="start" type="time" defaultValue="10:00" step={900} required /></div>
-            <div className="field"><label htmlFor="ev-end">Ends</label><input className="input" id="ev-end" name="end" type="time" defaultValue="11:00" step={900} required /></div>
+            <div className="field"><label htmlFor="ev-start">Starts</label><input className="input" id="ev-start" name="start" type="time" defaultValue="10:00" required /></div>
+            <div className="field"><label htmlFor="ev-end">Ends</label><input className="input" id="ev-end" name="end" type="time" defaultValue="11:00" required /></div>
           </div>
           <label className="row" style={{ alignItems: "center", gap: 8 }}><input type="checkbox" name="meet" /> Add a Google Meet link</label>
           {eventState.error && <p className="error">{eventState.error}</p>}

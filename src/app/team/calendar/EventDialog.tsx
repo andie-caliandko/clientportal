@@ -86,8 +86,8 @@ function EventDialog({ info, onClose }: { info: EventInfo; onClose: () => void }
             ) : (
               <div className="row">
                 <div className="field"><label htmlFor="ee-date">Date</label><input className="input" id="ee-date" name="date" type="date" defaultValue={info.date} required /></div>
-                <div className="field"><label htmlFor="ee-start">Starts</label><input className="input" id="ee-start" name="start" type="time" step={900} defaultValue={info.start} required /></div>
-                <div className="field"><label htmlFor="ee-end">Ends</label><input className="input" id="ee-end" name="end" type="time" step={900} defaultValue={info.end} required /></div>
+                <div className="field"><label htmlFor="ee-start">Starts</label><input className="input" id="ee-start" name="start" type="time" defaultValue={info.start} required /></div>
+                <div className="field"><label htmlFor="ee-end">Ends</label><input className="input" id="ee-end" name="end" type="time" defaultValue={info.end} required /></div>
               </div>
             )}
             <div className="field"><label htmlFor="ee-desc">Notes</label><textarea className="input" id="ee-desc" name="description" defaultValue={info.description ?? ""} style={{ minHeight: 70 }} /></div>
