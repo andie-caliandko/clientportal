@@ -7,7 +7,6 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { googleConfigured, googleStatus, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
 import { ConfirmButton, DriveSettings, NewClientTasksEditor } from "../TeamForms";
-import { driveFolderUrl } from "@/lib/links";
 import { ROLE_LABEL } from "@/lib/types";
 
 const GOOGLE_MESSAGES: Record<string, string> = {
@@ -33,11 +32,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
   const colors = Object.entries(agency.brand.colors ?? {});
   const google = await googleStatus(agency.id);
-  // Uploads from active clients not copied to Drive yet.
-  const { count: driveWaiting = 0 } = google.connected
-    ? await createAdminClient().from("uploads").select("id, clients!inner(agency_id, archived_at)", { count: "exact", head: true })
-        .is("drive_file_id", null).eq("clients.agency_id", agency.id).is("clients.archived_at", null)
-    : { count: 0 };
+  // Uploads waiting to be copied (for clients with a Drive folder), and clients still missing a folder link.
+  const [{ count: driveWaiting }, { count: noFolder }] = google.connected
+    ? await Promise.all([
+        createAdminClient().from("uploads").select("id, clients!inner(agency_id, archived_at, drive_folder_id)", { count: "exact", head: true })
+          .is("drive_file_id", null).eq("clients.agency_id", agency.id).is("clients.archived_at", null).not("clients.drive_folder_id", "is", null),
+        createAdminClient().from("clients").select("id", { count: "exact", head: true }).eq("agency_id", agency.id).is("archived_at", null).is("drive_folder_id", null),
+      ])
+    : [{ count: 0 }, { count: 0 }];
   const calendars = google.connected ? await listCalendars(agency.id) : [];
 
   return (
@@ -78,7 +80,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </form>
               {google.calendarName && <p className="note">Showing due dates from <b>{google.calendarName}</b>. Changes in Google show up here within 15 minutes.</p>}
               <h3 style={{ marginTop: 8 }}>Google Drive</h3>
-              <DriveSettings rootLink={google.driveRootId ? driveFolderUrl(google.driveRootId) : ""} rootName={google.driveRootName} waiting={driveWaiting ?? 0} />
+              <DriveSettings waiting={driveWaiting ?? 0} withoutFolder={noFolder ?? 0} />
               <form action={disconnectGoogle}><ConfirmButton label="Disconnect Google" confirmLabel="Disconnect?" /></form>
             </>
           ) : (

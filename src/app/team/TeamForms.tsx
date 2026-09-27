@@ -14,7 +14,6 @@ import {
   editCalendar,
   saveNewClientTasks,
   setClientLogo,
-  setDriveRoot,
   syncDriveNow,
   setMyPhoto,
   setContractLink,
@@ -716,29 +715,20 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
   );
 }
 
-/** Agency settings: where client folders go in Drive, and a button to copy files now. */
-export function DriveSettings({ rootLink, rootName, waiting }: { rootLink: string; rootName: string | null; waiting: number }) {
-  const [state, action, pending] = useActionState(setDriveRoot, {});
+/** Agency settings: copy client files to their Drive folders right now. */
+export function DriveSettings({ waiting, withoutFolder }: { waiting: number; withoutFolder: number }) {
   const [sync, setSync] = useState<{ error?: string; ok?: string }>({});
   const [syncing, startSync] = useTransition();
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <form action={action} className="row" style={{ alignItems: "flex-end" }}>
-        <div className="field" style={{ flex: 1, minWidth: "min(100%, 320px)" }}>
-          <label htmlFor="drive-root">Main client folder in Google Drive</label>
-          <input className="input" id="drive-root" name="folder" defaultValue={rootLink} placeholder="https://drive.google.com/drive/folders/…" />
-        </div>
-        <button className="btn sm" disabled={pending}>{pending ? "Checking…" : "Save"}</button>
-      </form>
-      {state.error && <p className="error">{state.error}</p>}
-      {state.ok && <p className="flash">{state.ok}</p>}
-      {rootName && !state.ok && <p className="note">Each client gets a folder inside <b>{rootName}</b>, with Branding and Content folders in it. Everything else they send goes straight into their folder. A client with its own Drive folder link on their page uses that one instead.</p>}
+      <p className="note">Files go into the Google Drive folder saved on each client&apos;s page: branding and content uploads in their Branding and Content folders, and everything else straight into the client&apos;s folder.</p>
       <div className="row" style={{ alignItems: "center" }}>
         <button type="button" className="btn sm line" disabled={syncing} onClick={() => startSync(async () => setSync(await syncDriveNow()))}>
           {syncing ? "Copying…" : "Copy files to Drive now"}
         </button>
         <span className="note">{waiting ? `${waiting} file${waiting === 1 ? "" : "s"} waiting to be copied.` : "Everything is in Drive."} New files copy on their own.</span>
       </div>
+      {withoutFolder > 0 && <p className="readonly">{withoutFolder} active client{withoutFolder === 1 ? " doesn't" : "s don't"} have a Drive folder link yet. Add it under Client info on their page.</p>}
       {sync.error && <p className="error">{sync.error}</p>}
       {sync.ok && <p className="flash">{sync.ok}</p>}
     </div>

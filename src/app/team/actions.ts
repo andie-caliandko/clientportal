@@ -918,30 +918,6 @@ export async function deleteTemplate(form: FormData) {
   revalidatePath("/team/templates");
 }
 
-/** Admins choose the Drive folder where each client's folder is made. */
-export async function setDriveRoot(_: Result, form: FormData): Promise<Result> {
-  const v = await requireAdmin().catch(() => null);
-  if (!v) return { error: "Only admins can change this." };
-  const link = String(form.get("folder") ?? "").trim();
-  const id = link ? driveFolderId(link) : null;
-  if (link && !id) return { error: "That doesn't look like a Google Drive folder link." };
-  let name: string | null = null;
-  if (id) {
-    const { driveFolderName } = await import("@/lib/drive");
-    name = await driveFolderName(v.agency.id, id);
-    if (!name) return { error: "Google can't open that folder. Make sure it's a folder the connected Google account can edit." };
-  }
-  const { error } = await createAdminClient()
-    .from("agency_integrations")
-    .update({ drive_root_folder_id: id, drive_root_folder_name: name, updated_at: new Date().toISOString() })
-    .eq("agency_id", v.agency.id);
-  if (error) return { error: "That couldn't be saved." };
-  // Make every active client's folder now, not just when their first file arrives.
-  if (id) after(() => ensureClientFolders({ agencyId: v.agency.id }));
-  revalidatePath("/team/settings");
-  return { ok: id ? `Saved. Client folders are being made inside "${name}", each with Branding and Content.` : "Removed." };
-}
-
 /** Copy every upload that isn't in Drive yet, right now. */
 export async function syncDriveNow(): Promise<Result> {
   const v = await requireAdmin().catch(() => null);

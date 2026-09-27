@@ -75,7 +75,7 @@ export async function accessToken(refreshToken: string) {
 export async function integration(agencyId: string) {
   const { data } = await createAdminClient()
     .from("agency_integrations")
-    .select("google_email, google_refresh_token, deadlines_calendar_id, deadlines_calendar_name, drive_root_folder_id, drive_root_folder_name")
+    .select("google_email, google_refresh_token, deadlines_calendar_id, deadlines_calendar_name")
     .eq("agency_id", agencyId)
     .maybeSingle();
   return data;
@@ -88,8 +88,6 @@ export async function googleStatus(agencyId: string) {
     email: i?.google_email ?? null,
     calendarId: i?.deadlines_calendar_id ?? null,
     calendarName: i?.deadlines_calendar_name ?? null,
-    driveRootId: i?.drive_root_folder_id ?? null,
-    driveRootName: i?.drive_root_folder_name ?? null,
   };
 }
 
