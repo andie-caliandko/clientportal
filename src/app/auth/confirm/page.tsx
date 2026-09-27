@@ -4,51 +4,91 @@ import { useEffect, useState } from "react";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/browser";
 
-// Invitation and password-reset emails land here. Supabase's default emails put
-// the sign-in tokens after "#" in the link, which only the browser can read.
+// Invitation and password-reset links land here. We sign the person in from
+// the link, then (for invites and resets) let them choose a password on this
+// same page, so nothing depends on a second page load.
 export default function ConfirmPage() {
-  const [failed, setFailed] = useState(false);
+  const [stage, setStage] = useState<"checking" | "password" | "failed">("checking");
+  const [next, setNext] = useState("/");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    const next = url.searchParams.get("next")?.startsWith("/") ? url.searchParams.get("next")! : "/";
+    const target = url.searchParams.get("next")?.startsWith("/") ? url.searchParams.get("next")! : "/";
     const hash = new URLSearchParams(url.hash.slice(1));
     const supabase = createClient();
 
     (async () => {
-      let error: unknown = null;
+      let failed: unknown = null;
       if (hash.get("access_token") && hash.get("refresh_token")) {
-        ({ error } = await supabase.auth.setSession({
+        ({ error: failed } = await supabase.auth.setSession({
           access_token: hash.get("access_token")!,
           refresh_token: hash.get("refresh_token")!,
         }));
       } else if (url.searchParams.get("code")) {
         // Password resets requested from the sign-in page use a one-time code.
-        ({ error } = await supabase.auth.exchangeCodeForSession(url.searchParams.get("code")!));
+        ({ error: failed } = await supabase.auth.exchangeCodeForSession(url.searchParams.get("code")!));
       } else if (url.searchParams.get("token_hash") && url.searchParams.get("type")) {
-        ({ error } = await supabase.auth.verifyOtp({
+        ({ error: failed } = await supabase.auth.verifyOtp({
           token_hash: url.searchParams.get("token_hash")!,
           type: url.searchParams.get("type") as EmailOtpType,
         }));
       } else {
-        error = hash.get("error_description") ?? "missing token";
+        failed = hash.get("error_description") ?? "missing token";
       }
-      if (error) setFailed(true);
-      else window.location.replace(next);
+      if (failed) return setStage("failed");
+      // Clean the one-time token out of the address bar.
+      window.history.replaceState(null, "", "/auth/confirm");
+      if (target === "/set-password") {
+        setNext("/");
+        setStage("password");
+      } else {
+        window.location.replace(target);
+      }
     })();
   }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return setError("Use at least 8 characters.");
+    setSaving(true);
+    const { error: err } = await createClient().auth.updateUser({ password });
+    setSaving(false);
+    if (err) return setError("We couldn't save that password. Try a different one.");
+    window.location.replace(next);
+  }
 
   return (
     <main className="auth">
       <div className="auth-card">
-        {failed ? (
+        {stage === "checking" && <p className="note">Signing you in…</p>}
+        {stage === "failed" && (
           <div className="auth-box">
             <p><b>That link has expired or was already used.</b></p>
-            <p className="note">Links from invite and reset emails work once, for a limited time. Ask your team to resend the invite, or reset your password from the sign-in page.</p>
+            <p className="note">
+              Links from invite and reset emails work once, for a limited time. Ask your team to resend the invite, or
+              reset your password from the sign-in page.
+            </p>
             <a className="btn" href="/login">Go to sign in</a>
           </div>
-        ) : (
-          <p className="note">Signing you in…</p>
+        )}
+        {stage === "password" && (
+          <form className="auth-box" onSubmit={save}>
+            <h1 style={{ fontSize: "2rem" }}>Choose a password</h1>
+            <p>You&apos;ll use it with your email each time you sign in.</p>
+            <div className="field">
+              <label htmlFor="new-password">New password</label>
+              <input className="input" id="new-password" type="password" autoComplete="new-password" value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(null); }} autoFocus required />
+            </div>
+            <p className={error ? "error" : "note"} style={!error && password.length >= 8 ? { color: "var(--ok)" } : undefined}>
+              {error ?? (password.length >= 8 ? "Looks good." : "Use at least 8 characters.")}
+            </p>
+            <button className="btn lg" disabled={saving}>{saving ? "Saving…" : "Save password and open my portal"}</button>
+            <p className="note">Tip: let your phone or browser save it for you.</p>
+          </form>
         )}
       </div>
     </main>
