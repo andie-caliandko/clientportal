@@ -43,8 +43,27 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
   const [open, setOpen] = useState(startOpen);
   const [client, setClient] = useState(clientId ?? "");
   const [assignee, setAssignee] = useState(`team:${people.me}`);
-  const [state, action, pending] = useActionState(addTask, {});
-  if (!open) return <div><button className="btn sm" onClick={() => setOpen(true)}>New task</button></div>;
+  const [done, setDone] = useState<string | null>(null);
+  // Once a task is added, close the form and confirm next to the button.
+  const [state, action, pending] = useActionState(async (prev: { error?: string; ok?: string }, form: FormData) => {
+    const result = await addTask(prev, form);
+    if (result.ok) {
+      setOpen(false);
+      setDone(result.ok);
+      setClient(clientId ?? "");
+      setAssignee(`team:${people.me}`);
+      return {};
+    }
+    return result;
+  }, {});
+  if (!open) {
+    return (
+      <div className="row" style={{ alignItems: "center" }}>
+        <button className="btn sm" onClick={() => { setDone(null); setOpen(true); }}>New task</button>
+        {done && <p className="flash" role="status" style={{ margin: 0 }}>{done}</p>}
+      </div>
+    );
+  }
 
   const team = people.team.filter((m) => !client || m.role === "admin" || people.onClient[client]?.includes(m.user_id));
   const contacts = client ? people.contacts[client] ?? [] : [];
@@ -89,7 +108,6 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
           : "Only your team sees this task."}
       </p>
       {state.error && <p className="error">{state.error}</p>}
-      {state.ok && <p className="flash">{state.ok}</p>}
       <div className="row"><button className="btn sm" disabled={pending}>{pending ? "Adding…" : "Add task"}</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
     </form>
   );
