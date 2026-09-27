@@ -435,5 +435,5 @@ async function FileLink({ path }: { path: string }) {
   const supabase = await createClient();
   const { data } = await supabase.storage.from("uploads").createSignedUrl(path, 60 * 60);
   const name = path.split("/").pop()?.replace(/^\d+-/, "") ?? "file";
-  return data?.signedUrl ? <a className="note" href={data.signedUrl} target="_blank" rel="noreferrer">Attached: {name}</a> : null;
+  return data?.signedUrl ? <FilePreview url={data.signedUrl} name={name} label={`Attached: ${name}`} /> : null;
 }

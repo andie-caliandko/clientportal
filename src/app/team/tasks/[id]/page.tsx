@@ -6,6 +6,7 @@ import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
 import { deleteTask } from "../../actions";
 import { ConfirmButton, EditTaskForm } from "../../TeamForms";
+import { FilePreview } from "@/app/portal/FilePreview";
 
 const SOURCE: Record<string, string> = {
   manual: "Added by your team",
@@ -62,7 +63,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       {(task.completion_comment || fileUrl) && (
         <div className="noteline">
           {task.completion_comment && <p><b>Client&apos;s note:</b> {task.completion_comment}</p>}
-          {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer">Open the file they attached</a>}
+          {fileUrl && <FilePreview url={fileUrl} name={task.completion_file_path!.split("/").pop()!.replace(/^\d+-/, "")} label="Open the file they attached" />}
         </div>
       )}
       <div className="panel">

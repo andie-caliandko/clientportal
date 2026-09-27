@@ -234,6 +234,7 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .attach-list li button { border: 0; background: transparent; font-size: 1rem; line-height: 1; color: var(--ink-2); }
 .bubble .files-in-msg { display: grid; gap: 6px; margin-top: 8px; justify-items: start; }
 .file-link { border: 0; background: none; padding: 0; color: inherit; font: inherit; font-weight: 600; font-size: .9rem; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
+.file-link.btn { text-decoration: none; }
 .file-link img { max-width: 240px; max-height: 180px; border-radius: 10px; display: block; cursor: zoom-in; }
 .lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(12, 18, 17, .82); display: grid; grid-template-rows: auto 1fr; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); gap: 12px; }
 .lightbox-bar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }

@@ -446,7 +446,7 @@ async function DocViewer(ctx: PortalCtx, kind: "strategy" | "report", section: s
                 <Link key={d.id} href={`${ctx.base}/${section}?doc=${d.id}`} aria-selected={d.id === doc.id}>{d.title}</Link>
               ))}
             </div>
-            <a className="btn line sm" href={url} target="_blank" rel="noreferrer">Open full screen</a>
+            <FilePreview url={url} name={`${doc.title}.pdf`} type="application/pdf" label="Open full screen" className="btn line sm" />
           </div>
           <iframe src={`${url}#view=FitH`} title={doc.title} />
         </>

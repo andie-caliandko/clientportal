@@ -12,10 +12,12 @@ const kindOf = (name: string, type?: string | null) => {
 };
 
 /** A file or image that opens in a preview over the page instead of a new tab. */
-export function FilePreview({ url, name, type, thumbnail = false, className }: {
+export function FilePreview({ url, name, type, thumbnail = false, className, label }: {
   url: string;
   name: string;
   type?: string | null;
+  /** Button text, if it should say something other than the file name. */
+  label?: string;
   /** Show images as a small preview in place of the file name. */
   thumbnail?: boolean;
   className?: string;
@@ -40,7 +42,7 @@ export function FilePreview({ url, name, type, thumbnail = false, className }: {
     <>
       <button type="button" className={`file-link ${className ?? ""}`} onClick={() => setOpen(true)} aria-label={`Open ${name}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {thumbnail && kind === "image" ? <img src={url} alt={name} /> : <span>{name}</span>}
+        {thumbnail && kind === "image" ? <img src={url} alt={name} /> : <span>{label ?? name}</span>}
       </button>
       {open && (
         <div className="lightbox" role="dialog" aria-modal="true" aria-label={name} onClick={() => setOpen(false)}>
