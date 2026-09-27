@@ -99,7 +99,7 @@ export async function ensureClientFolders(opts: { clientId?: string; agencyId?: 
  * call repeatedly; skips clients without a Drive folder link and agencies
  * without Google connected.
  */
-export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?: number; agencyId?: string } = {}) {
+export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?: number; agencyId?: string; clientId?: string } = {}) {
   const admin = createAdminClient();
   let q = admin
     .from("uploads")
@@ -111,6 +111,7 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
     .limit(filter.limit ?? 25);
   if (filter.uploadIds?.length) q = q.in("id", filter.uploadIds);
   if (filter.agencyId) q = q.eq("client.agency_id", filter.agencyId);
+  if (filter.clientId) q = q.eq("client_id", filter.clientId);
   const { data: rows } = await q;
 
   const agencies = new Map<string, Agency | null>();
@@ -143,3 +144,19 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
 }
 
 export const driveFileUrl = (id: string) => `https://drive.google.com/file/d/${id}/view`;
+
+/**
+ * Everything waiting for Drive, for one client or a whole agency: folders set
+ * up, then files copied in batches until done (or time runs short).
+ */
+export async function catchUpDrive(opts: { agencyId?: string; clientId?: string }) {
+  await ensureClientFolders(opts);
+  const started = Date.now();
+  let total = 0;
+  while (Date.now() - started < 240_000) {
+    const n = await syncUploadsToDrive({ ...opts, limit: 25 });
+    total += n;
+    if (n < 25) break;
+  }
+  return total;
+}

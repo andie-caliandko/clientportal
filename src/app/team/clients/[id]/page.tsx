@@ -25,6 +25,9 @@ import { TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
 
+// Saving a Drive folder link copies the client's waiting files in the background.
+export const maxDuration = 300;
+
 export default async function ClientDetail({
   params,
   searchParams,

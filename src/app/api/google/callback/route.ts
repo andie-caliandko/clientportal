@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
+import { after } from "next/server";
+import { catchUpDrive } from "@/lib/drive";
 import { exchangeCode } from "@/lib/google";
 import { getViewer } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/server";
 
 // Google sends people back here after they approve access.
+export const maxDuration = 300;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const state = searchParams.get("state");
@@ -29,6 +33,8 @@ export async function GET(request: NextRequest) {
       await admin
         .from("agency_integrations")
         .upsert({ agency_id: v.agency.id, google_refresh_token: refreshToken, google_email: email, updated_at: now });
+      // Copy anything clients uploaded before Drive was connected.
+      after(() => catchUpDrive({ agencyId: v.agency.id }));
     }
     // Either way, this is also the person's own calendar connection.
     await admin

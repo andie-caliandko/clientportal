@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { ensureClientFolders } from "@/lib/drive";
+import { catchUpDrive, ensureClientFolders } from "@/lib/drive";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
 import { emailClient, sendEmail } from "@/lib/notify";
 import { notifyClient, notifyUser } from "@/lib/notifications";
@@ -484,8 +484,8 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
     })
     .eq("id", clientId);
   if (error) return { error: "Those changes couldn't be saved." };
-  // Branding and Content folders in their Drive folder.
-  if (drive) after(() => ensureClientFolders({ clientId }));
+  // Branding and Content folders in their Drive folder, and any files that were waiting for it.
+  if (drive) after(() => catchUpDrive({ clientId }));
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: "Saved." };
 }
@@ -918,19 +918,3 @@ export async function deleteTemplate(form: FormData) {
   revalidatePath("/team/templates");
 }
 
-/** Copy every upload that isn't in Drive yet, right now. */
-export async function syncDriveNow(): Promise<Result> {
-  const v = await requireAdmin().catch(() => null);
-  if (!v) return { error: "Only admins can do that." };
-  const { syncUploadsToDrive } = await import("@/lib/drive");
-  await ensureClientFolders({ agencyId: v.agency.id });
-  let total = 0;
-  // A few rounds of 25, within the time a page request allows.
-  for (let round = 0; round < 4; round++) {
-    const n = await syncUploadsToDrive({ agencyId: v.agency.id, limit: 25 });
-    total += n;
-    if (n < 25) break;
-  }
-  revalidatePath("/team/settings");
-  return { ok: total ? `Copied ${total} file${total === 1 ? "" : "s"} to Google Drive.` : "Nothing new to copy." };
-}

@@ -14,7 +14,6 @@ import {
   editCalendar,
   saveNewClientTasks,
   setClientLogo,
-  syncDriveNow,
   setMyPhoto,
   setContractLink,
   updateTeammate,
@@ -715,22 +714,16 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
   );
 }
 
-/** Agency settings: copy client files to their Drive folders right now. */
+/** Agency settings: how Drive copying is going. Files copy on their own. */
 export function DriveSettings({ waiting, withoutFolder }: { waiting: number; withoutFolder: number }) {
-  const [sync, setSync] = useState<{ error?: string; ok?: string }>({});
-  const [syncing, startSync] = useTransition();
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <p className="note">Files go into the Google Drive folder saved on each client&apos;s page: branding and content uploads in their Branding and Content folders, and everything else straight into the client&apos;s folder.</p>
-      <div className="row" style={{ alignItems: "center" }}>
-        <button type="button" className="btn sm line" disabled={syncing} onClick={() => startSync(async () => setSync(await syncDriveNow()))}>
-          {syncing ? "Copying…" : "Copy files to Drive now"}
-        </button>
-        <span className="note">{waiting ? `${waiting} file${waiting === 1 ? "" : "s"} waiting to be copied.` : "Everything is in Drive."} New files copy on their own.</span>
-      </div>
-      {withoutFolder > 0 && <p className="readonly">{withoutFolder} active client{withoutFolder === 1 ? " doesn't" : "s don't"} have a Drive folder link yet. Add it under Client info on their page.</p>}
-      {sync.error && <p className="error">{sync.error}</p>}
-      {sync.ok && <p className="flash">{sync.ok}</p>}
+    <div style={{ display: "grid", gap: 8 }}>
+      <p className="note">
+        Client files copy to the Google Drive folder saved on each client&apos;s page as soon as they arrive: branding and content uploads into
+        their Branding and Content folders, and everything else straight into the client&apos;s folder.
+        {waiting ? ` ${waiting} older file${waiting === 1 ? " is" : "s are"} still being copied.` : ""}
+      </p>
+      {withoutFolder > 0 && <p className="readonly">{withoutFolder} active client{withoutFolder === 1 ? " doesn't" : "s don't"} have a Drive folder link yet. Add it under Client info on their page and their files copy over automatically.</p>}
     </div>
   );
 }
