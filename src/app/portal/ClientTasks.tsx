@@ -14,7 +14,7 @@ export type ClientTask = {
   forName: string;
 };
 
-export function ClientTasks({ tasks, folder }: { tasks: ClientTask[]; folder: string }) {
+export function ClientTasks({ tasks, folder, readOnly = false }: { tasks: ClientTask[]; folder: string; readOnly?: boolean }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ error?: string; ok?: string }>({});
   return (
@@ -30,7 +30,7 @@ export function ClientTasks({ tasks, folder }: { tasks: ClientTask[]; folder: st
               </div>
               <span className="r">
                 {t.due && (t.overdue ? <span className="pill crit">Was due {t.due}</span> : <span className="pill info">Due {t.due}</span>)}
-                {openId !== t.id && <button className="btn sm" onClick={() => { setOpenId(t.id); setMessage({}); }}>Mark done</button>}
+                {openId !== t.id && (readOnly ? <button className="btn sm" disabled>Mark done</button> : <button className="btn sm" onClick={() => { setOpenId(t.id); setMessage({}); }}>Mark done</button>)}
               </span>
             </div>
             {t.note && <p className="noteline">{t.note}</p>}

@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isProtected = path.startsWith("/portal") || path.startsWith("/team") || path === "/set-password";
+  const isProtected = path.startsWith("/portal") || path.startsWith("/team") || path.startsWith("/preview") || path === "/set-password";
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -36,5 +36,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/portal/:path*", "/team/:path*", "/set-password", "/login", "/"],
+  matcher: ["/portal/:path*", "/team/:path*", "/preview/:path*", "/set-password", "/login", "/"],
 };

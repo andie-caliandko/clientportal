@@ -24,18 +24,17 @@ export function TaskCard({ task: t, clientName, personName, timeZone, canEdit }:
   const moves = client ? [{ to: "done", label: "Mark done for them" }] : MOVES[t.status] ?? [];
 
   return (
-    <article className={`task ${overdue ? "overdue" : ""}`}>
-      {t.auto && <span className="auto">Created automatically</span>}
+    <article className={`task ${client ? "client-task" : "team-task"} ${overdue ? "overdue" : ""}`}>
+      <span className={`kind ${client ? "client" : "team"}`}>
+        {client ? `Client task · ${client.split(" ")[0]} sees this` : "Team task"}
+      </span>
       <Link className="task-link" href={`/team/tasks/${t.id}`}>{t.title}</Link>
       {t.note && <p className="note" style={{ fontWeight: 400 }}>{t.note}</p>}
       <div className="meta">
         {clientName && <span className="chip">{clientName}</span>}
         {due && (overdue ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>)}
-        {client ? (
-          <span className="pill warn">{client.split(" ")[0]} · client</span>
-        ) : (
-          t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>
-        )}
+        {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
+        {t.auto && <span>· auto</span>}
       </div>
       {canEdit && (
         <div className="task-actions">

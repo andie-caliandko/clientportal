@@ -5,7 +5,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { addToClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { ClientInfoForm, ConfirmButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { ClientInfoForm, ConfirmButton, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -64,6 +64,13 @@ export default async function ClientDetail({
   const short = (d: string) => new Date(d).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const monthName = (m: string) => new Date(`${m}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
+  const portalLink = `${process.env.NEXT_PUBLIC_SITE_URL}/login?client=${client.slug}`;
+  const headActions = (
+    <div className="head-actions">
+      <CopyButton text={portalLink} label="Copy portal link" done="Link copied" />
+      <Link className="btn sm" href={`/preview/${client.id}`}>View their portal</Link>
+    </div>
+  );
   const tab = sp.tab === "health" ? "health" : "portal";
   const tabs = (
     <div className="tabs" role="tablist" aria-label="Client sections">
@@ -86,6 +93,7 @@ export default async function ClientDetail({
             <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
             <h1 style={{ marginTop: 6 }}>{client.name}</h1>
           </div>
+          {headActions}
         </div>
         {tabs}
         <HealthTab clientId={client.id} clientName={client.name} kpis={byClient.get(client.id) ?? []}
@@ -104,6 +112,7 @@ export default async function ClientDetail({
           <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
           <h1 style={{ marginTop: 6 }}>{client.name}</h1>
         </div>
+        {headActions}
       </div>
       {!canEdit && <p className="readonly">View only. Creators can see this account but can&apos;t make changes.</p>}
       {tabs}
@@ -112,12 +121,23 @@ export default async function ClientDetail({
       <div className="panel">
         <h2>Tasks</h2>
         {canEdit && <NewTask clients={[{ id: client.id, name: client.name }]} people={taskPeople} clientId={client.id} />}
-        <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-          {openTasks.map((t) => (
-            <TaskCard key={t.id} task={t} personName={(uid) => names.get(uid)} timeZone={tz} canEdit={canEdit} />
-          ))}
-        </div>
-        {!openTasks.length && <p className="note">No open tasks for {client.name}.</p>}
+        {[
+          { key: "client", title: "Client tasks", hint: "The client sees these in their portal and marks them done.", list: openTasks.filter((t) => t.client_assignee_id) },
+          { key: "team", title: "Team tasks", hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id) },
+        ].map((g) => (
+          <div className="task-group" key={g.key}>
+            <h3>{g.title} <span>{g.list.length} open · {g.hint}</span></h3>
+            {g.list.length ? (
+              <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+                {g.list.map((t) => (
+                  <TaskCard key={t.id} task={t} personName={(uid) => names.get(uid)} timeZone={tz} canEdit={canEdit} />
+                ))}
+              </div>
+            ) : (
+              <p className="note">{g.key === "client" ? `Nothing assigned to ${client.name} right now.` : "No open team tasks."}</p>
+            )}
+          </div>
+        ))}
         {finishedByClient.length > 0 && (
           <>
             <p className="eyebrow" style={{ marginTop: 8 }}>Recently finished by the client</p>

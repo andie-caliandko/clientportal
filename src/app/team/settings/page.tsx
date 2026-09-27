@@ -101,7 +101,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </ul>
           <p className="note">{questionCount ?? 0} questionnaire questions. Every new client gets this checklist and questionnaire automatically.</p>
         </div>
-        <div className="panel" style={{ gridColumn: "1 / -1" }}>
+        <div className="panel">
           <h2>New-client tasks</h2>
           <p className="note">Created for the team whenever an admin adds a client. Days count from the day the client is added.</p>
           <NewClientTasksEditor tasks={agency.new_client_tasks ?? []} />

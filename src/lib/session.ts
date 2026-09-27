@@ -88,3 +88,15 @@ export const getPublicAgency = cache(async (): Promise<Pick<Agency, "name" | "br
     .maybeSingle();
   return data;
 });
+
+/** A client's name for their personal sign-in link (/login?client=<slug>). */
+export async function publicClientName(agencySlug: string, clientSlug: string) {
+  if (!/^[a-z0-9-]{1,80}$/.test(clientSlug)) return null;
+  const { data } = await createAdminClient()
+    .from("clients")
+    .select("name, agency:agencies!inner(slug)")
+    .eq("slug", clientSlug)
+    .eq("agency.slug", agencySlug)
+    .maybeSingle();
+  return data?.name ?? null;
+}

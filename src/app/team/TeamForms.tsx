@@ -434,10 +434,24 @@ export function TeammateRow({ member, isMe }: {
 }
 
 export function NewClientTasksEditor({ tasks }: { tasks: { title: string; days?: number; assignee?: string }[] }) {
+  const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState(tasks.map((t, i) => ({ key: i, ...t })));
   const [state, action, pending] = useActionState(saveNewClientTasks, {});
+  if (!editing) {
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        {state.ok && <p className="flash">{state.ok}</p>}
+        <ul className="list">
+          {tasks.map((t, i) => (
+            <li key={i}>{t.title}<span className="r note">Day {t.days ?? 0}</span></li>
+          ))}
+        </ul>
+        <div><button type="button" className="btn sm line" onClick={() => setEditing(true)}>Edit list</button></div>
+      </div>
+    );
+  }
   return (
-    <form action={action} style={{ display: "grid", gap: 10 }}>
+    <form action={async (f) => { action(f); setEditing(false); }} style={{ display: "grid", gap: 10 }}>
       {rows.map((r, i) => (
         <div className="task-row" key={r.key}>
           <div className="field"><label htmlFor={`nct-d-${r.key}`}>Day</label><input className="input" id={`nct-d-${r.key}`} name="days" type="number" min={0} defaultValue={r.days ?? 0} /></div>
@@ -452,9 +466,24 @@ export function NewClientTasksEditor({ tasks }: { tasks: { title: string; days?:
       <div className="row">
         <button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: "", days: 0, assignee: "account_manager" }])}>Add a task</button>
         <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save list"}</button>
+        <button type="button" className="btn sm line" onClick={() => setEditing(false)}>Cancel</button>
       </div>
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
     </form>
+  );
+}
+
+/** Copies text to the clipboard and says so. */
+export function CopyButton({ text, label, done = "Copied" }: { text: string; label: string; done?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button type="button" className="btn sm line" onClick={async () => {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }}>
+      {copied ? done : label}
+    </button>
   );
 }

@@ -98,8 +98,8 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
                   <tr key={k.id}>
                     <td><b>{k.name}</b>{k.benchmark && <><br /><span className="note">Industry: {k.benchmark}</span></>}
                       <br /><span className="note">{k.higher_is_better ? "Higher is better" : "Lower is better"}</span></td>
-                    <td className="num">{formatKpi(k.good, k.unit)} · {formatKpi(k.better, k.unit)} · {formatKpi(k.best, k.unit)}</td>
-                    <td className="num">{k.summary ? <b>{formatKpi(k.summary.latest, k.unit)}</b> : "—"}</td>
+                    <td className="kn">{formatKpi(k.good, k.unit)} · {formatKpi(k.better, k.unit)} · {formatKpi(k.best, k.unit)}</td>
+                    <td className="kn">{k.summary ? <b>{formatKpi(k.summary.latest, k.unit)}</b> : "—"}</td>
                     <td>{k.summary ? <><RatingPill rating={k.summary.rating} /><br /><span className="note">{TIER[k.summary.tier]}</span></> : "—"}</td>
                     <td>{k.summary?.trend ? <span className={`trend ${k.summary.trend}`}><span aria-hidden="true">{TREND[k.summary.trend].mark}</span> {TREND[k.summary.trend].label}</span> : <span className="note">Needs 2 weeks</span>}</td>
                     <td><Sparkline kpi={k} /></td>
@@ -143,7 +143,7 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
                     <td>{new Date(`${w}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</td>
                     {kpis.map((k) => {
                       const v = k.history.find((h) => h.week === w)?.value;
-                      return <td key={k.id} className="num">{v === undefined ? "—" : formatKpi(v, k.unit)}</td>;
+                      return <td key={k.id} className="kn">{v === undefined ? "—" : formatKpi(v, k.unit)}</td>;
                     })}
                     <td style={{ whiteSpace: "normal", minWidth: 200 }}>{notes[w] ?? ""}</td>
                   </tr>

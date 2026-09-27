@@ -85,7 +85,9 @@ button:disabled { opacity: .5; cursor: default; }
 .input { width: 100%; border: 1.5px solid var(--line); background: var(--bg); border-radius: 12px; padding: .8em 1em; font-size: 1.05rem; }
 .input:focus, textarea.input:focus { outline: none; border-color: var(--head); }
 textarea.input { min-height: 150px; resize: vertical; border-radius: 16px; }
-select.sel { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: .5em .8em; }
+select.sel { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: .5em .8em; max-width: 100%; }
+.field select.sel { width: 100%; border: 1.5px solid var(--line); background: var(--bg); border-radius: 12px; padding: .8em 1em; font-size: 1.05rem; }
+.field { min-width: 0; }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px; }
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 18px; }
@@ -188,8 +190,11 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .task-actions { position: relative; z-index: 1; }
 .teammate { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr auto; gap: 10px; align-items: end; padding: 14px 0; border-top: 1px solid var(--line); }
 .teammate:first-of-type { border-top: 0; }
-.task-row { display: grid; grid-template-columns: 80px 1fr 200px auto; gap: 10px; align-items: end; }
+.task-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(170px, 230px) auto; gap: 10px; align-items: end; }
+.task-row + .task-row label { position: absolute; left: -9999px; }
 @media (max-width: 780px) { .teammate, .task-row { grid-template-columns: 1fr; } }
+.preview-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: var(--accent-soft); border-radius: 14px; padding: 10px 14px; font-size: .92rem; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .connect { border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 8px; }
 .connect-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .later { display: inline-flex; gap: 6px; align-items: center; font-size: .88rem; color: var(--ink-2); }
@@ -207,7 +212,7 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .trend.steady span { color: var(--ink-2); }
 .trend.slipping span { color: var(--st-red); }
 .kpi-table td { vertical-align: top; white-space: normal; }
-.kpi-table td.num, td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.kn { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .spark { display: block; overflow: visible; }
 .spark .goal { stroke: var(--stone); stroke-width: 1; stroke-dasharray: 3 3; }
 .spark .goal.best { stroke-dasharray: none; opacity: .7; }
@@ -269,7 +274,13 @@ select.sel { border: 1px solid var(--line); background: var(--surface); border-r
 .task p { font-size: .95rem; font-weight: 600; line-height: 1.35; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .78rem; color: var(--ink-2); }
 .chip { padding: .12em .55em; border-radius: 6px; background: var(--surface-2); font-weight: 600; }
-.auto { font-size: .7rem; font-weight: 600; color: var(--accent); }
+.kind { justify-self: start; font-family: var(--label); font-weight: 500; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; padding: .25em .7em; border-radius: 999px; }
+.kind.client { background: var(--accent-soft); color: var(--accent); }
+.kind.team { background: var(--soft); color: var(--head); }
+.task.client-task { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.task-group { display: grid; gap: 10px; }
+.task-group h3 { font-family: var(--sans); font-size: 1rem; font-weight: 600; color: var(--ink); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.task-group h3 span { font-weight: 400; font-size: .88rem; color: var(--ink-2); }
 .task-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .task-actions button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: .2em .6em; font-size: .75rem; }
 table { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--surface); }
