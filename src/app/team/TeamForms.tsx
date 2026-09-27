@@ -14,6 +14,8 @@ import {
   editCalendar,
   saveNewClientTasks,
   setClientLogo,
+  setDriveRoot,
+  syncDriveNow,
   setMyPhoto,
   setContractLink,
   updateTeammate,
@@ -710,6 +712,35 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
         />
       )}
       {error && <p className="error" style={{ fontSize: ".75rem" }}>{error}</p>}
+    </div>
+  );
+}
+
+/** Agency settings: where client folders go in Drive, and a button to copy files now. */
+export function DriveSettings({ rootLink, rootName, waiting }: { rootLink: string; rootName: string | null; waiting: number }) {
+  const [state, action, pending] = useActionState(setDriveRoot, {});
+  const [sync, setSync] = useState<{ error?: string; ok?: string }>({});
+  const [syncing, startSync] = useTransition();
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <form action={action} className="row" style={{ alignItems: "flex-end" }}>
+        <div className="field" style={{ flex: 1, minWidth: "min(100%, 320px)" }}>
+          <label htmlFor="drive-root">Main client folder in Google Drive</label>
+          <input className="input" id="drive-root" name="folder" defaultValue={rootLink} placeholder="https://drive.google.com/drive/folders/…" />
+        </div>
+        <button className="btn sm" disabled={pending}>{pending ? "Checking…" : "Save"}</button>
+      </form>
+      {state.error && <p className="error">{state.error}</p>}
+      {state.ok && <p className="flash">{state.ok}</p>}
+      {rootName && !state.ok && <p className="note">Each client gets a folder inside <b>{rootName}</b>, with Branding, Content, Task files and Messages folders in it. A client with its own Drive folder link on their page uses that one instead.</p>}
+      <div className="row" style={{ alignItems: "center" }}>
+        <button type="button" className="btn sm line" disabled={syncing} onClick={() => startSync(async () => setSync(await syncDriveNow()))}>
+          {syncing ? "Copying…" : "Copy files to Drive now"}
+        </button>
+        <span className="note">{waiting ? `${waiting} file${waiting === 1 ? "" : "s"} waiting to be copied.` : "Everything is in Drive."} New files copy on their own.</span>
+      </div>
+      {sync.error && <p className="error">{sync.error}</p>}
+      {sync.ok && <p className="flash">{sync.ok}</p>}
     </div>
   );
 }

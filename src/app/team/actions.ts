@@ -911,3 +911,41 @@ export async function deleteTemplate(form: FormData) {
   if (data.file_path) await supabase.storage.from("templates").remove([data.file_path]);
   revalidatePath("/team/templates");
 }
+
+/** Admins choose the Drive folder where each client's folder is made. */
+export async function setDriveRoot(_: Result, form: FormData): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can change this." };
+  const link = String(form.get("folder") ?? "").trim();
+  const id = link ? driveFolderId(link) : null;
+  if (link && !id) return { error: "That doesn't look like a Google Drive folder link." };
+  let name: string | null = null;
+  if (id) {
+    const { driveFolderName } = await import("@/lib/drive");
+    name = await driveFolderName(v.agency.id, id);
+    if (!name) return { error: "Google can't open that folder. Make sure it's a folder the connected Google account can edit." };
+  }
+  const { error } = await createAdminClient()
+    .from("agency_integrations")
+    .update({ drive_root_folder_id: id, drive_root_folder_name: name, updated_at: new Date().toISOString() })
+    .eq("agency_id", v.agency.id);
+  if (error) return { error: "That couldn't be saved." };
+  revalidatePath("/team/settings");
+  return { ok: id ? `Saved. Client folders will be made inside "${name}".` : "Removed." };
+}
+
+/** Copy every upload that isn't in Drive yet, right now. */
+export async function syncDriveNow(): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can do that." };
+  const { syncUploadsToDrive } = await import("@/lib/drive");
+  let total = 0;
+  // A few rounds of 25, within the time a page request allows.
+  for (let round = 0; round < 4; round++) {
+    const n = await syncUploadsToDrive({ agencyId: v.agency.id, limit: 25 });
+    total += n;
+    if (n < 25) break;
+  }
+  revalidatePath("/team/settings");
+  return { ok: total ? `Copied ${total} file${total === 1 ? "" : "s"} to Google Drive.` : "Nothing new to copy." };
+}

@@ -3,10 +3,11 @@ import Link from "next/link";
 import { Logo } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/session";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { googleConfigured, googleStatus, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
-import { ConfirmButton, NewClientTasksEditor } from "../TeamForms";
+import { ConfirmButton, DriveSettings, NewClientTasksEditor } from "../TeamForms";
+import { driveFolderUrl } from "@/lib/links";
 import { ROLE_LABEL } from "@/lib/types";
 
 const GOOGLE_MESSAGES: Record<string, string> = {
@@ -32,6 +33,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
   const colors = Object.entries(agency.brand.colors ?? {});
   const google = await googleStatus(agency.id);
+  // Uploads from active clients not copied to Drive yet.
+  const { count: driveWaiting = 0 } = google.connected
+    ? await createAdminClient().from("uploads").select("id, clients!inner(agency_id, archived_at)", { count: "exact", head: true })
+        .is("drive_file_id", null).eq("clients.agency_id", agency.id).is("clients.archived_at", null)
+    : { count: 0 };
   const calendars = google.connected ? await listCalendars(agency.id) : [];
 
   return (
@@ -50,7 +56,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       )}
       <div className="cgrid">
         <div className="panel" style={{ gridColumn: "1 / -1" }}>
-          <h2>Google Calendar</h2>
+          <h2>Google</h2>
           <p className="note" style={{ maxWidth: "64ch" }}>
             Connect the agency&apos;s Google account and choose the calendar that holds your monthly due dates. Those
             dates show above Tasks every week, and client uploads are filed in Google Drive. This also connects your own
@@ -71,6 +77,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <button className="btn sm">Save</button>
               </form>
               {google.calendarName && <p className="note">Showing due dates from <b>{google.calendarName}</b>. Changes in Google show up here within 15 minutes.</p>}
+              <h3 style={{ marginTop: 8 }}>Google Drive</h3>
+              <DriveSettings rootLink={google.driveRootId ? driveFolderUrl(google.driveRootId) : ""} rootName={google.driveRootName} waiting={driveWaiting ?? 0} />
               <form action={disconnectGoogle}><ConfirmButton label="Disconnect Google" confirmLabel="Disconnect?" /></form>
             </>
           ) : (
