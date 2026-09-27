@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
 
   const { data: reminders } = await admin
     .from("content_calendars")
-    .select("id, client_id, month, rella_url, due_at, agency:agencies(timezone)")
+    .select("id, client_id, month, rella_url, due_at, agency:agencies(timezone), clients!inner(archived_at)")
     .eq("status", "pending")
+    .is("clients.archived_at", null)
     .is("reminder_sent_at", null)
     .gt("due_at", now.toISOString())
     .lte("due_at", soon.toISOString());
@@ -31,12 +32,16 @@ export async function GET(request: NextRequest) {
     await admin.from("content_calendars").update({ reminder_sent_at: now.toISOString() }).eq("id", c.id);
   }
 
-  const { data: expired } = await admin
+  // Archived clients are left alone.
+  const { data: archived } = await admin.from("clients").select("id").not("archived_at", "is", null);
+  const skip = (archived ?? []).map((c) => c.id);
+  let expireQuery = admin
     .from("content_calendars")
     .update({ status: "auto_approved", resolved_at: now.toISOString() })
     .eq("status", "pending")
-    .lte("due_at", now.toISOString())
-    .select("id, client_id, month");
+    .lte("due_at", now.toISOString());
+  if (skip.length) expireQuery = expireQuery.not("client_id", "in", `(${skip.join(",")})`);
+  const { data: expired } = await expireQuery.select("id, client_id, month");
   for (const c of expired ?? []) {
     const month = new Date(`${c.month}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
     await clientActivity(c.client_id, {

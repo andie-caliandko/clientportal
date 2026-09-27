@@ -713,3 +713,16 @@ export async function setContractLink(_: Result, form: FormData): Promise<Result
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: url ? "Saved. The client now sees an Open contract button." : "Removed." };
 }
+
+export async function archiveClient(form: FormData) {
+  const v = await requireAdmin();
+  const clientId = String(form.get("client"));
+  const archive = form.get("archive") === "1";
+  const supabase = await createClient();
+  await supabase
+    .from("clients")
+    .update(archive ? { archived_at: new Date().toISOString(), archived_by: v.userId } : { archived_at: null, archived_by: null })
+    .eq("id", clientId);
+  revalidatePath("/team", "layout");
+  redirect(archive ? "/team/clients?archived=1&done=archived" : `/team/clients/${clientId}?restored=1`);
+}

@@ -55,6 +55,7 @@ export type Client = {
   dubsado_project_url: string | null;
   website: string | null;
   start_date: string | null;
+  archived_at: string | null;
 };
 
 export type ClientUser = {

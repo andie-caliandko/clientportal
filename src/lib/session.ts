@@ -41,6 +41,14 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   return null;
 });
 
+/** Signed in, but with no active portal or team role (for example, an archived client). */
+export async function getSignedInWithoutAccess() {
+  if (await getViewer()) return false;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return !!user;
+}
+
 export async function requireTeam() {
   const v = await getViewer();
   if (!v) redirect("/login");

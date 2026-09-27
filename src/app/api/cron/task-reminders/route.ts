@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const { data: tasks } = await admin
     .from("tasks")
-    .select("id, title, note, due_at, created_at, reminders_sent, client_id, client_assignee_id, client:clients(name, agency_id, account_manager_id)")
+    .select("id, title, note, due_at, created_at, reminders_sent, client_id, client_assignee_id, client:clients!inner(name, agency_id, account_manager_id, archived_at)")
+    .is("client.archived_at", null)
     .not("client_assignee_id", "is", null)
     .neq("status", "done")
     .lt("reminders_sent", REMINDER_DAYS.length);

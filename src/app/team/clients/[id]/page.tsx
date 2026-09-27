@@ -4,7 +4,7 @@ import { formatDue } from "@/lib/approval";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
-import { addToClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
+import { addToClient, archiveClient, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
 import { ClientInfoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
@@ -19,7 +19,7 @@ export default async function ClientDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string; answers?: string; tab?: string }>;
+  searchParams: Promise<{ created?: string; answers?: string; tab?: string; restored?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -116,6 +116,19 @@ export default async function ClientDetail({
       </div>
       {!canEdit && <p className="readonly">View only. Creators can see this account but can&apos;t make changes.</p>}
       {tabs}
+      {client.archived_at && (
+        <div className="readonly" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+          <span>Archived on {new Date(client.archived_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric" })}. Their portal is closed; everything here is saved.</span>
+          {isAdmin && (
+            <form action={archiveClient}>
+              <input type="hidden" name="client" value={client.id} />
+              <input type="hidden" name="archive" value="0" />
+              <button className="btn sm">Restore client</button>
+            </form>
+          )}
+        </div>
+      )}
+      {sp.restored && <p className="flash">{client.name} is active again. Their portal is open.</p>}
       {sp.created && <p className="flash">Client created. {people.data?.[0]?.display_name ?? "The main contact"} has an invite to set their password.</p>}
 
       <div className="panel">
@@ -283,6 +296,17 @@ export default async function ClientDetail({
           <div className="panel">
             <h2>Client info</h2>
             <ClientInfoForm client={client} />
+          </div>
+        )}
+        {isAdmin && !client.archived_at && (
+          <div className="panel">
+            <h2>Archive client</h2>
+            <p className="note">For clients whose term has ended. Their portal closes and reminders stop, but nothing is deleted. You can restore them any time.</p>
+            <form action={archiveClient}>
+              <input type="hidden" name="client" value={client.id} />
+              <input type="hidden" name="archive" value="1" />
+              <ConfirmButton label="Archive client" confirmLabel={`Archive ${client.name}?`} />
+            </form>
           </div>
         )}
         {isAdmin && (

@@ -4,17 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 import { loadHealth } from "@/lib/healthData";
 import { RatingPill } from "./[id]/HealthTab";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ archived?: string; done?: string }> }) {
   const { agency, member } = await requireTeam();
+  const sp = await searchParams;
+  const showArchived = sp.archived === "1";
   const supabase = await createClient();
   const [{ data: clients }, { data: steps }, { data: status }, { data: cals }, { data: members }] = await Promise.all([
-    supabase.from("clients").select("id, name, account_manager_id").order("name"),
+    supabase.from("clients").select("id, name, account_manager_id, archived_at").order("name"),
     supabase.from("onboarding_steps").select("id").eq("agency_id", agency.id),
     supabase.from("client_step_status").select("client_id"),
     supabase.from("content_calendars").select("client_id, status, month").order("month", { ascending: false }),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
   ]);
   const { health } = await loadHealth(supabase);
+  const all = clients ?? [];
+  const list = all.filter((c) => (showArchived ? c.archived_at : !c.archived_at));
+  const archivedCount = all.filter((c) => c.archived_at).length;
   const total = steps?.length ?? 0;
   const doneBy = new Map<string, number>();
   (status ?? []).forEach((s) => doneBy.set(s.client_id, (doneBy.get(s.client_id) ?? 0) + 1));
@@ -31,13 +36,19 @@ export default async function ClientsPage() {
     <section style={{ display: "grid", gap: 16 }}>
       <div className="top">
         <h1>Clients</h1>
-        {member.role === "admin" && <Link className="btn sm" href="/team/clients/new">Add client</Link>}
+        {member.role === "admin" && !showArchived && <Link className="btn sm" href="/team/clients/new">Add client</Link>}
       </div>
+      <div className="tabs" role="tablist" aria-label="Which clients">
+        <Link href="/team/clients" role="tab" aria-selected={!showArchived}>Active</Link>
+        <Link href="/team/clients?archived=1" role="tab" aria-selected={showArchived}>Archived{archivedCount ? ` (${archivedCount})` : ""}</Link>
+      </div>
+      {sp.done === "archived" && <p className="flash">Client archived. Their portal is closed, and everything is saved here if you ever need it.</p>}
+      {showArchived && <p className="note">Archived clients keep all their files, messages and history. Their portal is closed. Open one to restore it.</p>}
       <div className="tablewrap">
         <table>
           <thead><tr><th>Client</th><th>Health · internal</th><th>Account manager</th><th>Onboarding</th><th>Latest content calendar</th></tr></thead>
           <tbody>
-            {(clients ?? []).map((c) => {
+            {list.map((c) => {
               const done = doneBy.get(c.id) ?? 0;
               return (
                 <tr key={c.id}>
@@ -49,7 +60,7 @@ export default async function ClientsPage() {
                 </tr>
               );
             })}
-            {!clients?.length && <tr><td colSpan={5} className="note">No clients yet.</td></tr>}
+            {!list.length && <tr><td colSpan={5} className="note">{showArchived ? "No archived clients." : "No clients yet."}</td></tr>}
           </tbody>
         </table>
       </div>

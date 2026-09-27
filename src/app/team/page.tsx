@@ -24,13 +24,13 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
   const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google, { count: openApprovals }] = await Promise.all([
     supabase.from("tasks").select("*").neq("status", "done").order("due_at", { ascending: true, nullsFirst: false }),
-    supabase.from("clients").select("id, name").order("name"),
+    supabase.from("clients").select("id, name").is("archived_at", null).order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
     loadTaskPeople(supabase, agency.id, userId),
     supabase.from("rhythm_checks").select("user_id, week, item").eq("agency_id", agency.id).eq("month", monthKey(agency.timezone)),
     getDueDates(agency.id, monthStart.toISOString(), horizon.toISOString()),
     googleStatus(agency.id),
-    supabase.from("content_calendars").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("content_calendars").select("id, clients!inner(archived_at)", { count: "exact", head: true }).eq("status", "pending").is("clients.archived_at", null),
   ]);
   // My own check-offs. Admins also get everyone else's rows (RLS), for the progress circles.
   const rhythmChecks = Object.fromEntries((checks ?? []).filter((c) => c.user_id === userId).map((c) => [`${c.week}-${c.item}`, true]));
@@ -56,7 +56,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const clientName = Object.fromEntries((clients ?? []).map((c) => [c.id, c.name]));
   const names = new Map<string, string>((members ?? []).map((m) => [m.user_id, m.display_name]));
   Object.values(people.contacts).flat().forEach((c) => names.set(c.user_id, c.display_name));
-  const list = ((tasks ?? []) as Task[]).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
+  // Archived clients drop off the board.
+  const list = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
 
   const now = Date.now();
   const endOfToday = new Date();
