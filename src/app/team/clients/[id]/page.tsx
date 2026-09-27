@@ -1,3 +1,7 @@
+import { connectedMembers } from "@/lib/google";
+import type { CallRequest } from "@/lib/calls";
+import { CallRequestForm } from "../../schedule/CallRequestForm";
+import { cancelCallRequest } from "../../schedule/actions";
 import { memberColors } from "@/lib/memberColors";
 import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
@@ -39,7 +43,7 @@ export default async function ClientDetail({
   if (!client) notFound();
   if (client.archived_at && member.role !== "admin") notFound();
 
-  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads] = await Promise.all([
+  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", id),
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
@@ -56,6 +60,8 @@ export default async function ClientDetail({
     supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50),
     loadTaskPeople(supabase, agency.id, userId),
     supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
+    supabase.from("call_requests").select("*").eq("client_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(10),
+    connectedMembers(agency.id),
   ]);
   const uploadRows = uploads.data ?? [];
   const messageFileUrls = await signAttachments(supabase, (messages.data ?? []) as Message[]);
@@ -78,6 +84,14 @@ export default async function ClientDetail({
   const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
 
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at]));
+  // Who can host a client call: the account manager, teammates on the account, and admins.
+  const hosts = members
+    .filter((m) => m.role !== "creator" && (m.role === "admin" || onTeam.has(m.user_id) || m.user_id === client.account_manager_id))
+    .map((m) => ({ user_id: m.user_id, display_name: m.display_name, connected: linked.has(m.user_id) }));
+  const defaultHost = (client.account_manager_id && hosts.find((h) => h.user_id === client.account_manager_id && h.connected)?.user_id) || hosts.find((h) => h.connected)?.user_id || userId;
+  const calls = (callRows.data ?? []) as CallRequest[];
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date());
+  const plusDays = (n: number) => new Date(Date.parse(`${todayStr}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const answerBy = Object.fromEntries((answers.data ?? []).map((a) => [a.question_id, a.body]));
   const tz = agency.timezone;
   const short = (d: string) => new Date(d).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -188,6 +202,36 @@ export default async function ClientDetail({
             </ul>
           </>
         )}
+      </div>
+
+      <div className="panel">
+        <h2>Calls</h2>
+        {calls.length > 0 && (
+          <ul className="list">
+            {calls.map((c) => (
+              <li key={c.id}>
+                <b>{c.title}</b>
+                <span className="note">
+                  with {names.get(c.host_id) ?? "the team"} ·{" "}
+                  {c.status === "booked" && c.event_start
+                    ? new Date(c.event_start).toLocaleString("en-US", { timeZone: agency.timezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                    : `waiting for them to pick (${c.window_start.slice(5).replace("-", "/")} – ${c.window_end.slice(5).replace("-", "/")})`}
+                </span>
+                <span className="r">
+                  {c.status === "booked" ? <span className="pill ok">Booked</span> : <span className="pill warn">Waiting on client</span>}
+                  {c.status === "booked" && c.meet_link && <a className="btn sm line" href={c.meet_link} target="_blank" rel="noreferrer">Meet link</a>}
+                  {c.status === "open" && canEdit && (
+                    <form action={cancelCallRequest}>
+                      <input type="hidden" name="id" value={c.id} />
+                      <ConfirmButton label="Cancel" confirmLabel="Cancel this request?" />
+                    </form>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEdit && <CallRequestForm clientId={client.id} hosts={hosts} defaultHost={defaultHost} from={plusDays(1)} to={plusDays(14)} />}
       </div>
 
       <div className="cgrid">

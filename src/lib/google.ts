@@ -2,24 +2,27 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "./supabase/server";
 
-// Calendar (read only) for due dates and meetings; Drive to file client uploads
-// into each client's folder.
-const SCOPES = [
+// Calendar: read due dates and schedules, and add events (client calls, time
+// off) to the connected person's own calendar. Drive (agency connection only):
+// file client uploads into each client's folder.
+const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/calendar.events",
   "openid",
   "email",
 ];
+const AGENCY_SCOPES = [...CALENDAR_SCOPES, "https://www.googleapis.com/auth/drive"];
 
 export const googleConfigured = () => !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 const redirectUri = () => `${process.env.NEXT_PUBLIC_SITE_URL}/api/google/callback`;
 
-export function googleAuthUrl(state: string) {
+/** "agency": an admin connects the agency account (also their own calendar). "member": a teammate connects their calendar. */
+export function googleAuthUrl(state: string, purpose: "agency" | "member" = "agency") {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: SCOPES.join(" "),
+    scope: (purpose === "agency" ? AGENCY_SCOPES : CALENDAR_SCOPES).join(" "),
     access_type: "offline",
     prompt: "consent", // always return a refresh token
     include_granted_scopes: "true",
@@ -46,7 +49,12 @@ export async function exchangeCode(code: string) {
   return { refreshToken: data.refresh_token ?? null, email: email as string | null };
 }
 
+// Access tokens last an hour; reuse them instead of refreshing on every call.
+const tokens = new Map<string, { value: string; expires: number }>();
+
 export async function accessToken(refreshToken: string) {
+  const hit = tokens.get(refreshToken);
+  if (hit && hit.expires > Date.now()) return hit.value;
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -59,7 +67,9 @@ export async function accessToken(refreshToken: string) {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Google refresh failed: ${res.status}`);
-  return ((await res.json()) as { access_token: string }).access_token;
+  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  tokens.set(refreshToken, { value: data.access_token, expires: Date.now() + ((data.expires_in ?? 3600) - 300) * 1000 });
+  return data.access_token;
 }
 
 export async function integration(agencyId: string) {
@@ -141,59 +151,165 @@ export const getDueDates = (agencyId: string, fromIso: string, toIso: string) =>
 
 export type Meeting = { id: string; title: string; start: string; end: string; allDay: boolean; meetLink: string | null };
 
+// ---------------------------------------------------------------------------
+// Each teammate's own calendar
+// ---------------------------------------------------------------------------
+
+/** Which teammates have connected their Google Calendar (user id → Google email). */
+export async function connectedMembers(agencyId: string): Promise<Map<string, string | null>> {
+  const { data } = await createAdminClient().from("member_google").select("user_id, google_email").eq("agency_id", agencyId);
+  return new Map((data ?? []).map((r) => [r.user_id, r.google_email]));
+}
+
+async function memberAuth(userId: string) {
+  const { data } = await createAdminClient().from("member_google").select("refresh_token, google_email").eq("user_id", userId).maybeSingle();
+  if (!data) return null;
+  return { token: await accessToken(data.refresh_token), email: data.google_email as string | null };
+}
+
+async function gcal<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Google Calendar ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return (res.status === 204 ? null : await res.json()) as T;
+}
+
+type GEvent = {
+  id: string; summary?: string; status?: string; eventType?: string; hangoutLink?: string; htmlLink?: string;
+  transparency?: string;
+  start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
+  attendees?: { email?: string; self?: boolean; responseStatus?: string }[];
+};
+
+export type CalEvent = {
+  id: string; title: string; start: string; end: string; allDay: boolean;
+  /** Out of office: Google's Out of office events, or anything titled OOO / PTO / vacation. */
+  ooo: boolean;
+  meetLink: string | null;
+  link: string | null;
+};
+
+const OOO_WORDS = /\b(ooo|out of (the )?office|pto|vacation|time off|holiday)\b/i;
+
+function toCalEvent(e: GEvent): CalEvent {
+  return {
+    id: e.id,
+    title: e.summary ?? (e.eventType === "outOfOffice" ? "Out of office" : "Busy"),
+    start: e.start.dateTime ?? e.start.date!,
+    end: e.end.dateTime ?? e.end.date!,
+    allDay: !e.start.dateTime,
+    ooo: e.eventType === "outOfOffice" || OOO_WORDS.test(e.summary ?? ""),
+    meetLink: e.hangoutLink ?? null,
+    link: e.htmlLink ?? null,
+  };
+}
+
+/** A teammate's events between two times, from their main Google Calendar. Null if not connected. */
+export async function memberEvents(userId: string, fromIso: string, toIso: string): Promise<CalEvent[] | null> {
+  const auth = await memberAuth(userId);
+  if (!auth) return null;
+  const params = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+  const data = await gcal<{ items?: GEvent[] }>(auth.token, `/calendars/primary/events?${params}`);
+  return (data.items ?? [])
+    .filter((e) => e.status !== "cancelled" && e.eventType !== "workingLocation")
+    // Hide invitations they've declined.
+    .filter((e) => !(e.attendees ?? []).some((a) => a.self && a.responseStatus === "declined"))
+    .map(toCalEvent);
+}
+
+/** When a teammate is busy (their main calendar), for offering open times to clients. */
+export async function memberBusy(userId: string, fromIso: string, toIso: string) {
+  const auth = await memberAuth(userId);
+  if (!auth) return null;
+  const data = await gcal<{ calendars: Record<string, { busy?: { start: string; end: string }[] }> }>(auth.token, "/freeBusy", {
+    method: "POST",
+    body: JSON.stringify({ timeMin: fromIso, timeMax: toIso, items: [{ id: "primary" }] }),
+  });
+  return Object.values(data.calendars ?? {}).flatMap((c) => c.busy ?? []);
+}
+
+/** Adds an event to a teammate's own calendar. With `attendees`, Google emails them the invite. */
+export async function createMemberEvent(userId: string, input: {
+  title: string; description?: string; start: string; end: string; timeZone: string;
+  attendees?: string[]; meet?: boolean;
+}) {
+  const auth = await memberAuth(userId);
+  if (!auth) throw new Error("Google Calendar isn't connected.");
+  const body = {
+    summary: input.title,
+    description: input.description,
+    start: { dateTime: input.start, timeZone: input.timeZone },
+    end: { dateTime: input.end, timeZone: input.timeZone },
+    attendees: input.attendees?.map((email) => ({ email })),
+    ...(input.meet ? { conferenceData: { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: "hangoutsMeet" } } } } : {}),
+  };
+  const params = new URLSearchParams({ sendUpdates: input.attendees?.length ? "all" : "none", ...(input.meet ? { conferenceDataVersion: "1" } : {}) });
+  return toCalEvent(await gcal<GEvent>(auth.token, `/calendars/primary/events?${params}`, { method: "POST", body: JSON.stringify(body) }));
+}
+
 /**
- * A client's calls: events on the given calendars (usually their account
- * manager's) that include one of the client's contacts. Cached for 15 minutes.
+ * Marks a teammate out of office from `start` to `end`. Uses Google's own Out
+ * of office event (which declines new meetings for them); accounts that don't
+ * support it get a regular all-day "Out of office" event instead.
  */
-export const getClientMeetings = (agencyId: string, calendarIds: string[], emails: string[]) =>
+export async function createOutOfOffice(userId: string, input: { start: string; end: string; timeZone: string; message?: string; allDay: { from: string; to: string } }) {
+  const auth = await memberAuth(userId);
+  if (!auth) throw new Error("Google Calendar isn't connected.");
+  try {
+    return toCalEvent(await gcal<GEvent>(auth.token, "/calendars/primary/events", {
+      method: "POST",
+      body: JSON.stringify({
+        summary: "Out of office",
+        eventType: "outOfOffice",
+        start: { dateTime: input.start, timeZone: input.timeZone },
+        end: { dateTime: input.end, timeZone: input.timeZone },
+        transparency: "opaque",
+        outOfOfficeProperties: { autoDeclineMode: "declineOnlyNewConflictingInvitations", declineMessage: input.message || "I'm out of the office." },
+      }),
+    }));
+  } catch {
+    return toCalEvent(await gcal<GEvent>(auth.token, "/calendars/primary/events", {
+      method: "POST",
+      body: JSON.stringify({ summary: "Out of office", description: input.message, start: { date: input.allDay.from }, end: { date: input.allDay.to }, transparency: "opaque" }),
+    }));
+  }
+}
+
+/**
+ * A client's calls: events on their team's calendars that include one of the
+ * client's contacts. Cached for 5 minutes.
+ */
+export const getClientMeetings = (agencyId: string, hostIds: string[], emails: string[]) =>
   unstable_cache(
     async (): Promise<Meeting[]> => {
-      const i = await integration(agencyId);
       const wanted = new Set(emails.map((e) => e.toLowerCase()));
-      if (!i?.google_refresh_token || !wanted.size) return [];
-      try {
-        const token = await accessToken(i.google_refresh_token);
-        const now = Date.now();
-        const params = new URLSearchParams({
-          timeMin: new Date(now - 90 * 86_400_000).toISOString(),
-          timeMax: new Date(now + 120 * 86_400_000).toISOString(),
-          singleEvents: "true",
-          orderBy: "startTime",
-          maxResults: "250",
-        });
-        const seen = new Map<string, Meeting>();
-        for (const cal of [...new Set(calendarIds)]) {
-          const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal)}/events?${params}`, {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          });
-          if (!res.ok) continue;
-          const data = (await res.json()) as {
-            items?: {
-              id: string; summary?: string; status?: string; hangoutLink?: string;
-              start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
-              attendees?: { email?: string }[];
-            }[];
-          };
+      if (!wanted.size) return [];
+      const now = Date.now();
+      const from = new Date(now - 90 * 86_400_000).toISOString();
+      const to = new Date(now + 120 * 86_400_000).toISOString();
+      const seen = new Map<string, Meeting>();
+      for (const host of [...new Set(hostIds)]) {
+        try {
+          const auth = await memberAuth(host);
+          if (!auth) continue;
+          const params = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+          const data = await gcal<{ items?: GEvent[] }>(auth.token, `/calendars/primary/events?${params}`);
           for (const e of data.items ?? []) {
-            if (e.status === "cancelled" || seen.has(e.id)) continue;
-            if (!(e.attendees ?? []).some((a) => a.email && wanted.has(a.email.toLowerCase()))) continue;
-            seen.set(e.id, {
-              id: e.id,
-              title: e.summary ?? "Meeting",
-              start: e.start.dateTime ?? e.start.date!,
-              end: e.end.dateTime ?? e.end.date!,
-              allDay: !e.start.dateTime,
-              meetLink: e.hangoutLink ?? null,
-            });
+            if (e.status === "cancelled" || !(e.attendees ?? []).some((a) => a.email && wanted.has(a.email.toLowerCase()))) continue;
+            const ev = toCalEvent(e);
+            // The same call can be on several teammates' calendars; show it once.
+            const key = `${ev.start}|${ev.title}`;
+            if (!seen.has(key)) seen.set(key, { id: ev.id, title: ev.title, start: ev.start, end: ev.end, allDay: ev.allDay, meetLink: ev.meetLink });
           }
+        } catch (err) {
+          console.error("Couldn't load a teammate's calendar", err);
         }
-        return [...seen.values()].sort((a, b) => a.start.localeCompare(b.start));
-      } catch (err) {
-        console.error("Couldn't load client meetings from Google Calendar", err);
-        return [];
       }
+      return [...seen.values()].sort((a, b) => a.start.localeCompare(b.start));
     },
-    ["client-meetings", agencyId, ...calendarIds, ...emails],
-    { revalidate: 900, tags: [`due-dates-${agencyId}`] },
+    ["client-meetings-v2", agencyId, ...hostIds, ...emails],
+    { revalidate: 300, tags: [`meetings-${agencyId}`] },
   )();

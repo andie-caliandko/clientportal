@@ -52,9 +52,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="panel" style={{ gridColumn: "1 / -1" }}>
           <h2>Google Calendar</h2>
           <p className="note" style={{ maxWidth: "64ch" }}>
-            Connect Google and choose the calendar that holds your monthly due dates, like content calendars to internal
-            review and to clients. Those dates then show above Tasks every week. The portal only reads the calendar and
-            never changes it.
+            Connect the agency&apos;s Google account and choose the calendar that holds your monthly due dates. Those
+            dates show above Tasks every week, and client uploads are filed in Google Drive. This also connects your own
+            calendar for the Schedule page. Each teammate connects their own calendar on the Schedule page.
           </p>
           {!googleConfigured() && <p className="readonly">Waiting on server setup: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.</p>}
           {google.connected ? (
@@ -74,7 +74,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <form action={disconnectGoogle}><ConfirmButton label="Disconnect Google" confirmLabel="Disconnect?" /></form>
             </>
           ) : (
-            googleConfigured() && <div><a className="btn sm" href="/api/google/connect">Connect Google</a></div>
+            googleConfigured() && <div><a className="btn sm" href="/api/google/connect?for=agency">Connect Google</a></div>
           )}
         </div>
         <div className="panel" style={{ alignSelf: "stretch" }}>

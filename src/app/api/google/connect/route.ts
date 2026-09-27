@@ -1,17 +1,22 @@
 import crypto from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { googleAuthUrl, googleConfigured } from "@/lib/google";
 import { getViewer } from "@/lib/session";
 
-// Admin clicks "Connect Google" in Agency settings.
-export async function GET(request: Request) {
+// "Connect Google" in Agency settings (admins, ?for=agency) or "Connect my
+// Google Calendar" on Schedule (any teammate, ?for=me).
+export async function GET(request: NextRequest) {
+  const purpose = request.nextUrl.searchParams.get("for") === "me" ? "member" : "agency";
+  const back = new URL(purpose === "member" ? "/team/schedule" : "/team/settings", request.url);
   const v = await getViewer();
-  const back = new URL("/team/settings", request.url);
-  if (!v || v.kind !== "team" || v.member.role !== "admin") return NextResponse.redirect(back);
-  if (!googleConfigured()) return NextResponse.redirect(new URL("/team/settings?google=not-configured", request.url));
+  if (!v || v.kind !== "team" || (purpose === "agency" && v.member.role !== "admin")) return NextResponse.redirect(back);
+  if (!googleConfigured()) {
+    back.searchParams.set("google", "not-configured");
+    return NextResponse.redirect(back);
+  }
 
-  const state = crypto.randomBytes(24).toString("hex");
-  const res = NextResponse.redirect(googleAuthUrl(state));
+  const state = `${purpose}.${crypto.randomBytes(24).toString("hex")}`;
+  const res = NextResponse.redirect(googleAuthUrl(state, purpose));
   res.cookies.set("google_oauth_state", state, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 600, path: "/" });
   return res;
 }

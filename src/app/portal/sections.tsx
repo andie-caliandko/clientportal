@@ -2,8 +2,10 @@ import { Avatar } from "@/app/Avatar";
 import { cache } from "react";
 import Link from "next/link";
 import { formatDue } from "@/lib/approval";
-import { getClientMeetings, googleStatus } from "@/lib/google";
-import { createClient } from "@/lib/supabase/server";
+import { getClientMeetings } from "@/lib/google";
+import { requestSlots, type CallRequest } from "@/lib/calls";
+import { SlotPicker } from "./SlotPicker";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Agency, Calendar, Client, ClientUser, Doc, Message, Step } from "@/lib/types";
 import { approveCalendar, confirmBooked, sendMessage } from "./actions";
 import { ClientTasks, type ClientTask } from "./ClientTasks";
@@ -52,7 +54,7 @@ const loadCore = (ctx: Omit<PortalCtx, "params">) => coreFor(ctx.agency, ctx.cli
 const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["client"], userId: string | null, preview: boolean) => {
   const supabase = await createClient();
   const ctx = { userId, preview };
-  const [steps, status, calendars, manager, people, tasks, teamRows] = await Promise.all([
+  const [steps, status, calendars, manager, people, tasks, teamRows, calls] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", client.id),
     supabase.from("content_calendars").select("*").eq("client_id", client.id).order("month", { ascending: false }),
@@ -69,6 +71,7 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
       .neq("status", "done")
       .order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("client_team").select("user_id").eq("client_id", client.id),
+    supabase.from("call_requests").select("*").eq("client_id", client.id).eq("status", "open").order("created_at"),
   ]);
   // Teammates this client can see (admins only when they're the account manager), for "From <name>".
   const teamIds = (teamRows.data ?? []).map((r) => r.user_id);
@@ -104,13 +107,15 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
     amEmail: manager.data?.email as string | undefined,
     contacts,
     teamTasks,
+    teamIds: [...new Set([client.account_manager_id, ...teamIds].filter(Boolean))] as string[],
+    openCalls: (calls.data ?? []) as CallRequest[],
   };
 });
 
 /** Open items for the Tasks badge in the menu. */
 export async function openCount(ctx: Omit<PortalCtx, "params">) {
   const d = await loadCore(ctx);
-  return d.teamTasks.length + (d.pending ? 1 : 0) + d.steps.filter((s) => !d.done.has(s.id)).length;
+  return d.teamTasks.length + d.openCalls.length + (d.pending ? 1 : 0) + d.steps.filter((s) => !d.done.has(s.id)).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +238,16 @@ export async function HomeSection(ctx: PortalCtx) {
       </section>
       {ctx.params.done && DONE_MESSAGES[ctx.params.done] && <p className="flash">{DONE_MESSAGES[ctx.params.done]}</p>}
       {d.pending && <ApprovalCard cal={d.pending} agency={ctx.agency} preview={ctx.preview} />}
+      {d.openCalls.map((c) => (
+        <section key={c.id} className="task-card next" aria-label="Pick a time">
+          <div>
+            <p className="eyebrow">Let&apos;s talk</p>
+            <h2>Pick a time for your {c.title}</h2>
+            <p>{c.duration_min} minutes on Google Meet. Choose any open time and you&apos;ll get a calendar invite.</p>
+          </div>
+          <Link className="btn lg warm" href={`${ctx.base}/meetings#call-${c.id}`}>Pick a time</Link>
+        </section>
+      ))}
       {d.teamTasks.length > 0 && (
         <section className="task-card plain" aria-label="From your team">
           <div>
@@ -494,13 +509,18 @@ export async function AnalyticsSection(ctx: PortalCtx) {
 
 export async function MeetingsSection(ctx: PortalCtx) {
   const d = await loadCore(ctx);
-  const google = await googleStatus(ctx.agency.id);
-  const calendars = [d.amEmail, google.email].filter(Boolean) as string[];
-  const meetings = google.connected ? await getClientMeetings(ctx.agency.id, calendars, d.contacts.map((c) => c.email)) : [];
+  const admin = createAdminClient();
+  // Open "pick a time" requests, each with the host's open times.
+  const hostIds = [...new Set(d.openCalls.map((c) => c.host_id))];
+  const [{ data: hosts }, slotLists] = await Promise.all([
+    hostIds.length ? admin.from("agency_members").select("user_id, display_name").in("user_id", hostIds) : Promise.resolve({ data: [] as { user_id: string; display_name: string }[] }),
+    Promise.all(d.openCalls.map((c) => requestSlots(c, ctx.agency.timezone).catch(() => [] as string[]))),
+  ]);
+  const hostName = new Map((hosts ?? []).map((h) => [h.user_id, h.display_name]));
+  const meetings = await getClientMeetings(ctx.agency.id, [...d.teamIds, ...hostIds], d.contacts.map((c) => c.email));
   const now = Date.now();
   const upcoming = meetings.filter((m) => new Date(m.end).getTime() >= now);
   const past = meetings.filter((m) => new Date(m.end).getTime() < now).reverse().slice(0, 10);
-  const booking = d.steps.find((s) => s.kind === "booking")?.action_url;
   const tz = ctx.agency.timezone;
   const day = (iso: string) => {
     const dt = new Date(iso);
@@ -527,12 +547,21 @@ export async function MeetingsSection(ctx: PortalCtx) {
   return (
     <>
       <PageHead title="Meetings" sub={`Your calls with ${ctx.agency.brand.shortName ?? ctx.agency.name} happen on Google Meet.`} />
+      {d.openCalls.map((c, i) => (
+        <section key={c.id} id={`call-${c.id}`} className="card" style={{ display: "grid", gap: 12 }}>
+          <div>
+            <p className="eyebrow">Pick a time</p>
+            <h2>{c.title} with {(hostName.get(c.host_id) ?? d.amName).split(" ")[0]}</h2>
+            {c.note && <p className="note" style={{ marginTop: 6 }}>{c.note}</p>}
+          </div>
+          <SlotPicker requestId={c.id} slots={slotLists[i]} durationMin={c.duration_min} disabled={ctx.preview} />
+        </section>
+      ))}
       <section className="card">
         <div className="sec-head">
           <h2>Coming up</h2>
-          {booking && (ctx.preview ? <button className="btn sm line" disabled>Book a call</button> : <a className="btn sm line" href={booking} target="_blank" rel="noreferrer">Book a call with {d.amName.split(" ")[0]}</a>)}
         </div>
-        {upcoming.length ? <ul className="list">{upcoming.map((m) => row(m, true))}</ul> : <p className="note">No calls on the calendar right now.{booking ? " Use Book a call to pick a time." : ""}</p>}
+        {upcoming.length ? <ul className="list">{upcoming.map((m) => row(m, true))}</ul> : <p className="note">No calls on the calendar right now. When it&apos;s time to meet, we&apos;ll ask you to pick a time here.</p>}
       </section>
       {past.length > 0 && (
         <section className="card">

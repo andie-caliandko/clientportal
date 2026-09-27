@@ -85,6 +85,12 @@ export function dateAtHour(date: string, hour: number, timeZone: string): Date {
   return fromWall(new Date(Date.UTC(y, m - 1, d, hour)), timeZone);
 }
 
+/** A calendar date at minutes past midnight (wall clock) in `timeZone`. */
+export function dateAtMinute(date: string, minutes: number, timeZone: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  return fromWall(new Date(Date.UTC(y, m - 1, d, 0, minutes)), timeZone);
+}
+
 /** Days after the due date (or assignment date) when overdue client tasks get a reminder. */
 export const REMINDER_DAYS = [2, 5, 7];
 

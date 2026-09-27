@@ -1,6 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { requestSlots, type CallRequest } from "@/lib/calls";
+import { createMemberEvent } from "@/lib/google";
+import { notifyUser } from "@/lib/notifications";
+import { sendEmail } from "@/lib/notify";
 import { redirect } from "next/navigation";
 import { requireClient } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
@@ -216,4 +220,68 @@ export async function completeClientTask(input: { id: string; comment: string; f
   });
   revalidatePath("/portal");
   return { ok: "Done! Your team has been told." };
+}
+
+/** A client picks one of the offered times; the host's Google Calendar invites them with a Meet link. */
+export async function bookCall(requestId: string, start: string): Promise<{ error?: string; ok?: string }> {
+  const v = await requireClient();
+  const admin = createAdminClient();
+  const { data } = await admin.from("call_requests").select("*").eq("id", requestId).eq("client_id", v.client.id).maybeSingle();
+  const req = data as CallRequest | null;
+  if (!req || req.status !== "open") return { error: "This call is already booked or was cancelled. Refresh the page." };
+  const tz = v.agency.timezone;
+  let slots: string[];
+  try {
+    slots = await requestSlots(req, tz);
+  } catch {
+    return { error: "We couldn't check the calendar just now. Try again in a minute." };
+  }
+  const startMs = new Date(start).getTime();
+  if (!slots.some((s) => new Date(s).getTime() === startMs)) return { error: "That time was just taken. Please pick another." };
+
+  // Claim the request first so two people can't book it at once.
+  const { data: claimed } = await admin
+    .from("call_requests")
+    .update({ status: "booked", booked_by: v.userId, booked_at: new Date().toISOString() })
+    .eq("id", req.id)
+    .eq("status", "open")
+    .select("id")
+    .maybeSingle();
+  if (!claimed) return { error: "This call was just booked. Refresh the page." };
+
+  const [{ data: contacts }, { data: host }] = await Promise.all([
+    admin.from("client_users").select("email").eq("client_id", v.client.id),
+    admin.from("agency_members").select("display_name, email").eq("user_id", req.host_id).maybeSingle(),
+  ]);
+  const short = v.agency.brand.shortName ?? v.agency.name;
+  const end = new Date(startMs + req.duration_min * 60_000).toISOString();
+  try {
+    const event = await createMemberEvent(req.host_id, {
+      title: `${req.title} · ${v.client.name} & ${short}`,
+      description: `${req.note ? `${req.note}\n\n` : ""}Booked by ${v.clientUser.display_name} through the ${short} portal.`,
+      start: new Date(startMs).toISOString(),
+      end,
+      timeZone: tz,
+      attendees: (contacts ?? []).map((c) => c.email).filter(Boolean),
+      meet: true,
+    });
+    await admin
+      .from("call_requests")
+      .update({ event_id: event.id, event_start: event.start, event_end: event.end, meet_link: event.meetLink })
+      .eq("id", req.id);
+  } catch (err) {
+    console.error("Booking a call failed", err);
+    await admin.from("call_requests").update({ status: "open", booked_by: null, booked_at: null }).eq("id", req.id);
+    return { error: "We couldn't add this to the calendar. Try again, or send us a message." };
+  }
+
+  const when = new Date(startMs).toLocaleString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+  await notifyUser(v.agency.id, v.client.id, req.host_id, { kind: "task", title: `${v.client.name} booked: ${req.title}`, body: when, link: `/team/clients/${v.client.id}` });
+  if (host?.email) {
+    await sendEmail([host.email], `${v.client.name} booked your ${req.title}`, `${v.clientUser.display_name} picked ${when}.\n\nIt's on your Google Calendar with a Google Meet link, and they've been sent the invite.`);
+  }
+  revalidateTag(`meetings-${v.agency.id}`);
+  revalidatePath("/portal/meetings");
+  revalidatePath("/portal");
+  return { ok: `You're booked for ${when}. A Google Calendar invite with the Meet link is on its way to your email.` };
 }
