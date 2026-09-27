@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { dateAtHour, dateAtMinute } from "@/lib/approval";
-import { createMemberEvent, createOutOfOffice } from "@/lib/google";
+import { createMemberEvent, createOutOfOffice, deleteMemberEvent, updateMemberEvent } from "@/lib/google";
 import { emailClient } from "@/lib/notify";
 import { notifyClient } from "@/lib/notifications";
 import { requireTeam } from "@/lib/session";
@@ -85,6 +85,62 @@ export async function saveBookingHours(_: Result, form: FormData): Promise<Resul
   if (error) return { error: "Your hours couldn't be saved." };
   revalidatePath("/team/calendar");
   return { ok: "Saved. Clients only see open times inside these hours." };
+}
+
+/** You can change your own events; admins can change anyone's. */
+async function canChange(ownerId: string) {
+  const v = await requireTeam();
+  if (ownerId !== v.userId && v.member.role !== "admin") return null;
+  const { data } = await createAdminClient().from("agency_members").select("user_id").eq("user_id", ownerId).eq("agency_id", v.agency.id).maybeSingle();
+  return data ? v : null;
+}
+
+/** Edit an event from the Calendar page. */
+export async function editCalendarEvent(_: Result, form: FormData): Promise<Result> {
+  const owner = String(form.get("owner") ?? "");
+  const eventId = String(form.get("event") ?? "");
+  const v = await canChange(owner);
+  if (!v) return { error: "You can only change your own events." };
+  const title = String(form.get("title") ?? "").trim();
+  if (!title) return { error: "Give it a name." };
+  const tz = v.agency.timezone;
+  const date = String(form.get("date") ?? "");
+  let timed: { start: string; end: string } | undefined;
+  let allDay: { from: string; toExclusive: string } | undefined;
+  if (form.get("allDay") === "on") {
+    const last = String(form.get("lastDate") ?? "") || date;
+    if (!DATE.test(date) || !DATE.test(last) || last < date) return { error: "Check the dates." };
+    allDay = { from: date, toExclusive: nextDay(last) };
+  } else {
+    const start = minutes(String(form.get("start") ?? ""));
+    const end = minutes(String(form.get("end") ?? ""));
+    if (!DATE.test(date) || start === null || end === null) return { error: "Pick a date and times." };
+    if (end <= start) return { error: "The end time needs to be after the start time." };
+    timed = { start: dateAtMinute(date, start, tz).toISOString(), end: dateAtMinute(date, end, tz).toISOString() };
+  }
+  try {
+    await updateMemberEvent(owner, eventId, { title, description: String(form.get("description") ?? ""), timeZone: tz, timed, allDay });
+  } catch (err) {
+    console.error("Editing an event failed", err);
+    return { error: "Google Calendar didn't accept that change. You may only be able to edit this one in Google." };
+  }
+  revalidateTag(`meetings-${v.agency.id}`);
+  revalidatePath("/team/calendar");
+  return { ok: "Saved to Google Calendar." };
+}
+
+export async function deleteCalendarEvent(owner: string, eventId: string): Promise<Result> {
+  const v = await canChange(owner);
+  if (!v) return { error: "You can only delete your own events." };
+  try {
+    await deleteMemberEvent(owner, eventId);
+  } catch (err) {
+    console.error("Deleting an event failed", err);
+    return { error: "Google Calendar didn't let us delete that. Try deleting it in Google." };
+  }
+  revalidateTag(`meetings-${v.agency.id}`);
+  revalidatePath("/team/calendar");
+  return { ok: "Deleted." };
 }
 
 export async function disconnectMyGoogle() {

@@ -1,4 +1,5 @@
 import { layoutDay } from "@/lib/calendarLayout";
+import { EventChip, type EventInfo } from "./EventDialog";
 
 const HOUR = 52; // pixels per hour
 
@@ -12,6 +13,7 @@ export type WeekItem = {
   start?: number;
   end?: number;
   timeLabel: string;
+  info: EventInfo;
 };
 
 /** Everyone's week on one grid, each person in their own color; overlaps sit side by side. */
@@ -44,9 +46,9 @@ export function TogetherWeek({ days, today, items, legend }: {
           {days.map((d) => (
             <div key={d.date} className={`tw-allday ${d.date === today ? "today" : ""}`}>
               {(items[d.date] ?? []).filter((i) => i.start === undefined).map((i) => (
-                <div key={i.key} className={`tw-ev who-${i.color} ${i.ooo ? "ooo" : ""}`} title={`${i.who} · ${i.title}`}>
+                <EventChip key={i.key} info={i.info} className={`tw-ev who-${i.color} ${i.ooo ? "ooo" : ""}`} title={`${i.who} · ${i.title}`}>
                   <b>{i.ooo ? `${i.who} out` : i.title}</b>
-                </div>
+                </EventChip>
               ))}
             </div>
           ))}
@@ -62,12 +64,12 @@ export function TogetherWeek({ days, today, items, legend }: {
                   const top = ((i.start - first * 60) / 60) * HOUR;
                   const height = Math.max(22, ((i.end - i.start) / 60) * HOUR - 2);
                   return (
-                    <div key={i.key} className={`tw-ev timed who-${i.color} ${i.ooo ? "ooo" : ""} ${i.cols > 1 ? "shared" : ""}`}
+                    <EventChip key={i.key} info={i.info} className={`tw-ev timed who-${i.color} ${i.ooo ? "ooo" : ""} ${i.cols > 1 ? "shared" : ""}`}
                       style={{ top, height, left: `calc(${(i.col / i.cols) * 100}% + 2px)`, width: `calc(${100 / i.cols}% - 4px)` }}
                       title={`${i.who} · ${i.timeLabel} · ${i.title}`}>
                       <b>{i.ooo ? `${i.who} out` : i.title}</b>
                       {height > 34 && i.cols < 3 && <span>{i.timeLabel}</span>}
-                    </div>
+                    </EventChip>
                   );
                 })}
               </div>

@@ -179,7 +179,8 @@ async function gcal<T>(token: string, path: string, init?: RequestInit): Promise
 
 type GEvent = {
   id: string; summary?: string; status?: string; eventType?: string; hangoutLink?: string; htmlLink?: string;
-  transparency?: string;
+  transparency?: string; description?: string; recurringEventId?: string;
+  organizer?: { self?: boolean; email?: string; displayName?: string };
   start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
   attendees?: { email?: string; self?: boolean; responseStatus?: string }[];
 };
@@ -190,6 +191,13 @@ export type CalEvent = {
   ooo: boolean;
   meetLink: string | null;
   link: string | null;
+  description: string | null;
+  /** They created it, so they can change it (not just an invitation from someone else). */
+  mine: boolean;
+  /** Who sent the invitation, when it isn't theirs. */
+  organizer: string | null;
+  recurring: boolean;
+  guests: number;
 };
 
 const OOO_WORDS = /\b(ooo|out of (the )?office|pto|vacation|time off|holiday)\b/i;
@@ -204,7 +212,39 @@ function toCalEvent(e: GEvent): CalEvent {
     ooo: e.eventType === "outOfOffice" || OOO_WORDS.test(e.summary ?? ""),
     meetLink: e.hangoutLink ?? null,
     link: e.htmlLink ?? null,
+    description: e.description ?? null,
+    mine: e.organizer ? !!e.organizer.self : true,
+    organizer: e.organizer && !e.organizer.self ? e.organizer.displayName ?? e.organizer.email ?? null : null,
+    recurring: !!e.recurringEventId,
+    guests: (e.attendees ?? []).filter((a) => !a.self).length,
   };
+}
+
+/** Changes an event on a teammate's calendar. Guests get Google's update email. */
+export async function updateMemberEvent(userId: string, eventId: string, input: {
+  title: string; description?: string | null; timeZone: string;
+  timed?: { start: string; end: string };
+  allDay?: { from: string; toExclusive: string };
+}) {
+  const auth = await memberAuth(userId);
+  if (!auth) throw new Error("Google Calendar isn't connected.");
+  const body = {
+    summary: input.title,
+    ...(input.description !== undefined ? { description: input.description ?? "" } : {}),
+    ...(input.timed
+      ? { start: { dateTime: input.timed.start, timeZone: input.timeZone }, end: { dateTime: input.timed.end, timeZone: input.timeZone } }
+      : input.allDay
+        ? { start: { date: input.allDay.from }, end: { date: input.allDay.toExclusive } }
+        : {}),
+  };
+  return toCalEvent(await gcal<GEvent>(auth.token, `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: "PATCH", body: JSON.stringify(body) }));
+}
+
+/** Deletes an event (or, for an invitation, removes it from their calendar). Guests are told. */
+export async function deleteMemberEvent(userId: string, eventId: string) {
+  const auth = await memberAuth(userId);
+  if (!auth) throw new Error("Google Calendar isn't connected.");
+  await gcal<null>(auth.token, `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: "DELETE" });
 }
 
 /** A teammate's events between two times, from their main Google Calendar. Null if not connected. */

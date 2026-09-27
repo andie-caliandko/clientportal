@@ -8,6 +8,7 @@ import { ConfirmButton } from "../TeamForms";
 import { disconnectMyGoogle } from "./actions";
 import { AddToSchedule, BookingHours } from "./ScheduleForms";
 import { TogetherWeek, type WeekItem } from "./TogetherWeek";
+import { EventChip, type EventInfo } from "./EventDialog";
 import { memberColors } from "@/lib/memberColors";
 
 const DAY = 86_400_000;
@@ -89,6 +90,24 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     const f = (d: string) => dayLabel(d, { weekday: "short", month: "short", day: "numeric" });
     return first === last ? f(first) : `${f(first)} – ${f(last)}`;
   };
+  // What the event pop-up needs, with form values in the agency's time zone.
+  const wallDate = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
+  const wallTime = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  const longDay = (d: string) => dayLabel(d, { weekday: "short", month: "short", day: "numeric" });
+  const infoFor = (p: Person, e: CalEvent): EventInfo => {
+    const date = e.allDay ? e.start : wallDate(e.start);
+    const lastDate = e.allDay ? addDays(e.end, -1) : wallDate(e.end);
+    const when = e.allDay
+      ? date === lastDate ? `${longDay(date)} · All day` : `${longDay(date)} – ${longDay(lastDate)}`
+      : date === lastDate ? `${longDay(date)} · ${time(e.start)} – ${time(e.end)}` : `${longDay(date)} ${time(e.start)} – ${longDay(lastDate)} ${time(e.end)}`;
+    return {
+      owner: p.user_id, id: e.id, title: e.title, who: p.user_id === userId ? "You" : p.display_name, when, ooo: e.ooo,
+      meetLink: e.meetLink, link: e.link, description: e.description, mine: e.mine, organizer: e.organizer,
+      recurring: e.recurring, guests: e.guests, canChange: p.user_id === userId || isAdmin,
+      allDay: e.allDay, date, lastDate, start: e.allDay ? "09:00" : wallTime(e.start), end: e.allDay ? "10:00" : wallTime(e.end),
+    };
+  };
+
   // One grid for everyone: all-day items on top, timed ones placed by the hour.
   const colors = memberColors(everyone.map((p) => p.user_id));
   const together: Record<string, WeekItem[]> = Object.fromEntries(days.map((d) => [d, []]));
@@ -106,6 +125,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           color: colors.get(p.user_id) ?? 0,
           ooo: e.ooo,
           timeLabel: label(e, d),
+          info: infoFor(p, e),
           ...(whole ? {} : { start: (Math.max(s0, d0) - d0) / 60_000, end: (Math.min(e0, d1) - d0) / 60_000 }),
         });
       }
@@ -205,14 +225,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                     return (
                       <td key={d} className={`${out ? "out" : ""} ${d === today ? "today" : ""}`}>
                         {items.map((e) => (
-                          <div key={e.id} className={`ev ${e.ooo ? "ooo" : ""}`}>
+                          <EventChip key={e.id} info={infoFor(p, e)} className={`ev ${e.ooo ? "ooo" : ""}`} title={e.title}>
                             {e.ooo ? <b>Out of office</b> : (
                               <>
                                 <span className="ev-time">{label(e, d)}</span>
                                 <span className="ev-title">{e.title}</span>
                               </>
                             )}
-                          </div>
+                          </EventChip>
                         ))}
                       </td>
                     );
