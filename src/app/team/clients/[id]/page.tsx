@@ -189,7 +189,7 @@ export default async function ClientDetail({
             <h3>{g.title} <span>{g.list.length + g.approvals.length} open · {g.hint}</span></h3>
             {g.list.length || g.approvals.length ? (
               <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-                {g.approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={client.name} timeZone={tz} showClient={false} />)}
+                {g.approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={client.name} timeZone={tz} showClient={false} canEdit={canEdit} />)}
                 {g.list.map((t) => (
                   <TaskCard key={t.id} task={t} clientName={client.name}
                     showClientChip={false} personName={(uid) => names.get(uid)} colorOf={(uid) => colors.get(uid)} timeZone={tz} canEdit={canEdit} />

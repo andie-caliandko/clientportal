@@ -124,7 +124,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           return (
             <DropColumn status={col.key} key={col.key}>
               <h2>{col.label}<span>{items.length + approvals.length}</span></h2>
-              {approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={clientName[c.client_id]} timeZone={agency.timezone} />)}
+              {approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={clientName[c.client_id]} timeZone={agency.timezone} canEdit={canEdit} />)}
               {items.map((t) => (
                 <DragCard id={t.id} key={t.id}>
                   <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} 

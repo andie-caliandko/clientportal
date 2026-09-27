@@ -918,3 +918,21 @@ export async function deleteTemplate(form: FormData) {
   revalidatePath("/team/templates");
 }
 
+
+/** The team marks a content calendar approved for the client (for example, they said yes by phone). */
+export async function markCalendarApproved(form: FormData) {
+  await requireEditor();
+  const id = String(form.get("id"));
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("content_calendars")
+    .update({ status: "approved", resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("client_id")
+    .maybeSingle();
+  if (!data) return;
+  revalidatePath("/team");
+  revalidatePath(`/team/clients/${data.client_id}`);
+  revalidatePath("/portal", "layout");
+}

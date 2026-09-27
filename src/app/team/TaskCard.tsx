@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Task } from "@/lib/types";
-import { moveTask } from "./actions";
+import { markCalendarApproved, moveTask } from "./actions";
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
   todo: [{ to: "doing", label: "Start" }, { to: "done", label: "Done" }],
@@ -66,11 +66,12 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
 }
 
 /** A content calendar the client hasn't approved yet, shown with their other waiting items. */
-export function ApprovalCard({ cal, clientName, timeZone, showClient = true }: {
+export function ApprovalCard({ cal, clientName, timeZone, showClient = true, canEdit }: {
   cal: { id: string; client_id: string; month: string; rella_url: string; due_at: string };
   clientName: string;
   timeZone: string;
   showClient?: boolean;
+  canEdit: boolean;
 }) {
   const month = new Date(`${cal.month.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" });
   const late = new Date(cal.due_at).getTime() < Date.now();
@@ -83,7 +84,15 @@ export function ApprovalCard({ cal, clientName, timeZone, showClient = true }: {
         {late ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>}
       </div>
       <p className="task-by">If they don&apos;t reply by then, it&apos;s approved automatically and flagged.</p>
-      {showClient && <div className="task-actions"><Link href={`/team/clients/${cal.client_id}`}>Open client</Link></div>}
+      <div className="task-actions">
+        {canEdit && (
+          <form action={markCalendarApproved}>
+            <input type="hidden" name="id" value={cal.id} />
+            <button>Mark approved for them</button>
+          </form>
+        )}
+        {showClient && <Link href={`/team/clients/${cal.client_id}`}>Open client</Link>}
+      </div>
     </article>
   );
 }

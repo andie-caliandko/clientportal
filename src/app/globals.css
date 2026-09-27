@@ -604,3 +604,4 @@ td a:hover { text-decoration: underline; }
 .mg-more:hover { text-decoration: underline; }
 .sched.one { min-width: 0; }
 .rh-this { display: grid; gap: 10px; }
+.task-actions a { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: .2em .6em; font-size: .75rem; text-decoration: none; color: inherit; }
