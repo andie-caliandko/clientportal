@@ -21,7 +21,7 @@ import { MessageComposer } from "@/app/portal/MessageComposer";
 import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
 import { ScrollToLatest } from "@/app/portal/ScrollToLatest";
 import { FilePreview } from "@/app/portal/FilePreview";
-import { TaskCard } from "../../TaskCard";
+import { ApprovalCard, TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
 
@@ -83,6 +83,7 @@ export default async function ClientDetail({
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
   const allTasks = (tasks.data ?? []) as Task[];
   const openTasks = allTasks.filter((t) => t.status !== "done");
+  const pendingCals = ((cals.data ?? []) as Calendar[]).filter((c) => c.status === "pending");
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
   const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role; avatar_path: string | null }[];
@@ -181,13 +182,14 @@ export default async function ClientDetail({
         <h2>Tasks</h2>
         {canEdit && <NewTask clients={[{ id: client.id, name: client.name }]} people={taskPeople} clientId={client.id} />}
         {[
-          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter((t) => t.client_assignee_id || t.status === "waiting") },
-          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id && t.status !== "waiting") },
+          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter((t) => t.client_assignee_id || t.status === "waiting"), approvals: pendingCals },
+          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id && t.status !== "waiting"), approvals: [] as Calendar[] },
         ].map((g) => (
           <div className="task-group" key={g.key}>
-            <h3>{g.title} <span>{g.list.length} open · {g.hint}</span></h3>
-            {g.list.length ? (
+            <h3>{g.title} <span>{g.list.length + g.approvals.length} open · {g.hint}</span></h3>
+            {g.list.length || g.approvals.length ? (
               <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+                {g.approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={client.name} timeZone={tz} showClient={false} />)}
                 {g.list.map((t) => (
                   <TaskCard key={t.id} task={t} clientName={client.name}
                     showClientChip={false} personName={(uid) => names.get(uid)} colorOf={(uid) => colors.get(uid)} timeZone={tz} canEdit={canEdit} />

@@ -6,7 +6,7 @@ import type { Task } from "@/lib/types";
 import { getDueDates, googleStatus } from "@/lib/google";
 import { describeDueDates, monthKey, weekOfMonth, weekRange } from "@/lib/rhythm";
 import { RhythmPanel } from "./RhythmPanel";
-import { TaskCard } from "./TaskCard";
+import { ApprovalCard, TaskCard } from "./TaskCard";
 import { DragBoard, DragCard, DropColumn } from "./DragBoard";
 import { NewTask } from "./TeamForms";
 
@@ -23,7 +23,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
-  const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google, { count: openApprovals }] = await Promise.all([
+  const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google, { data: openApprovalRows }] = await Promise.all([
     supabase.from("tasks").select("*").neq("status", "done").order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("clients").select("id, name").is("archived_at", null).order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
@@ -31,8 +31,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     supabase.from("rhythm_checks").select("user_id, week, item").eq("agency_id", agency.id).eq("month", monthKey(agency.timezone)),
     getDueDates(agency.id, monthStart.toISOString(), horizon.toISOString()),
     googleStatus(agency.id),
-    supabase.from("content_calendars").select("id, clients!inner(archived_at)", { count: "exact", head: true }).eq("status", "pending").is("clients.archived_at", null),
+    supabase.from("content_calendars").select("id, client_id, month, rella_url, due_at, clients!inner(archived_at)").eq("status", "pending").is("clients.archived_at", null).order("due_at"),
   ]);
+  const pendingCals = (openApprovalRows ?? []) as { id: string; client_id: string; month: string; rella_url: string; due_at: string }[];
+  const openApprovals = pendingCals.length;
   // My own check-offs. Admins also get everyone else's rows (RLS), for the progress circles.
   const rhythmChecks = Object.fromEntries((checks ?? []).filter((c) => c.user_id === userId).map((c) => [`${c.week}-${c.item}`, true]));
   const rhythm = agency.monthly_rhythm ?? [];
@@ -117,16 +119,19 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <DragBoard enabled={canEdit}>
         {COLUMNS.map((col) => {
           const items = list.filter((t) => t.status === col.key);
+          // Content calendars waiting for approval sit with the other things waiting on clients.
+          const approvals = col.key === "waiting" ? pendingCals.filter((c) => c.client_id in clientName) : [];
           return (
             <DropColumn status={col.key} key={col.key}>
-              <h2>{col.label}<span>{items.length}</span></h2>
+              <h2>{col.label}<span>{items.length + approvals.length}</span></h2>
+              {approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={clientName[c.client_id]} timeZone={agency.timezone} />)}
               {items.map((t) => (
                 <DragCard id={t.id} key={t.id}>
                   <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} 
                     personName={(id) => names.get(id)} colorOf={(id) => colors.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
                 </DragCard>
               ))}
-              {!items.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}
+              {!items.length && !approvals.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}
             </DropColumn>
           );
         })}

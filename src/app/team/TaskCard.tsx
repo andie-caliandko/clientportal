@@ -64,3 +64,26 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
     </article>
   );
 }
+
+/** A content calendar the client hasn't approved yet, shown with their other waiting items. */
+export function ApprovalCard({ cal, clientName, timeZone, showClient = true }: {
+  cal: { id: string; client_id: string; month: string; rella_url: string; due_at: string };
+  clientName: string;
+  timeZone: string;
+  showClient?: boolean;
+}) {
+  const month = new Date(`${cal.month.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" });
+  const late = new Date(cal.due_at).getTime() < Date.now();
+  const due = new Date(cal.due_at).toLocaleString("en-US", { timeZone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <article className="task client-task">
+      <span className="kind client">{clientName} · Approval</span>
+      <a className="task-link" href={cal.rella_url} target="_blank" rel="noreferrer">Approve the {month} content calendar</a>
+      <div className="meta">
+        {late ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>}
+      </div>
+      <p className="task-by">If they don&apos;t reply by then, it&apos;s approved automatically and flagged.</p>
+      {showClient && <div className="task-actions"><Link href={`/team/clients/${cal.client_id}`}>Open client</Link></div>}
+    </article>
+  );
+}
