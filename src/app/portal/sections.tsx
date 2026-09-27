@@ -66,7 +66,7 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
       .select("id, title, note, due_at, created_by, client_assignee_id")
       .eq("client_id", client.id)
       // Assigned to a contact, or the team is waiting on the client (approval reminders excluded: that's the approval card).
-      .or("client_assignee_id.not.is.null,and(status.eq.waiting,source.neq.rella)")
+      .or("client_assignee_id.not.is.null,and(status.eq.waiting,source.neq.rella,auto.eq.false)")
       .neq("status", "done")
       .order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("client_team").select("user_id").eq("client_id", client.id),

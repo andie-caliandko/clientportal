@@ -24,6 +24,7 @@ import { FilePreview } from "@/app/portal/FilePreview";
 import { ApprovalCard, TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
+import { isClientFacing } from "@/lib/tasks";
 
 // Saving a Drive folder link copies the client's waiting files in the background.
 export const maxDuration = 300;
@@ -182,8 +183,8 @@ export default async function ClientDetail({
         <h2>Tasks</h2>
         {canEdit && <NewTask clients={[{ id: client.id, name: client.name }]} people={taskPeople} clientId={client.id} />}
         {[
-          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter((t) => t.client_assignee_id || t.status === "waiting"), approvals: pendingCals },
-          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !t.client_assignee_id && t.status !== "waiting"), approvals: [] as Calendar[] },
+          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter(isClientFacing), approvals: pendingCals },
+          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !isClientFacing(t)), approvals: [] as Calendar[] },
         ].map((g) => (
           <div className="task-group" key={g.key}>
             <h3>{g.title} <span>{g.list.length + g.approvals.length} open · {g.hint}</span></h3>

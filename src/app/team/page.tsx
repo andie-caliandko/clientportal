@@ -9,6 +9,7 @@ import { RhythmPanel } from "./RhythmPanel";
 import { ApprovalCard, TaskCard } from "./TaskCard";
 import { DragBoard, DragCard, DropColumn } from "./DragBoard";
 import { NewTask } from "./TeamForms";
+import { isClientFacing } from "@/lib/tasks";
 
 const COLUMNS = [
   { key: "todo", label: "To do" },
@@ -109,7 +110,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <div className="stats">
         <div className="stat"><b>{dueToday}</b><span>Due today</span></div>
         <div className={`stat ${list.some(overdue) ? "crit" : ""}`}><b>{list.filter(overdue).length}</b><span>Overdue</span></div>
-        <div className="stat warn"><b>{list.filter((t) => t.status === "waiting" || t.client_assignee_id).length}</b><span>Waiting on clients</span></div>
+        <div className="stat warn"><b>{list.filter(isClientFacing).length}</b><span>Waiting on clients</span></div>
         <div className="stat"><b>{openApprovals ?? 0}</b><span>Content approvals open</span></div>
       </div>
 

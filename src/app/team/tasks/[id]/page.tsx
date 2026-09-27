@@ -4,6 +4,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
+import { isClientFacing } from "@/lib/tasks";
 import { deleteTask } from "../../actions";
 import { ConfirmButton, EditTaskForm } from "../../TeamForms";
 import { FilePreview } from "@/app/portal/FilePreview";
@@ -41,7 +42,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     : "";
   const assignee = task.client_assignee_id
     ? `client:${task.client_assignee_id}`
-    : task.client_id && task.status === "waiting" && !task.assignee_id
+    : task.client_id && isClientFacing(task) && !task.assignee_id
       ? "client:all"
       : task.assignee_id ? `team:${task.assignee_id}` : `team:${userId}`;
   const created = new Date(task.created_at).toLocaleString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });

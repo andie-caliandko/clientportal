@@ -570,6 +570,8 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
       // A new due date or a new person starts the reminder schedule over.
       reminders_sent: dueAt !== before.due_at || assignee !== before.client_assignee_id ? 0 : before.reminders_sent,
       completed_at: status === "done" ? (before.completed_at ?? new Date().toISOString()) : null,
+      // Choosing a client (or everyone there) on purpose makes it a client task, even if it started automatic.
+      ...(kind === "client" ? { auto: false } : {}),
     })
     .eq("id", id);
   if (error) return { error: "Those changes couldn't be saved. Is that teammate on this client?" };
@@ -579,7 +581,8 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
       kind: "task", title: `${v.member.display_name.split(" ")[0]} assigned you: ${title}`, body: note, link: `/team/tasks/${id}`,
     }, v.userId);
   }
-  if (clientId && status === "waiting" && (before.status !== "waiting" || (everyone && before.client_assignee_id)) && (kind === "team" || everyone)) {
+  const becameClientFacing = everyone || (kind === "team" && !before.auto && before.source !== "rella");
+  if (clientId && status === "waiting" && (before.status !== "waiting" || (everyone && before.client_assignee_id)) && becameClientFacing) {
     await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
     await emailClient(
       clientId,
@@ -817,18 +820,18 @@ export async function setClientLogo(input: { clientId: string; path: string | nu
   return { ok: input.path ? "Logo saved. It now shows on their portal." : "Logo removed." };
 }
 
-/** Drag and drop on the task board. Moving a team task to Waiting on client tells the client. */
+/** Drag and drop on the task board. Moving a team task to Waiting on client tells the client (never for automatic tasks, which stay the team's). */
 export async function setTaskStatus(id: string, status: string) {
   await requireEditor();
   if (!["todo", "doing", "waiting", "done"].includes(status)) return;
   const supabase = await createClient();
-  const { data: before } = await supabase.from("tasks").select("status, client_id, client_assignee_id, title, note").eq("id", id).maybeSingle();
+  const { data: before } = await supabase.from("tasks").select("status, client_id, client_assignee_id, title, note, auto, source").eq("id", id).maybeSingle();
   if (!before || before.status === status) return;
   await supabase
     .from("tasks")
     .update({ status, completed_at: status === "done" ? new Date().toISOString() : null })
     .eq("id", id);
-  if (status === "waiting" && before.client_id && !before.client_assignee_id) {
+  if (status === "waiting" && before.client_id && !before.client_assignee_id && !before.auto && before.source !== "rella") {
     await notifyClient(before.client_id, { kind: "task", title: `New task: ${before.title}`, body: before.note, link: "/portal/tasks" });
     await emailClient(
       before.client_id,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Task } from "@/lib/types";
 import { markCalendarApproved, moveTask } from "./actions";
+import { isClientFacing } from "@/lib/tasks";
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
   todo: [{ to: "doing", label: "Start" }, { to: "done", label: "Done" }],
@@ -25,7 +26,7 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
     : null;
   const client = t.client_assignee_id ? personName(t.client_assignee_id) : null;
   // Client-facing: assigned to a client contact, or the team is waiting on the client.
-  const clientFacing = !!client || t.status === "waiting";
+  const clientFacing = isClientFacing(t);
   // Client tasks are finished by the client; the team can still close or reopen them.
   const moves = client ? [{ to: "done", label: "Mark done for them" }] : MOVES[t.status] ?? [];
   // Team tasks wear the creator's name in their color; automatic ones stay the default color.
