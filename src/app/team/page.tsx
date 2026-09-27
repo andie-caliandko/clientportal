@@ -14,9 +14,6 @@ const COLUMNS = [
   { key: "waiting", label: "Waiting on client" },
 ] as const;
 
-// Tasks created because a client did something (not the new-client checklist).
-const CLIENT_ACTIVITY = ["portal", "slack", "dubsado"];
-
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
@@ -25,7 +22,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
-  const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google] = await Promise.all([
+  const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google, { count: openApprovals }] = await Promise.all([
     supabase.from("tasks").select("*").neq("status", "done").order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
@@ -33,6 +30,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     supabase.from("rhythm_checks").select("user_id, week, item").eq("agency_id", agency.id).eq("month", monthKey(agency.timezone)),
     getDueDates(agency.id, monthStart.toISOString(), horizon.toISOString()),
     googleStatus(agency.id),
+    supabase.from("content_calendars").select("id", { count: "exact", head: true }).eq("status", "pending"),
   ]);
   // My own check-offs. Admins also get everyone else's rows (RLS), for the progress circles.
   const rhythmChecks = Object.fromEntries((checks ?? []).filter((c) => c.user_id === userId).map((c) => [`${c.week}-${c.item}`, true]));
@@ -90,7 +88,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         <div className="stat"><b>{dueToday}</b><span>Due today</span></div>
         <div className={`stat ${list.some(overdue) ? "crit" : ""}`}><b>{list.filter(overdue).length}</b><span>Overdue</span></div>
         <div className="stat warn"><b>{list.filter((t) => t.status === "waiting" || t.client_assignee_id).length}</b><span>Waiting on clients</span></div>
-        <div className="stat"><b>{list.filter((t) => CLIENT_ACTIVITY.includes(t.source) && t.status === "todo").length}</b><span>New from clients</span></div>
+        <div className="stat"><b>{openApprovals ?? 0}</b><span>Content approvals open</span></div>
       </div>
 
       {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
