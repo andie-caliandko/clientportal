@@ -56,7 +56,13 @@ export default function ConfirmPage() {
     setSaving(true);
     const { error: err } = await createClient().auth.updateUser({ password });
     setSaving(false);
-    if (err) return setError("We couldn't save that password. Try a different one.");
+    if (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "same_password") return setError("That's the password you already have. Choose a new one.");
+      if (code === "weak_password") return setError(`That password is too easy to guess. ${err.message}`);
+      if (/session/i.test(err.message)) return setError("Your sign-in link wore off before saving. Ask for a new link and try again.");
+      return setError(`We couldn't save that password: ${err.message}`);
+    }
     window.location.replace(next);
   }
 

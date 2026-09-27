@@ -31,7 +31,10 @@ export async function setPassword(_: FormState, form: FormData): Promise<FormSta
   if (password.length < 8) return { error: "Use at least 8 characters." };
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: "We couldn't save that password. Try a different one." };
+  if (error) {
+    if (error.code === "same_password") return { error: "That's the password you already have. Choose a new one." };
+    return { error: `We couldn't save that password: ${error.message}` };
+  }
   redirect("/");
 }
 
