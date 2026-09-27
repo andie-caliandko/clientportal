@@ -32,10 +32,14 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  // One channel should belong to one client; if it's shared, use the newest active one.
   const { data: client } = await admin
     .from("clients")
     .select("id, agency_id")
     .eq("slack_channel_id", event.channel)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (!client) return NextResponse.json({ ok: true });
 

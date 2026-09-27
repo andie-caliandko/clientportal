@@ -237,6 +237,10 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (!later("dubsado") && !dubsadoEmail) missing.push("add the client's Dubsado email");
   if (!later("dubsado") && get("dubsado_project") && !isUrl(get("dubsado_project"))) missing.push("paste the full contract link, starting with https://");
   if (missing.length) return { error: `Almost there: ${missing.join(", ")}, or tick "Set up later" for it.` };
+  if (slackId && !later("slack")) {
+    const { data: taken } = await createAdminClient().from("clients").select("name").eq("slack_channel_id", slackId).is("archived_at", null).limit(1).maybeSingle();
+    if (taken) return { error: `That Slack channel already belongs to ${taken.name}. Each client needs their own channel.` };
+  }
 
   const website = get("website");
   const extraTeam = form.getAll("team").map(String).filter((id) => id && id !== am);
@@ -428,6 +432,10 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
   const drive = get("drive_folder"), slack = get("slack_channel"), rella = get("rella");
   if (drive && !driveFolderId(drive)) return { error: "That doesn't look like a Google Drive folder link." };
   if (slack && !slackChannelId(slack)) return { error: "That doesn't look like a Slack channel link. In Slack, right-click the channel and choose Copy link." };
+  if (slack) {
+    const { data: taken } = await createAdminClient().from("clients").select("name").eq("slack_channel_id", slackChannelId(slack)!).neq("id", clientId).is("archived_at", null).limit(1).maybeSingle();
+    if (taken) return { error: `That Slack channel already belongs to ${taken.name}. Each client needs their own channel.` };
+  }
   if (rella && !isUrl(rella)) return { error: "Paste the full Rella link, starting with https://" };
   const website = get("website");
   const supabase = await createClient();
