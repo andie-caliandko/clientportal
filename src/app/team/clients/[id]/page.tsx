@@ -411,7 +411,7 @@ export default async function ClientDetail({
       <div className="panel">
         <h2>Messages</h2>
         <p className="note">These also appear in the client&apos;s Slack channel. Replies in Slack show up in their portal automatically.</p>
-        <ScrollToLatest className="thread" style={{ maxHeight: 460 }} count={messages.data?.length ?? 0}>
+        <ScrollToLatest className="thread" style={{ maxHeight: 460 }} latest={messages.data?.[0]?.id}>
           {[...((messages.data ?? []) as Message[])].reverse().map((m) => (
             <div key={m.id} className={`msg ${m.author_kind === "team" ? "me" : ""}`}>
               <span className="av">{m.author_name[0]}</span>

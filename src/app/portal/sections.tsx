@@ -322,7 +322,7 @@ export async function MessagesSection(ctx: PortalCtx) {
     <>
       <PageHead title="Messages" sub={`Your whole ${short} team sees these. We'll email you when we reply.`} />
       <section className="card">
-        <ScrollToLatest className="thread tall" count={data.length}>
+        <ScrollToLatest className="thread tall" latest={data.at(-1)?.id}>
           {((data ?? []) as Message[]).map((m) => {
             const mine = ctx.preview ? m.author_kind === "client" : m.author_id === ctx.userId;
             return (
