@@ -28,6 +28,8 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
   if (!title) return { error: "Give it a name." };
   if (!DATE.test(date) || start === null || end === null) return { error: "Pick a date and times." };
   if (end <= start) return { error: "The end time needs to be after the start time." };
+  const guests = parseEmails(String(form.get("guests") ?? ""));
+  if (guests.bad.length) return { error: `Check ${guests.bad.length > 1 ? "these emails" : "this email"}: ${guests.bad.join(", ")}` };
   const tz = v.agency.timezone;
   try {
     await createMemberEvent(v.userId, {
@@ -35,6 +37,7 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
       start: dateAtMinute(date, start, tz).toISOString(),
       end: dateAtMinute(date, end, tz).toISOString(),
       timeZone: tz,
+      attendees: guests.ok,
       meet: form.get("meet") === "on",
     });
   } catch (err) {
@@ -42,7 +45,7 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
     return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
   }
   revalidatePath("/team/calendar");
-  return { ok: "Added to your Google Calendar." };
+  return { ok: guests.ok.length ? `Added to your Google Calendar and invited ${guests.ok.length} ${guests.ok.length === 1 ? "person" : "people"}.` : "Added to your Google Calendar." };
 }
 
 /** A teammate marks themselves out of office for one or more days. */
@@ -204,4 +207,83 @@ export async function cancelCallRequest(form: FormData) {
   const supabase = await createClient();
   const { data } = await supabase.from("call_requests").update({ status: "cancelled" }).eq("id", id).eq("status", "open").select("client_id").maybeSingle();
   if (data) revalidatePath(`/team/clients/${data.client_id}`);
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Emails typed into a box: commas, spaces or new lines between them. */
+function parseEmails(text: string) {
+  const list = text.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return { ok: list.filter((e) => EMAIL.test(e)), bad: list.filter((e) => !EMAIL.test(e)) };
+}
+
+/**
+ * A call at a set time: Google invites the client's contacts (and anyone else
+ * added) with a Meet link. It shows in their portal once one of them accepts.
+ */
+export async function sendCallInvite(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: "Creators have view-only access." };
+  const clientId = String(form.get("client") ?? "");
+  const hostId = String(form.get("host") ?? "");
+  const title = String(form.get("title") ?? "").trim();
+  const note = String(form.get("note") ?? "").trim() || null;
+  const date = String(form.get("date") ?? "");
+  const start = minutes(String(form.get("start") ?? ""));
+  const duration = Number(form.get("duration"));
+  if (!title) return { error: "Name the call." };
+  if (!DATE.test(date) || start === null) return { error: "Pick the date and time." };
+  if (![15, 30, 45, 60, 90].includes(duration)) return { error: "Pick how long the call is." };
+
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const admin = createAdminClient();
+  const [{ data: host }, { data: linked }, { data: client }, { data: contacts }] = await Promise.all([
+    admin.from("agency_members").select("display_name").eq("user_id", hostId).eq("agency_id", v.agency.id).maybeSingle(),
+    admin.from("member_google").select("user_id").eq("user_id", hostId).maybeSingle(),
+    admin.from("clients").select("name").eq("id", clientId).maybeSingle(),
+    admin.from("client_users").select("user_id, email").eq("client_id", clientId),
+  ]);
+  if (!host || !client) return { error: "Pick who's hosting the call." };
+  if (!linked) return { error: `${host.display_name.split(" ")[0]} needs to connect their Google Calendar on the Calendar page first.` };
+
+  const picked = new Set(form.getAll("contact").map(String));
+  const contactEmails = (contacts ?? []).filter((c) => picked.has(c.user_id)).map((c) => c.email.toLowerCase());
+  const extra = parseEmails(String(form.get("guests") ?? ""));
+  if (extra.bad.length) return { error: `Check ${extra.bad.length > 1 ? "these emails" : "this email"}: ${extra.bad.join(", ")}` };
+  const attendees = [...new Set([...contactEmails, ...extra.ok])];
+  if (!attendees.length) return { error: "Choose at least one person to invite." };
+
+  const tz = v.agency.timezone;
+  const startAt = dateAtMinute(date, start, tz);
+  if (startAt.getTime() < Date.now()) return { error: "That time has already passed." };
+  const endAt = new Date(startAt.getTime() + duration * 60_000);
+  const short = v.agency.brand.shortName ?? v.agency.name;
+  let event;
+  try {
+    event = await createMemberEvent(hostId, {
+      title: `${title} · ${client.name} & ${short}`,
+      description: note ?? undefined,
+      start: startAt.toISOString(),
+      end: endAt.toISOString(),
+      timeZone: tz,
+      attendees,
+      meet: true,
+    });
+  } catch (err) {
+    console.error("Sending an invite failed", err);
+    return { error: "Google Calendar didn't accept the invite. Try reconnecting the host's calendar." };
+  }
+  const { error } = await supabase.from("call_requests").insert({
+    agency_id: v.agency.id, client_id: clientId, host_id: hostId, title, note, kind: "invite",
+    duration_min: duration, window_start: date, window_end: date, status: "booked",
+    event_id: event.id, event_start: event.start, event_end: event.end, meet_link: event.meetLink,
+    guests: attendees, created_by: v.userId, booked_at: new Date().toISOString(),
+  });
+  if (error) console.error("Saving the invite failed", error.message);
+  revalidateTag(`meetings-${v.agency.id}`);
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/team/calendar");
+  return { ok: `Invite sent to ${attendees.length} ${attendees.length === 1 ? "person" : "people"}. It shows in their portal once they accept.` };
 }

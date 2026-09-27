@@ -196,6 +196,8 @@ export type CalEvent = {
   organizer: string | null;
   recurring: boolean;
   guests: number;
+  /** Everyone invited besides the calendar's owner, with their reply. */
+  attendees: { email: string; response: string }[];
 };
 
 const OOO_WORDS = /\b(ooo|out of (the )?office|pto|vacation|time off|holiday)\b/i;
@@ -215,6 +217,7 @@ function toCalEvent(e: GEvent): CalEvent {
     organizer: e.organizer && !e.organizer.self ? e.organizer.displayName ?? e.organizer.email ?? null : null,
     recurring: !!e.recurringEventId,
     guests: (e.attendees ?? []).filter((a) => !a.self).length,
+    attendees: (e.attendees ?? []).filter((a) => !a.self && a.email).map((a) => ({ email: a.email!.toLowerCase(), response: a.responseStatus ?? "needsAction" })),
   };
 }
 

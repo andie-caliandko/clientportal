@@ -1,6 +1,6 @@
 import { connectedMembers } from "@/lib/google";
-import type { CallRequest } from "@/lib/calls";
-import { CallRequestForm } from "../../calendar/CallRequestForm";
+import { inviteReplies, type CallRequest } from "@/lib/calls";
+import { CallActions } from "../../calendar/CallRequestForm";
 import { cancelCallRequest } from "../../calendar/actions";
 import { memberColors } from "@/lib/memberColors";
 import { Avatar } from "@/app/Avatar";
@@ -90,6 +90,11 @@ export default async function ClientDetail({
     .map((m) => ({ user_id: m.user_id, display_name: m.display_name, connected: linked.has(m.user_id) }));
   const defaultHost = (client.account_manager_id && hosts.find((h) => h.user_id === client.account_manager_id && h.connected)?.user_id) || hosts.find((h) => h.connected)?.user_id || userId;
   const calls = (callRows.data ?? []) as CallRequest[];
+  // Replies from Google for invites that haven't happened yet.
+  const replies = new Map(await Promise.all(
+    calls.filter((c) => c.kind === "invite" && c.status === "booked" && c.event_end && new Date(c.event_end).getTime() > Date.now())
+      .map(async (c) => [c.id, await inviteReplies(c)] as const),
+  ));
   const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date());
   const plusDays = (n: number) => new Date(Date.parse(`${todayStr}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const answerBy = Object.fromEntries((answers.data ?? []).map((a) => [a.question_id, a.body]));
@@ -213,12 +218,20 @@ export default async function ClientDetail({
                 <b>{c.title}</b>
                 <span className="note">
                   with {names.get(c.host_id) ?? "the team"} ·{" "}
+                  {c.kind === "invite" ? "Invite · " : ""}
                   {c.status === "booked" && c.event_start
                     ? new Date(c.event_start).toLocaleString("en-US", { timeZone: agency.timezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
                     : `waiting for them to pick (${c.window_start.slice(5).replace("-", "/")} – ${c.window_end.slice(5).replace("-", "/")})`}
                 </span>
                 <span className="r">
-                  {c.status === "booked" ? <span className="pill ok">Booked</span> : <span className="pill warn">Waiting on client</span>}
+                  {c.kind === "invite" ? (
+                    (() => {
+                      const r = replies.get(c.id);
+                      if (c.accepted_at || (r && r.accepted)) return <span className="pill ok">Accepted{r ? ` · ${r.accepted} of ${r.total}` : ""}</span>;
+                      if (r && r.declined === r.total) return <span className="pill crit">Declined</span>;
+                      return <span className="pill warn">Waiting for a reply</span>;
+                    })()
+                  ) : c.status === "booked" ? <span className="pill ok">Booked</span> : <span className="pill warn">Waiting on client</span>}
                   {c.status === "booked" && c.meet_link && <a className="btn sm line" href={c.meet_link} target="_blank" rel="noreferrer">Meet link</a>}
                   {c.status === "open" && canEdit && (
                     <form action={cancelCallRequest}>
@@ -231,7 +244,10 @@ export default async function ClientDetail({
             ))}
           </ul>
         )}
-        {canEdit && <CallRequestForm clientId={client.id} hosts={hosts} defaultHost={defaultHost} from={plusDays(1)} to={plusDays(14)} />}
+        {canEdit && (
+          <CallActions clientId={client.id} hosts={hosts} defaultHost={defaultHost} from={plusDays(1)} to={plusDays(14)}
+            contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
+        )}
       </div>
 
       <div className="cgrid">
