@@ -51,13 +51,14 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
             <a className="btn sm line" href={downloadUrl}>Download</a>
             <button type="button" className="btn sm" onClick={() => setOpen(false)} autoFocus>Close</button>
           </div>
-          <div className="lightbox-body" onClick={(e) => e.stopPropagation()}>
+          {/* Clicking the dark space closes it; clicking the file itself doesn't. */}
+          <div className="lightbox-body">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {kind === "image" && <img src={url} alt={name} />}
+            {kind === "image" && <img src={url} alt={name} onClick={(e) => e.stopPropagation()} />}
             {kind === "pdf" && <iframe src={`${url}#view=FitH`} title={name} />}
-            {kind === "video" && <video src={url} controls autoPlay />}
+            {kind === "video" && <video src={url} controls autoPlay onClick={(e) => e.stopPropagation()} />}
             {kind === "other" && (
-              <div className="lightbox-file">
+              <div className="lightbox-file" onClick={(e) => e.stopPropagation()}>
                 <p><b>{name}</b></p>
                 <p className="note">This kind of file can&apos;t be previewed here. Download it to open it.</p>
                 <a className="btn" href={downloadUrl}>Download</a>
