@@ -881,3 +881,33 @@ export async function setMyPhoto(path: string | null): Promise<Result> {
   revalidatePath("/", "layout");
   return { ok: path ? "Photo saved." : "Photo removed." };
 }
+
+/** Admins add a template for the team: a link, a file, or both. */
+export async function addTemplate(input: { title: string; description: string; url: string; filePath: string | null; fileName: string | null }): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can add templates." };
+  const title = input.title.trim();
+  const url = input.url.trim() || null;
+  if (!title) return { error: "Give the template a name." };
+  if (!url && !input.filePath) return { error: "Add a link or a file." };
+  if (url && !/^https:\/\/\S+$/.test(url)) return { error: "Links need to start with https://" };
+  if (input.filePath && !input.filePath.startsWith(`${v.agency.id}/`)) return { error: "That file is in the wrong place. Try again." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("agency_templates").insert({
+    agency_id: v.agency.id, title, description: input.description.trim() || null, url,
+    file_path: input.filePath, file_name: input.fileName, created_by: v.userId,
+  });
+  if (error) return { error: "The template couldn't be saved." };
+  revalidatePath("/team/templates");
+  return { ok: "Template added." };
+}
+
+export async function deleteTemplate(form: FormData) {
+  const v = await requireAdmin();
+  const supabase = await createClient();
+  const { data } = await supabase.from("agency_templates").select("file_path").eq("id", String(form.get("id"))).eq("agency_id", v.agency.id).maybeSingle();
+  if (!data) return;
+  await supabase.from("agency_templates").delete().eq("id", String(form.get("id")));
+  if (data.file_path) await supabase.storage.from("templates").remove([data.file_path]);
+  revalidatePath("/team/templates");
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { driveFolderId, isUrl, slackChannelId } from "./links";
+import { driveFolderId, embedUrl, isUrl, slackChannelId } from "./links";
 
 describe("slackChannelId", () => {
   it("reads channel links and bare IDs", () => {
@@ -29,5 +29,22 @@ describe("isUrl", () => {
   it("wants a real link", () => {
     expect(isUrl("https://app.rella.social/space/bloom")).toBe(true);
     expect(isUrl("rella bloom")).toBe(false);
+  });
+});
+
+describe("embedUrl", () => {
+  it("turns shared links into embeddable ones", () => {
+    expect(embedUrl("https://docs.google.com/document/d/abc123/edit?usp=sharing")).toBe("https://docs.google.com/document/d/abc123/preview");
+    expect(embedUrl("https://docs.google.com/spreadsheets/d/s-1/edit#gid=0")).toBe("https://docs.google.com/spreadsheets/d/s-1/preview");
+    expect(embedUrl("https://drive.google.com/file/d/F_9/view")).toBe("https://drive.google.com/file/d/F_9/preview");
+    expect(embedUrl("https://www.canva.com/design/DAF1/abcKey/view")).toBe("https://www.canva.com/design/DAF1/abcKey/view?embed");
+    expect(embedUrl("https://www.canva.com/design/DAF1/edit")).toBe("https://www.canva.com/design/DAF1/view?embed");
+    expect(embedUrl("https://www.loom.com/share/xyz")).toBe("https://www.loom.com/embed/xyz");
+    expect(embedUrl("https://youtu.be/vid")).toBe("https://www.youtube.com/embed/vid");
+  });
+  it("leaves other links alone", () => {
+    expect(embedUrl("https://example.com/file.pdf")).toBeNull();
+    expect(embedUrl("http://docs.google.com/document/d/abc/edit")).toBeNull();
+    expect(embedUrl("not a link")).toBeNull();
   });
 });
