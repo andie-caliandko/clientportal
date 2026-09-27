@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { syncUploadsToDrive } from "@/lib/drive";
 import { emailClient } from "@/lib/notify";
 import { notifyClient } from "@/lib/notifications";
-import { downloadSlackFile, slackBotUserId, slackUserName, verifySlackSignature } from "@/lib/slack";
+import { downloadSlackFile, slackBotUserId, slackFileInfo, slackUserName, verifySlackSignature } from "@/lib/slack";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { Attachment } from "@/lib/types";
 
-type SlackFile = { name?: string; title?: string; mimetype?: string; size?: number; url_private_download?: string };
+type SlackFile = { id?: string; name?: string; title?: string; mimetype?: string; size?: number; url_private_download?: string; url_private?: string };
 type SlackEvent = {
   type: string;
   subtype?: string;
@@ -73,14 +73,21 @@ async function handle(event: SlackEvent) {
   if (seen) return;
 
   const attachments: Attachment[] = [];
-  for (const f of (event.files ?? []).slice(0, 10)) {
-    if (!f.url_private_download || (f.size ?? 0) > MAX_FILE) continue;
-    const file = await downloadSlackFile(f.url_private_download);
+  for (const shared of (event.files ?? []).slice(0, 10)) {
+    // Slack sometimes sends only the file id ("check_file_info"); look up the rest.
+    const f = shared.url_private_download || shared.url_private || !shared.id ? shared : { ...shared, ...(await slackFileInfo(shared.id)) };
+    const url = f.url_private_download ?? f.url_private;
+    if (!url || (f.size ?? 0) > MAX_FILE) {
+      console.error("Slack file skipped", { id: shared.id, hasUrl: !!url, size: f.size });
+      continue;
+    }
+    const file = await downloadSlackFile(url);
     if (!file) continue;
     const name = f.name ?? f.title ?? "file";
     const path = `${client.agency_id}/${client.id}/messages/${Date.now()}-${name.replace(/[^\w.\-]+/g, "_")}`;
     const { error } = await admin.storage.from("uploads").upload(path, file.data, { contentType: f.mimetype ?? file.type });
-    if (!error) attachments.push({ name, path, size: f.size, type: f.mimetype });
+    if (error) console.error("Saving Slack file failed", error.message);
+    else attachments.push({ name, path, size: f.size, type: f.mimetype ?? file.type });
   }
   if (!event.text && !attachments.length) return;
 

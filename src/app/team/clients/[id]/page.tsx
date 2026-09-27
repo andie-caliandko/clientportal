@@ -13,6 +13,7 @@ import { clientLogoUrl, driveFolderUrl } from "@/lib/links";
 import { driveFileUrl } from "@/lib/drive";
 import { MessageComposer } from "@/app/portal/MessageComposer";
 import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
+import { ScrollToLatest } from "@/app/portal/ScrollToLatest";
 import { TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
@@ -41,7 +42,7 @@ export default async function ClientDetail({
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
     supabase.from("documents").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("client_users").select("*").eq("client_id", id),
-    supabase.from("messages").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(20),
+    supabase.from("messages").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(100),
     supabase.from("questions").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("answers").select("question_id, body").eq("client_id", id),
     client.account_manager_id
@@ -409,17 +410,17 @@ export default async function ClientDetail({
       <div className="panel">
         <h2>Messages</h2>
         <p className="note">These also appear in the client&apos;s Slack channel. Replies in Slack show up in their portal automatically.</p>
-        {canEdit && (
-          <MessageComposer folder={`${agency.id}/${client.id}/messages`} placeholder={`Reply to ${client.name}…`} send={replyAsTeam} hidden={{ client: client.id }} />
-        )}
-        <div className="thread" style={{ maxHeight: 420 }}>
-          {((messages.data ?? []) as Message[]).map((m) => (
+        <ScrollToLatest className="thread" style={{ maxHeight: 460 }} count={messages.data?.length ?? 0}>
+          {[...((messages.data ?? []) as Message[])].reverse().map((m) => (
             <div key={m.id} className={`msg ${m.author_kind === "team" ? "me" : ""}`}>
               <span className="av">{m.author_name[0]}</span>
               <div className="bubble"><small>{m.author_name} · {short(m.created_at)}</small>{m.body}<MessageFiles files={m.attachments} urls={messageFileUrls} /></div>
             </div>
           ))}
-        </div>
+        </ScrollToLatest>
+        {canEdit && (
+          <MessageComposer folder={`${agency.id}/${client.id}/messages`} placeholder={`Reply to ${client.name}…`} send={replyAsTeam} hidden={{ client: client.id }} />
+        )}
       </div>
     </section>
   );

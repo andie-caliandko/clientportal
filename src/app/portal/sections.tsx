@@ -6,6 +6,7 @@ import type { Agency, Calendar, Client, ClientUser, Doc, Message, Step } from "@
 import { approveCalendar, confirmBooked, sendMessage } from "./actions";
 import { ClientTasks, type ClientTask } from "./ClientTasks";
 import { MessageComposer } from "./MessageComposer";
+import { ScrollToLatest } from "./ScrollToLatest";
 import { MessageFiles, signAttachments } from "./MessageFiles";
 
 /** Everything a portal page needs to know about who's looking. */
@@ -300,14 +301,16 @@ export async function TasksSection(ctx: PortalCtx) {
 
 export async function MessagesSection(ctx: PortalCtx) {
   const supabase = await createClient();
-  const { data } = await supabase.from("messages").select("*").eq("client_id", ctx.client.id).order("created_at").limit(300);
+  // The newest 300, shown oldest to newest so the latest sits at the bottom.
+  const { data: newest } = await supabase.from("messages").select("*").eq("client_id", ctx.client.id).order("created_at", { ascending: false }).limit(300);
+  const data = (newest ?? []).reverse();
   const fileUrls = await signAttachments(supabase, (data ?? []) as Message[]);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
   return (
     <>
       <PageHead title="Messages" sub={`Your whole ${short} team sees these. We'll email you when we reply.`} />
       <section className="card">
-        <div className="thread tall" aria-live="polite">
+        <ScrollToLatest className="thread tall" count={data.length}>
           {((data ?? []) as Message[]).map((m) => {
             const mine = ctx.preview ? m.author_kind === "client" : m.author_id === ctx.userId;
             return (
@@ -324,8 +327,8 @@ export async function MessagesSection(ctx: PortalCtx) {
               </div>
             );
           })}
-          {!data?.length && <p className="note">Say hello! Your whole team will see it.</p>}
-        </div>
+          {!data.length && <p className="note">Say hello! Your whole team will see it.</p>}
+        </ScrollToLatest>
         {ctx.preview ? (
           <p className="note">Clients type their messages and attach files here.</p>
         ) : (

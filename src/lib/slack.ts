@@ -88,3 +88,17 @@ export async function downloadSlackFile(url: string) {
   if (!res.ok) return null;
   return { data: await res.arrayBuffer(), type: res.headers.get("content-type") ?? "application/octet-stream" };
 }
+
+/** Full details for a shared file when Slack's event only includes its id. Needs files:read. */
+export async function slackFileInfo(fileId: string) {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return null;
+  const data = await fetch(`https://slack.com/api/files.info?file=${encodeURIComponent(fileId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((r) => r.json());
+  if (!data.ok) {
+    console.error("Slack files.info failed", data.error);
+    return null;
+  }
+  return data.file as { name?: string; title?: string; mimetype?: string; size?: number; url_private_download?: string; url_private?: string };
+}
