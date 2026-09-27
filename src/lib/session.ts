@@ -8,13 +8,22 @@ export type Viewer =
   | { kind: "team"; userId: string; agency: Agency; member: Member }
   | { kind: "client"; userId: string; agency: Agency; client: Client; clientUser: ClientUser };
 
+/**
+ * The signed-in person's id, checked once per page. Sign-in tokens are
+ * verified on the server itself (no trip to the sign-in service).
+ */
+export const getAuthUserId = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  return (data?.claims.sub as string | undefined) ?? null;
+});
+
 /** Who is signed in, and which agency and client they belong to. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
+  const userId = await getAuthUserId();
+  if (!userId) return null;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const user = { id: userId };
 
   const { data: member } = await supabase
     .from("agency_members")
@@ -44,9 +53,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 /** Signed in, but with no active portal or team role (for example, an archived client). */
 export async function getSignedInWithoutAccess() {
   if (await getViewer()) return false;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return !!user;
+  return !!(await getAuthUserId());
 }
 
 export async function requireTeam() {

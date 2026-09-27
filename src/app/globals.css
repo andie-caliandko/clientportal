@@ -422,3 +422,12 @@ td a:hover { text-decoration: underline; }
   .roles { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Loading placeholder */
+.skeleton { display: grid; gap: 18px; max-width: 900px; }
+.skeleton span { display: block; border-radius: 16px; background: color-mix(in srgb, var(--line) 70%, transparent); animation: sk-pulse 1.2s ease-in-out infinite; }
+.sk-line { width: 40%; height: 38px; }
+.sk-block { height: 150px; }
+.sk-block.short { height: 90px; width: 70%; }
+@keyframes sk-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .skeleton span { animation: none; } }

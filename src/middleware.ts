@@ -20,9 +20,9 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refreshes the session if needed and verifies the sign-in token locally.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub;
 
   const path = request.nextUrl.pathname;
   const isProtected = path.startsWith("/portal") || path.startsWith("/team") || path.startsWith("/preview") || path === "/set-password";

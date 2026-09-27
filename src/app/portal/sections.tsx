@@ -1,3 +1,4 @@
+import { cache } from "react";
 import Link from "next/link";
 import { formatDue } from "@/lib/approval";
 import { getClientMeetings, googleStatus } from "@/lib/google";
@@ -45,9 +46,12 @@ function greeting(tz: string) {
 // Shared data
 // ---------------------------------------------------------------------------
 
-async function loadCore(ctx: PortalCtx) {
+// The menu badge and the page share one set of queries per visit.
+const loadCore = (ctx: Omit<PortalCtx, "params">) => coreFor(ctx.agency, ctx.client, ctx.userId, ctx.preview);
+
+const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["client"], userId: string | null, preview: boolean) => {
   const supabase = await createClient();
-  const { agency, client } = ctx;
+  const ctx = { userId, preview };
   const [steps, status, calendars, manager, people, tasks] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", client.id),
@@ -94,10 +98,10 @@ async function loadCore(ctx: PortalCtx) {
     contacts,
     teamTasks,
   };
-}
+});
 
 /** Open items for the Tasks badge in the menu. */
-export async function openCount(ctx: PortalCtx) {
+export async function openCount(ctx: Omit<PortalCtx, "params">) {
   const d = await loadCore(ctx);
   return d.teamTasks.length + (d.pending ? 1 : 0) + d.steps.filter((s) => !d.done.has(s.id)).length;
 }

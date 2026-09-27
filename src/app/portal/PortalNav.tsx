@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Section } from "./sections";
 
 const ICONS: Record<Section, React.ReactNode> = {
@@ -16,7 +19,8 @@ const LABELS: Record<Section, string> = {
   files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings",
 };
 
-export function PortalNav({ base, current, openTasks }: { base: string; current: Section; openTasks: number }) {
+export function PortalNav({ base, openTasks }: { base: string; openTasks: number }) {
+  const current = (usePathname().slice(base.length).split("/")[1] || "home") as Section;
   return (
     <nav className="nav" aria-label="Your portal">
       {(Object.keys(LABELS) as Section[]).map((s) => (

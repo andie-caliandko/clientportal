@@ -8,10 +8,11 @@ import { Bell } from "../notifications/Bell";
 import { loadNotifications } from "@/lib/notificationsList";
 import { RailPeople } from "./PortalForms";
 import { clientLogoUrl } from "@/lib/links";
-import { openCount, type PortalCtx, type Section } from "./sections";
+import { openCount } from "./sections";
+import type { PortalBase } from "./context";
 
 /** Three columns: page menu on the left, the page, and Members on the right. */
-export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; section: Section; children: React.ReactNode }) {
+export async function PortalShell({ ctx, children }: { ctx: PortalBase; children: React.ReactNode }) {
   const supabase = await createClient();
   const [{ data: teamRows }, { data: people }, open] = await Promise.all([
     supabase.from("client_team").select("user_id, added_at").eq("client_id", ctx.client.id).order("added_at"),
@@ -46,7 +47,7 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
             <div className="brand" style={{ padding: 0 }}><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={52} /></div>
             {!ctx.preview && notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
           </div>
-          <PortalNav base={ctx.base} current={section} openTasks={open} />
+          <PortalNav base={ctx.base} openTasks={open} />
           <div className="me">
             <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{(me?.display_name ?? ctx.firstName)[0]}</span>
             <div>
