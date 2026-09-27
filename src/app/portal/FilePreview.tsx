@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 const kindOf = (name: string, type?: string | null) => {
   const t = (type ?? "").toLowerCase();
@@ -44,17 +45,18 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {thumbnail && kind === "image" ? <img src={url} alt={name} /> : <span>{label ?? name}</span>}
       </button>
-      {open && (
+      {/* Rendered at the top of the page so nothing around the link can get in the way. */}
+      {open && createPortal(
         <div className="lightbox" role="dialog" aria-modal="true" aria-label={name} onClick={() => setOpen(false)}>
-          <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
+          <div className="lightbox-bar">
             <span className="lightbox-name">{name}</span>
-            <a className="btn sm line" href={downloadUrl}>Download</a>
+            <a className="btn sm line" href={downloadUrl} onClick={(e) => e.stopPropagation()}>Download</a>
             <button type="button" className="btn sm" onClick={() => setOpen(false)} autoFocus>Close</button>
           </div>
-          {/* Clicking the dark space closes it; clicking the file itself doesn't. */}
+          {/* Clicking the dark space (or an image) closes it; PDFs and videos stay open so you can use them. */}
           <div className="lightbox-body">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {kind === "image" && <img src={url} alt={name} onClick={(e) => e.stopPropagation()} />}
+            {kind === "image" && <img src={url} alt={name} />}
             {kind === "pdf" && <iframe src={`${url}#view=FitH`} title={name} />}
             {kind === "video" && <video src={url} controls autoPlay onClick={(e) => e.stopPropagation()} />}
             {kind === "other" && (
@@ -65,7 +67,8 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
