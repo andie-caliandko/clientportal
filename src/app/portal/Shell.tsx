@@ -22,9 +22,12 @@ export async function PortalShell({ ctx, section, children }: { ctx: PortalCtx; 
   // Everyone the agency put on this account, account manager first.
   const teamIds = [...new Set([ctx.client.account_manager_id, ...(teamRows ?? []).map((t) => t.user_id)].filter(Boolean))] as string[];
   const { data: teamPeople } = teamIds.length
-    ? await supabase.from("agency_members").select("user_id, display_name, title").in("user_id", teamIds)
-    : { data: [] as { user_id: string; display_name: string; title: string | null }[] };
-  const team = teamIds.map((id) => (teamPeople ?? []).find((p) => p.user_id === id)).filter(Boolean) as { user_id: string; display_name: string; title: string | null }[];
+    ? await supabase.from("agency_members").select("user_id, display_name, title, role").in("user_id", teamIds)
+    : { data: [] as { user_id: string; display_name: string; title: string | null; role: string }[] };
+  // Admins stay hidden from clients unless they're this client's account manager.
+  const team = teamIds
+    .map((id) => (teamPeople ?? []).find((p) => p.user_id === id))
+    .filter((p): p is { user_id: string; display_name: string; title: string | null; role: string } => !!p && (p.role !== "admin" || p.user_id === ctx.client.account_manager_id));
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;

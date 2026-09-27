@@ -793,7 +793,7 @@ export async function setTaskStatus(id: string, status: string) {
   if (before.client_id) revalidatePath(`/team/clients/${before.client_id}`);
 }
 
-/** Team adds another person to a client's portal (no limit for the team). */
+/** Team adds a person to a client's portal (client seats are capped at 2). */
 export async function addClientContact(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
   if (v.member.role === "creator") return { error: VIEW_ONLY };
@@ -804,6 +804,8 @@ export async function addClientContact(_: Result, form: FormData): Promise<Resul
   const supabase = await createClient();
   const { data: ok } = await supabase.rpc("can_edit_client", { c: clientId });
   if (!ok) return { error: "You don't have access to change this client." };
+  const { count } = await supabase.from("client_users").select("*", { count: "exact", head: true }).eq("client_id", clientId);
+  if ((count ?? 0) >= 2) return { error: "This client already has 2 people on their portal, which is the limit. Remove someone first." };
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {

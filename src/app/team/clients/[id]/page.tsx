@@ -62,10 +62,11 @@ export default async function ClientDetail({
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
   const members = (allMembers.data ?? []) as { user_id: string; display_name: string; role: Role }[];
-  // People added to this account are shown to the client. Admins not added still have access.
-  const accountTeam = members.filter((m) => onTeam.has(m.user_id));
-  const otherAdmins = members.filter((m) => m.role === "admin" && !onTeam.has(m.user_id));
-  const addable = members.filter((m) => !onTeam.has(m.user_id));
+  // Account managers and creators added here show to the client; admins never do
+  // (unless an admin is the account manager). Admins can open every account anyway.
+  const accountTeam = members.filter((m) => onTeam.has(m.user_id) && (m.role !== "admin" || m.user_id === client.account_manager_id));
+  const otherAdmins = members.filter((m) => m.role === "admin" && m.user_id !== client.account_manager_id);
+  const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
 
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at]));
   const answerBy = Object.fromEntries((answers.data ?? []).map((a) => [a.question_id, a.body]));
@@ -281,7 +282,7 @@ export default async function ClientDetail({
               </li>
             ))}
           </ul>
-          {canEdit && <AddClientContact clientId={client.id} />}
+          {canEdit && (people.data?.length ?? 0) < 2 ? <AddClientContact clientId={client.id} /> : <p className="note">2 of 2 client seats used.</p>}
         </div>
 
         <div className="panel">
@@ -327,7 +328,7 @@ export default async function ClientDetail({
 
         <div className="panel" style={{ gridColumn: "1 / -1" }}>
           <h2>Team on this account</h2>
-          <p className="note">Everyone added here shows in the client&apos;s Members panel. Admins can open every account either way.</p>
+          <p className="note">Everyone listed here shows in the client&apos;s Members panel. Admins aren&apos;t shown to clients, and can open every account.</p>
           <ul className="list">
             {accountTeam.map((m) => (
               <li key={m.user_id}>
@@ -355,7 +356,7 @@ export default async function ClientDetail({
           </ul>
           {!accountTeam.length && <p className="note">No one added yet.</p>}
           {otherAdmins.length > 0 && (
-            <p className="note">Also has access, not shown to the client: {otherAdmins.map((m) => m.display_name).join(", ")} (admin).</p>
+            <p className="note">Admins with access (not shown to the client): {otherAdmins.map((m) => m.display_name).join(", ")}.</p>
           )}
           {isAdmin && addable.length > 0 && (
             <form action={addToClient} className="row">

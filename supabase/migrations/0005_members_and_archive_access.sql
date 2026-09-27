@@ -1,9 +1,6 @@
--- Clients can have any number of contacts (the team decides; client self-invites
--- are still capped in the app). Clients see everyone added to their account's
--- team, not just the account manager. Archived clients are admin-only.
-
-drop trigger if exists client_user_limit on client_users;
-drop function if exists enforce_client_user_limit();
+-- Clients see the teammates on their account (not just the account manager);
+-- the app hides admins from that list. Archived clients are admin-only.
+-- Client seats stay capped at 2 (the existing trigger).
 
 drop policy if exists members_read on agency_members;
 create policy members_read on agency_members for select using (
