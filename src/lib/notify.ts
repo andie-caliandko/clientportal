@@ -2,6 +2,24 @@ import "server-only";
 import { createAdminClient } from "./supabase/server";
 import { notifyTeam, notifyUser } from "./notifications";
 
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Branded HTML version of a plain-text email: paragraphs, with a trailing link turned into a button. */
+function toHtml(text: string) {
+  const lines = text.trim().split("\n");
+  const last = lines[lines.length - 1]?.trim() ?? "";
+  const link = /^https?:\/\/\S+$/.test(last) ? lines.pop()!.trim() : null;
+  const body = lines
+    .join("\n")
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 14px;line-height:1.55;">${esc(p).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  const button = link
+    ? `<p style="margin:24px 0 8px;"><a href="${esc(link)}" style="background:#364E4A;color:#F6F0EA;padding:13px 24px;border-radius:999px;text-decoration:none;display:inline-block;font-weight:600;">Open your portal</a></p>`
+    : "";
+  return `<div style="font-family:Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#24322F;background:#F6F0EA;border-radius:16px;">${body}${button}<p style="margin:24px 0 0;color:#5B6A67;font-size:13px;">Cali &amp; Ko Marketing</p></div>`;
+}
+
 /** Sends an email through Resend, or logs it when email isn't set up yet. */
 export async function sendEmail(to: string[], subject: string, text: string) {
   const recipients = [...new Set(to.filter(Boolean))];
@@ -15,7 +33,7 @@ export async function sendEmail(to: string[], subject: string, text: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: recipients, subject, text }),
+    body: JSON.stringify({ from, to: recipients, subject, text, html: toHtml(text) }),
   });
   if (!res.ok) console.error("Email failed", res.status, await res.text());
 }

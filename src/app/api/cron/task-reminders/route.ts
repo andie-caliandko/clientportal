@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       await sendEmail(
         [contact.email],
         `Reminder: ${t.title}`,
-        `Hi ${contact.display_name.split(" ")[0]}, just a friendly reminder about this task from your team:\n\n${t.title}${t.note ? `\n${t.note}` : ""}\n\nYou can mark it done in your portal: ${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
+        `Hi ${contact.display_name.split(" ")[0]}, just a friendly reminder about this task from your team:\n\n${t.title}${t.note ? `\n${t.note}` : ""}\n\nYou can mark it done in your portal.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
       );
     }
     if (due === REMINDER_DAYS.length) {
