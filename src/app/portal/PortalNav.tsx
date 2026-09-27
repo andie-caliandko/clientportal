@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { Section } from "./sections";
 
 const ICONS: Record<Section, React.ReactNode> = {
@@ -19,8 +20,14 @@ const LABELS: Record<Section, string> = {
   files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings",
 };
 
-export function PortalNav({ base, openTasks }: { base: string; openTasks: number }) {
+export function PortalNav({ base, openTasks, newMessages }: { base: string; openTasks: number; newMessages: number }) {
   const current = (usePathname().slice(base.length).split("/")[1] || "home") as Section;
+  // Opening Messages reads them; hide the count from then on (the menu doesn't reload between pages).
+  const [readThrough, setReadThrough] = useState(0);
+  useEffect(() => {
+    if (current === "messages") setReadThrough(newMessages);
+  }, [current, newMessages]);
+  const unread = current === "messages" ? 0 : Math.max(0, newMessages - readThrough);
   return (
     <nav className="nav" aria-label="Your portal">
       {(Object.keys(LABELS) as Section[]).map((s) => (
@@ -28,6 +35,7 @@ export function PortalNav({ base, openTasks }: { base: string; openTasks: number
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">{ICONS[s]}</svg>
           {LABELS[s]}
           {s === "tasks" && openTasks > 0 && <span className="count">{openTasks}</span>}
+          {s === "messages" && unread > 0 && <span className="count" aria-label={`${unread} new`}>{unread}</span>}
         </Link>
       ))}
     </nav>

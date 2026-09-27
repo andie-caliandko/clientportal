@@ -327,6 +327,10 @@ export async function TasksSection(ctx: PortalCtx) {
 
 export async function MessagesSection(ctx: PortalCtx) {
   const supabase = await createClient();
+  // Opening Messages marks them read (not when the team is previewing).
+  if (!ctx.preview && ctx.userId) {
+    await createAdminClient().from("client_users").update({ messages_read_at: new Date().toISOString() }).eq("client_id", ctx.client.id).eq("user_id", ctx.userId);
+  }
   // The newest 300, shown oldest to newest so the latest sits at the bottom.
   const { data: newest } = await supabase.from("messages").select("*").eq("client_id", ctx.client.id).order("created_at", { ascending: false }).limit(300);
   const data = (newest ?? []).reverse();

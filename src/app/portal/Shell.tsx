@@ -23,6 +23,11 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
     openCount(ctx),
   ]);
   const contacts = (people ?? []) as ClientUser[];
+  // Team messages since this person last opened Messages.
+  const readAt = (contacts.find((c) => c.user_id === ctx.userId) as (ClientUser & { messages_read_at?: string }) | undefined)?.messages_read_at;
+  const { count: newMessages } = readAt
+    ? await supabase.from("messages").select("id", { count: "exact", head: true }).eq("client_id", ctx.client.id).eq("author_kind", "team").gt("created_at", readAt)
+    : { count: 0 };
   // Everyone the agency put on this account, account manager first.
   const teamIds = [...new Set([ctx.client.account_manager_id, ...(teamRows ?? []).map((t) => t.user_id)].filter(Boolean))] as string[];
   const { data: teamPeople } = teamIds.length
@@ -50,7 +55,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
             <div className="brand" style={{ padding: 0 }}><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={52} /></div>
             {!ctx.preview && notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
           </div>
-          <PortalNav base={ctx.base} openTasks={open} />
+          <PortalNav base={ctx.base} openTasks={open} newMessages={newMessages ?? 0} />
           <div className="me">
             <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{(me?.display_name ?? ctx.firstName)[0]}</span>
             <div>
