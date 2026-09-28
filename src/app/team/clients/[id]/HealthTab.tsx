@@ -2,7 +2,7 @@ import { formatKpi, type Rating, type Tier, type Trend } from "@/lib/health";
 import type { KpiWithHistory } from "@/lib/healthData";
 import { deleteKpi } from "../../actions";
 import { ConfirmButton } from "../../TeamForms";
-import { AddKpi, EditKpi, ScorecardForm } from "./HealthForms";
+import { AddKpi, EditKpi, EditScorecardWeek, ScorecardForm } from "./HealthForms";
 
 const RATING: Record<Rating, { label: string; meaning: string }> = {
   green: { label: "Green", meaning: "Healthy" },
@@ -136,7 +136,7 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
           <h2>Scorecard history</h2>
           <div className="tablewrap">
             <table>
-              <thead><tr><th>Week of</th>{kpis.map((k) => <th key={k.id}>{k.name}</th>)}<th>Notes</th></tr></thead>
+              <thead><tr><th>Week of</th>{kpis.map((k) => <th key={k.id}>{k.name}</th>)}<th>Notes</th>{canEdit && <th><span className="sr-only">Edit</span></th>}</tr></thead>
               <tbody>
                 {weeks.map((w) => (
                   <tr key={w}>
@@ -146,6 +146,7 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
                       return <td key={k.id} className="kn">{v === undefined ? "—" : formatKpi(v, k.unit)}</td>;
                     })}
                     <td style={{ whiteSpace: "normal", minWidth: 200 }}>{notes[w] ?? ""}</td>
+                    {canEdit && <td><EditScorecardWeek clientId={clientId} kpis={lite} notes={notes} week={w} /></td>}
                   </tr>
                 ))}
               </tbody>

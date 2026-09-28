@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/browser";
+import { markJoined } from "../../login/actions";
 
 // Invitation and password-reset links land here. We sign the person in from
 // the link, then (for invites and resets) let them choose a password on this
@@ -63,6 +64,8 @@ export default function ConfirmPage() {
       if (/session/i.test(err.message)) return setError("Your sign-in link wore off before saving. Ask for a new link and try again.");
       return setError(`We couldn't save that password: ${err.message}`);
     }
+    // First time here? Tells the team they joined.
+    await markJoined().catch(() => {});
     window.location.replace(next);
   }
 

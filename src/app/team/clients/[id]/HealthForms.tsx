@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { Modal } from "@/app/Modal";
 import { saveKpi, saveScorecard } from "../../actions";
 
 type KpiLite = {
@@ -18,6 +19,8 @@ type KpiLite = {
 export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: KpiLite; onDone?: () => void }) {
   const [state, action, pending] = useActionState(saveKpi, {});
   const [lower, setLower] = useState(kpi ? !kpi.higher_is_better : false);
+  // In a pop-up: close once it's saved.
+  useEffect(() => { if (state.ok) onDone?.(); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   const p = kpi?.id ?? "new";
   return (
     <form action={action} style={{ display: "grid", gap: 12 }}>
@@ -47,7 +50,7 @@ export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: Kpi
       {state.ok && <p className="flash">{state.ok}</p>}
       <div className="row">
         <button className="btn sm" disabled={pending}>{pending ? "Saving…" : kpi ? "Save KPI" : "Add KPI"}</button>
-        {onDone && <button type="button" className="btn sm line" onClick={onDone}>Close</button>}
+        {onDone && <button type="button" className="btn sm line" onClick={onDone}>Cancel</button>}
       </div>
     </form>
   );
@@ -55,30 +58,59 @@ export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: Kpi
 
 export function EditKpi({ clientId, kpi }: { clientId: string; kpi: KpiLite }) {
   const [open, setOpen] = useState(false);
-  return open ? (
-    <div className="panel" style={{ gridColumn: "1 / -1" }}><KpiForm clientId={clientId} kpi={kpi} onDone={() => setOpen(false)} /></div>
-  ) : (
-    <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit goals</button>
+  return (
+    <>
+      <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit goals</button>
+      {open && (
+        <Modal title={`Edit ${kpi.name}`} onClose={() => setOpen(false)}>
+          <KpiForm clientId={clientId} kpi={kpi} onDone={() => setOpen(false)} />
+        </Modal>
+      )}
+    </>
   );
 }
 
 export function AddKpi({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
-  return open ? (
-    <div className="panel"><h2>Add a KPI</h2><KpiForm clientId={clientId} onDone={() => setOpen(false)} /></div>
-  ) : (
-    <div><button className="btn sm" onClick={() => setOpen(true)}>Add KPI</button></div>
+  return (
+    <>
+      <div><button className="btn sm" onClick={() => setOpen(true)}>Add KPI</button></div>
+      {open && (
+        <Modal title="Add a KPI" onClose={() => setOpen(false)}>
+          <KpiForm clientId={clientId} onDone={() => setOpen(false)} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Scorecard history: change a week's numbers or notes after it was saved. */
+export function EditScorecardWeek({ clientId, kpis, notes, week }: { clientId: string; kpis: KpiLite[]; notes: Record<string, string>; week: string }) {
+  const [open, setOpen] = useState(false);
+  const label = new Date(`${week}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return (
+    <>
+      <button type="button" className="linkbtn note" onClick={() => setOpen(true)} aria-label={`Edit the week of ${label}`}>Edit</button>
+      {open && (
+        <Modal title={`Scorecard · week of ${label}`} onClose={() => setOpen(false)} wide>
+          <ScorecardForm clientId={clientId} kpis={kpis} notes={notes} thisWeek={week} onSaved={() => setOpen(false)} />
+        </Modal>
+      )}
+    </>
   );
 }
 
 /** Enter this week's numbers. Picking an earlier week loads what was entered then. */
-export function ScorecardForm({ clientId, kpis, notes, thisWeek }: {
+export function ScorecardForm({ clientId, kpis, notes, thisWeek, onSaved }: {
   clientId: string;
   kpis: KpiLite[];
   notes: Record<string, string>;
   thisWeek: string;
+  /** In a pop-up: close once it's saved. */
+  onSaved?: () => void;
 }) {
   const [state, action, pending] = useActionState(saveScorecard, {});
+  useEffect(() => { if (state.ok) onSaved?.(); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   const [week, setWeek] = useState(thisWeek);
   const monday = useMemo(() => {
     const [y, m, d] = week.split("-").map(Number);
