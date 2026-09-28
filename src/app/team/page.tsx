@@ -21,7 +21,9 @@ const COLUMNS = [
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string; due?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
-  const { who = "all", due: dueFilter = "all" } = await searchParams;
+  const { who: whoParam, due: dueFilter = "all" } = await searchParams;
+  // Everyone starts on their own tasks; only admins can look at someone else's or everyone's.
+  const who = member.role === "admin" && whoParam ? whoParam : "me";
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
@@ -63,7 +65,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const colors = memberColors((members ?? []).map((m) => m.user_id));
   Object.values(people.contacts).flat().forEach((c) => names.set(c.user_id, c.display_name));
   // Archived clients drop off the board.
-  const forWho = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
+  // Someone's tasks: assigned to them, or sent to a client by them (they follow up on it).
+  const isFor = (t: Task, id: string) => t.assignee_id === id || (!t.assignee_id && t.created_by === id);
+  const forWho = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || isFor(t, who === "me" ? userId : who));
 
   const now = Date.now();
   const dayOf = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(d);
@@ -89,7 +93,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const counts = (items: { due_at: string | null }[]) => Object.fromEntries(Object.keys(FILTERS).map((k) => [k, items.filter((t) => FILTERS[k].test(t as Task)).length]));
 
   // A friendly hello, like clients get in their portal. Counts are for this person.
-  const mine = ((tasks ?? []) as Task[]).filter((t) => t.assignee_id === userId && (!t.client_id || t.client_id in clientName));
+  const mine = ((tasks ?? []) as Task[]).filter((t) => isFor(t, userId) && (!t.client_id || t.client_id in clientName));
   const myToday = mine.filter(isToday).length;
   const myLate = mine.filter(overdue).length;
   const hour = +new Intl.DateTimeFormat("en-US", { timeZone: agency.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date());
@@ -109,7 +113,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       </div>
       <div className="top">
         <h2 style={{ fontSize: "2rem" }}>Tasks</h2>
-        <WhoSelect value={who} options={[{ value: "all", label: "Everyone" }, { value: "me", label: "Me" }, ...(members ?? []).map((m) => ({ value: m.user_id, label: m.display_name }))]} />
+        {member.role === "admin" && (
+          <WhoSelect value={who} options={[{ value: "me", label: "Me" }, ...(members ?? []).filter((m) => m.user_id !== userId).map((m) => ({ value: m.user_id, label: m.display_name })), { value: "all", label: "Everyone" }]} />
+        )}
       </div>
 
       <RhythmPanel rhythm={rhythm} current={currentWeek} teamProgress={teamProgress}

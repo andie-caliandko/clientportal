@@ -66,7 +66,7 @@ export function WhoSelect({ value, options }: { value: string; options: { value:
       <label htmlFor="who" className="note">Show tasks for</label>
       <select className="sel" id="who" value={value} onChange={(e) => {
         const next = new URLSearchParams(params.toString());
-        if (e.target.value === "all") next.delete("who");
+        if (e.target.value === "me") next.delete("who");
         else next.set("who", e.target.value);
         // Keep whatever due filter is showing right now.
         const due = new URL(window.location.href).searchParams.get("due");
