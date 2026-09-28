@@ -205,6 +205,27 @@ export type CalEvent = {
 
 const OOO_WORDS = /\b(ooo|out of (the )?office|pto|vacation|time off|holiday)\b/i;
 
+/**
+ * Event notes as plain text, without invoice links (Dubsado puts those on the
+ * events it creates) and without the HTML Google sometimes stores.
+ */
+export function cleanNotes(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const text = raw
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li)>/gi, "\n")
+    .replace(/<a\s[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, (_, href: string, label: string) => (/invoice/i.test(href + label) ? "[invoice]" : `${label} ${href}`))
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const kept = text
+    .split("\n")
+    // Drop any line about an invoice or payment link, and bare invoice URLs.
+    .filter((line) => !/invoice|pay (your|now|here)|payment link/i.test(line))  // also catches "[invoice]" left by a removed link
+    .map((line) => line.replace(/https?:\/\/\S*invoice\S*/gi, "").trimEnd());
+  const out = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out || null;
+}
+
 function toCalEvent(e: GEvent): CalEvent {
   return {
     id: e.id,
@@ -215,7 +236,7 @@ function toCalEvent(e: GEvent): CalEvent {
     ooo: e.eventType === "outOfOffice" || OOO_WORDS.test(e.summary ?? ""),
     meetLink: e.hangoutLink ?? null,
     link: e.htmlLink ?? null,
-    description: e.description ?? null,
+    description: cleanNotes(e.description),
     mine: e.organizer ? !!e.organizer.self : true,
     organizer: e.organizer && !e.organizer.self ? e.organizer.displayName ?? e.organizer.email ?? null : null,
     recurring: !!e.recurringEventId,
