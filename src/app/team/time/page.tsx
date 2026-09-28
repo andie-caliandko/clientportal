@@ -49,7 +49,7 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
     return [...m].sort((a, b) => b[1] - a[1]);
   };
   const q2 = (over: Record<string, string>) => `/team/time?${new URLSearchParams({ week: monday, ...(isAdmin && who !== userId ? { who } : {}), ...over })}`;
-  const canEdit = (e: Entry) => e.user_id === userId || isAdmin;
+  const canEdit = (e: Entry) => e.user_id === userId && who === userId;
   const formFields = (e: Entry) => ({
     id: e.id, client_id: e.client_id, description: e.description, date: dayOf(e.started_at),
     start: new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(e.started_at)),
@@ -71,11 +71,16 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
         </div>
       </div>
 
-      <TimerCard running={(running as Running | null) ?? null} clients={clients ?? []} agencyName={short} />
+      {/* Tracking your own time; looking at someone else's is view only. */}
+      {who === userId ? (
+        <TimerCard running={(running as Running | null) ?? null} clients={clients ?? []} agencyName={short} />
+      ) : (
+        <p className="readonly">You&apos;re looking at {who === "all" ? "everyone's" : `${personName(who)}'s`} time. Switch Show to Me to track your own.</p>
+      )}
 
       <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
         <p className="time-total"><b>{formatMinutes(total)}</b> <span className="note">this week</span></p>
-        <AddTime clients={clients ?? []} agencyName={short} today={today} />
+        {who === userId && <AddTime clients={clients ?? []} agencyName={short} today={today} />}
       </div>
 
       <div className="cgrid">

@@ -74,7 +74,9 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
         </div>
       </div>
       <p className="note" style={{ maxWidth: "70ch" }}>
-        Log what you did on each account every day: likes, comments, follows, shares and DMs, with links to where you engaged. Click a day to add or change it.
+        {who === userId || !isAdmin
+          ? "Log what you did on each account every day: likes, comments, follows, shares and DMs, with links to where you engaged. Click a day to add or change it."
+          : "You're looking at someone else's accounts, so this is view only. Click a day to see what was logged."}
       </p>
 
       {!accounts.length ? (
@@ -105,7 +107,7 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
                     {accounts.map((c) => (
                       <td key={c.id}>
                         <EngagementCell clientId={c.id} clientName={c.name} day={d} dayLabel={label(d, { weekday: "long", month: "long", day: "numeric" })}
-                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit team={teamFor(c)} managerId={c.account_manager_id} people={people} />
+                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit={c.account_manager_id === userId} team={teamFor(c)} managerId={c.account_manager_id} people={people} />
                       </td>
                     ))}
                   </tr>
