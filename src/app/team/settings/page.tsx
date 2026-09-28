@@ -47,7 +47,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="top">
         <div>
           <p className="eyebrow">Your agency&apos;s setup</p>
-          <h1 style={{ marginTop: 6 }}>Agency settings</h1>
+          <h1 style={{ marginTop: 6 }}>Settings</h1>
         </div>
       </div>
       <p className="note" style={{ maxWidth: "62ch" }}>

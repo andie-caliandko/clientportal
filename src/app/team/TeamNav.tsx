@@ -11,7 +11,7 @@ const LINKS = [
   { href: "/team/time", label: "Time tracker" },
   { href: "/team/templates", label: "Agency templates" },
   { href: "/team/team", label: "Team", adminOnly: true },
-  { href: "/team/settings", label: "Agency settings", adminOnly: true },
+  { href: "/team/settings", label: "Settings", adminOnly: true },
 ];
 
 export function TeamNav({ isAdmin, isCreator = false }: { isAdmin: boolean; isCreator?: boolean }) {

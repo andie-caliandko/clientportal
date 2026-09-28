@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { googleAuthUrl, googleConfigured } from "@/lib/google";
 import { getViewer } from "@/lib/session";
 
-// "Connect Google" in Agency settings (admins, ?for=agency) or "Connect my
+// "Connect Google" in Settings (admins, ?for=agency) or "Connect my
 // Google Calendar" on Calendar (any teammate, ?for=me).
 export async function GET(request: NextRequest) {
   const purpose = request.nextUrl.searchParams.get("for") === "me" ? "member" : "agency";

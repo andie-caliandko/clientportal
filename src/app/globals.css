@@ -788,3 +788,8 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .tm-clients h3 { font-size: 1.05rem; }
 .tm-client-list { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
 .tm-client-list label { display: flex; align-items: center; gap: 8px; }
+.report-section { display: grid; gap: 10px; break-inside: avoid; }
+.report-section h2 { font-size: 1.5rem; }
+.report-section h3 { font-size: 1rem; margin-bottom: 6px; }
+.report-list { width: 100%; font-size: .9rem; }
+.report-list td, .report-list th { padding: 8px 10px; }

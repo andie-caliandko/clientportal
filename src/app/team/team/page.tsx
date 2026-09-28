@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -69,8 +70,8 @@ export default async function TeamPage() {
                     <td>{ROLE_LABEL[m.role]}</td>
                     <td className="note">{m.email}</td>
                     <td className="kn">{m.role === "admin" ? "All" : count.get(m.user_id) ?? 0}</td>
-                    <td className="team-edit"><EditTeammate member={m} isMe={self} removeAction={removeTeammate}
-                        clients={activeClients.map((c) => ({ id: c.id, name: c.name, manages: c.account_manager_id === m.user_id, on: (onTeam ?? []).some((t) => t.user_id === m.user_id && t.client_id === c.id) }))} /></td>
+                    <td className="team-edit"><span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end" }}><Link className="btn sm line" href={`/team/team/${m.user_id}/report`}>Report</Link><EditTeammate member={m} isMe={self} removeAction={removeTeammate}
+                        clients={activeClients.map((c) => ({ id: c.id, name: c.name, manages: c.account_manager_id === m.user_id, on: (onTeam ?? []).some((t) => t.user_id === m.user_id && t.client_id === c.id) }))} /></span></td>
                   </tr>
                 );
               })}

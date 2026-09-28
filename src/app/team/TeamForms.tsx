@@ -296,7 +296,7 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
 
       <p className="note">
         Every new client automatically gets your onboarding checklist and questionnaire in their portal, plus your new-client
-        tasks for the team (see Agency settings).
+        tasks for the team (see Settings).
       </p>
       {state.error && <p className="error">{state.error}</p>}
       <div><button className="btn" disabled={pending}>{pending ? "Creating…" : "Create client and send invite"}</button></div>
@@ -799,7 +799,7 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
   );
 }
 
-/** Agency settings: how Drive copying is going. Files copy on their own. */
+/** Settings: how Drive copying is going. Files copy on their own. */
 export function DriveSettings({ waiting, withoutFolder }: { waiting: number; withoutFolder: number }) {
   return (
     <div style={{ display: "grid", gap: 8 }}>
