@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/app/Modal";
 import { useActionState, useState } from "react";
 import { sendCallInvite, sendCallRequest } from "./actions";
 
@@ -20,14 +21,24 @@ export function CallActions(props: {
   const [open, setOpen] = useState<"pick" | "invite" | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const finish = (msg: string) => { setOpen(null); setDone(msg); };
-  if (open === "pick") return <CallRequestForm {...props} onDone={finish} onCancel={() => setOpen(null)} />;
-  if (open === "invite") return <CallInviteForm {...props} onDone={finish} onCancel={() => setOpen(null)} />;
   return (
-    <div className="row" style={{ alignItems: "center" }}>
-      <button className="btn sm" onClick={() => { setDone(null); setOpen("pick"); }}>Ask them to pick a time</button>
-      <button className="btn sm line" onClick={() => { setDone(null); setOpen("invite"); }}>Send an invite</button>
-      {done && <p className="flash" role="status" style={{ margin: 0 }}>{done}</p>}
-    </div>
+    <>
+      <div className="row" style={{ alignItems: "center" }}>
+        <button className="btn sm" onClick={() => { setDone(null); setOpen("pick"); }}>Ask them to pick a time</button>
+        <button className="btn sm line" onClick={() => { setDone(null); setOpen("invite"); }}>Send an invite</button>
+        {done && <p className="flash" role="status" style={{ margin: 0 }}>{done}</p>}
+      </div>
+      {open === "pick" && (
+        <Modal title="Ask them to pick a time" onClose={() => setOpen(null)} wide>
+          <CallRequestForm {...props} onDone={finish} onCancel={() => setOpen(null)} />
+        </Modal>
+      )}
+      {open === "invite" && (
+        <Modal title="Send a call invite" onClose={() => setOpen(null)} wide>
+          <CallInviteForm {...props} onDone={finish} onCancel={() => setOpen(null)} />
+        </Modal>
+      )}
+    </>
   );
 }
 

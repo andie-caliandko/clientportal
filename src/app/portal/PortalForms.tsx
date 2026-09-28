@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/app/Modal";
 import { useActionState, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ClientUser } from "@/lib/types";
@@ -50,6 +51,7 @@ export function RailPeople({ people, canAdd }: { people: ClientUser[]; canAdd: b
         </>
       )}
       {open && !state.ok && (
+        <Modal title="Add a person" onClose={() => setOpen(false)}>
         <form action={action} style={{ display: "grid", gap: 10 }}>
           <div className="field"><label htmlFor="pp-name">Their name</label><input className="input" id="pp-name" name="name" required /></div>
           <div className="field"><label htmlFor="pp-email">Their email</label><input className="input" id="pp-email" name="email" type="email" required /></div>
@@ -59,6 +61,7 @@ export function RailPeople({ people, canAdd }: { people: ClientUser[]; canAdd: b
             <button className="btn sm line" type="button" onClick={() => setOpen(false)}>Cancel</button>
           </div>
         </form>
+        </Modal>
       )}
     </>
   );

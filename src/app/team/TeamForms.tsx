@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { Modal } from "@/app/Modal";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { avatarUrl } from "@/app/Avatar";
@@ -59,14 +60,12 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
     }
     return result;
   }, {});
-  if (!open) {
-    return (
-      <div className="row" style={{ alignItems: "center" }}>
-        <button className="btn sm" onClick={() => { setDone(null); setOpen(true); }}>New task</button>
-        {done && <p className="flash" role="status" style={{ margin: 0 }}>{done}</p>}
-      </div>
-    );
-  }
+  const trigger = (
+    <div className="row" style={{ alignItems: "center" }}>
+      <button className="btn sm" onClick={() => { setDone(null); setOpen(true); }}>New task</button>
+      {done && <p className="flash" role="status" style={{ margin: 0 }}>{done}</p>}
+    </div>
+  );
 
   const team = people.team.filter((m) => !client || m.role === "admin" || people.onClient[client]?.includes(m.user_id));
   const contacts = client ? people.contacts[client] ?? [] : [];
@@ -74,45 +73,52 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
   const forClient = assignee.startsWith("client:");
 
   return (
-    <form action={action} className="panel">
-      <h2>New task</h2>
-      <div className="row">
-        <div className="field" style={{ flex: 2 }}><label htmlFor="t-title">Task</label><input className="input" id="t-title" name="title" placeholder="Send us your holiday hours" required /></div>
-        {clientId ? (
-          <input type="hidden" name="client" value={clientId} />
-        ) : (
-          <div className="field"><label htmlFor="t-client">Client</label>
-            <select className="sel" id="t-client" name="client" value={client}
-              onChange={(e) => { setClient(e.target.value); setAssignee(`team:${people.me}`); }}>
-              <option value="">No client</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select></div>
-        )}
-      </div>
-      <div className="row">
-        <div className="field"><label htmlFor="t-who">Assign to</label>
-          <select className="sel" id="t-who" name="assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-            {contacts.length > 0 && (
-              <optgroup label={clientName}>
-                {contacts.length > 1 && <option value="client:all">Everyone at {clientName} (client)</option>}
-                {contacts.map((c) => <option key={c.user_id} value={`client:${c.user_id}`}>{c.display_name} (client)</option>)}
-              </optgroup>
-            )}
-            <optgroup label="Team">
-              {team.map((m) => <option key={m.user_id} value={`team:${m.user_id}`}>{m.display_name}{m.user_id === people.me ? " (me)" : ""}</option>)}
-            </optgroup>
-          </select></div>
-        <div className="field"><label htmlFor="t-due">Due</label><input className="input" id="t-due" name="due" type="date" /></div>
-      </div>
-      <div className="field"><label htmlFor="t-note">Note (optional)</label><textarea className="input" id="t-note" name="note" style={{ minHeight: 70 }} placeholder="Anything they need to know" /></div>
-      <p className="note">
-        {forClient
-          ? "They'll see this in their portal and get an email. If it's late, reminders go out 2 days, 5 days and 1 week after the due date."
-          : "Only your team sees this task."}
-      </p>
-      {state.error && <p className="error">{state.error}</p>}
-      <div className="row"><button className="btn sm" disabled={pending}>{pending ? "Adding…" : "Add task"}</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
-    </form>
+    <>
+      {trigger}
+      {open && (
+        <Modal title="New task" onClose={() => setOpen(false)}>
+          <form action={action} className="panel">
+            <h2>New task</h2>
+            <div className="row">
+              <div className="field" style={{ flex: 2 }}><label htmlFor="t-title">Task</label><input className="input" id="t-title" name="title" placeholder="Send us your holiday hours" required /></div>
+              {clientId ? (
+                <input type="hidden" name="client" value={clientId} />
+              ) : (
+                <div className="field"><label htmlFor="t-client">Client</label>
+                  <select className="sel" id="t-client" name="client" value={client}
+                    onChange={(e) => { setClient(e.target.value); setAssignee(`team:${people.me}`); }}>
+                    <option value="">No client</option>
+                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select></div>
+              )}
+            </div>
+            <div className="row">
+              <div className="field"><label htmlFor="t-who">Assign to</label>
+                <select className="sel" id="t-who" name="assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                  {contacts.length > 0 && (
+                    <optgroup label={clientName}>
+                      {contacts.length > 1 && <option value="client:all">Everyone at {clientName} (client)</option>}
+                      {contacts.map((c) => <option key={c.user_id} value={`client:${c.user_id}`}>{c.display_name} (client)</option>)}
+                    </optgroup>
+                  )}
+                  <optgroup label="Team">
+                    {team.map((m) => <option key={m.user_id} value={`team:${m.user_id}`}>{m.display_name}{m.user_id === people.me ? " (me)" : ""}</option>)}
+                  </optgroup>
+                </select></div>
+              <div className="field"><label htmlFor="t-due">Due</label><input className="input" id="t-due" name="due" type="date" /></div>
+            </div>
+            <div className="field"><label htmlFor="t-note">Note (optional)</label><textarea className="input" id="t-note" name="note" style={{ minHeight: 70 }} placeholder="Anything they need to know" /></div>
+            <p className="note">
+              {forClient
+                ? "They'll see this in their portal and get an email. If it's late, reminders go out 2 days, 5 days and 1 week after the due date."
+                : "Only your team sees this task."}
+            </p>
+            {state.error && <p className="error">{state.error}</p>}
+            <div className="row"><button className="btn sm" disabled={pending}>{pending ? "Adding…" : "Add task"}</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -272,48 +278,55 @@ export function InviteTeammateForm({ clients }: { clients: Opt[] }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("account_manager");
   const [state, action, pending] = useActionState(inviteTeammate, {});
-  if (!open) {
-    return (
-      <div style={{ display: "grid", gap: 10 }}>
-        {state.ok && <p className="flash">{state.ok}</p>}
-        <div><button className="btn sm" onClick={() => setOpen(true)}>Invite teammate</button></div>
-      </div>
-    );
-  }
-  return (
-    <form action={action} className="panel">
-      <h2>Invite a teammate</h2>
-      <div className="row">
-        <div className="field"><label htmlFor="inv-name">Name</label><input className="input" id="inv-name" name="name" required /></div>
-        <div className="field"><label htmlFor="inv-email">Email</label><input className="input" id="inv-email" name="email" type="email" required /></div>
-      </div>
-      <div className="row">
-        <div className="field"><label htmlFor="inv-title">Job title (optional)</label><input className="input" id="inv-title" name="title" placeholder="Content creator" /></div>
-        <div className="field"><label htmlFor="inv-role">Role</label>
-          <select className="sel" id="inv-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="account_manager">Account manager</option>
-            <option value="creator">Creator</option>
-            <option value="admin">Admin</option>
-          </select></div>
-      </div>
-      {role === "admin" ? (
-        <p className="note">Admins automatically get every client.</p>
-      ) : (
-        <fieldset className="checks">
-          <legend>Which client portals?</legend>
-          {clients.map((c) => (
-            <label key={c.id}><input type="checkbox" name="clients" value={c.id} /> {c.name}</label>
-          ))}
-          {!clients.length && <p className="note">No clients yet. You can add them to clients later.</p>}
-        </fieldset>
-      )}
-      {state.error && <p className="error">{state.error}</p>}
+  // Close the pop-up once it worked; the confirmation shows on the page.
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  const trigger = (
+    <div style={{ display: "grid", gap: 10 }}>
       {state.ok && <p className="flash">{state.ok}</p>}
-      <div className="row">
-        <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
-        <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
-      </div>
-    </form>
+      <div><button className="btn sm" onClick={() => setOpen(true)}>Invite teammate</button></div>
+    </div>
+  );
+  return (
+    <>
+      {trigger}
+      {open && (
+        <Modal title="Invite a teammate" onClose={() => setOpen(false)}>
+          <form action={action} className="panel">
+            <h2>Invite a teammate</h2>
+            <div className="row">
+              <div className="field"><label htmlFor="inv-name">Name</label><input className="input" id="inv-name" name="name" required /></div>
+              <div className="field"><label htmlFor="inv-email">Email</label><input className="input" id="inv-email" name="email" type="email" required /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label htmlFor="inv-title">Job title (optional)</label><input className="input" id="inv-title" name="title" placeholder="Content creator" /></div>
+              <div className="field"><label htmlFor="inv-role">Role</label>
+                <select className="sel" id="inv-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
+                  <option value="account_manager">Account manager</option>
+                  <option value="creator">Creator</option>
+                  <option value="admin">Admin</option>
+                </select></div>
+            </div>
+            {role === "admin" ? (
+              <p className="note">Admins automatically get every client.</p>
+            ) : (
+              <fieldset className="checks">
+                <legend>Which client portals?</legend>
+                {clients.map((c) => (
+                  <label key={c.id}><input type="checkbox" name="clients" value={c.id} /> {c.name}</label>
+                ))}
+                {!clients.length && <p className="note">No clients yet. You can add them to clients later.</p>}
+              </fieldset>
+            )}
+            {state.error && <p className="error">{state.error}</p>}
+            {state.ok && <p className="flash">{state.ok}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -424,18 +437,25 @@ export function EditTaskForm({ task, clients, people, readOnly }: {
 export function EditCalendar({ id, month, url }: { id: string; month: string; url: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(editCalendar, {});
-  if (!open) return <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit</button>;
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
   return (
-    <form action={action} className="panel" style={{ flexBasis: "100%", gap: 10 }}>
-      <input type="hidden" name="id" value={id} />
-      <div className="row">
-        <div className="field"><label htmlFor={`ec-m-${id}`}>Month</label><input className="input" id={`ec-m-${id}`} name="month" type="month" defaultValue={month} required /></div>
-        <div className="field" style={{ flex: 2 }}><label htmlFor={`ec-u-${id}`}>Rella link</label><input className="input" id={`ec-u-${id}`} name="url" defaultValue={url} required /></div>
-      </div>
-      {state.error && <p className="error">{state.error}</p>}
-      {state.ok && <p className="flash">{state.ok}</p>}
-      <div className="row"><button className="btn sm" disabled={pending}>Save</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
-    </form>
+    <>
+      <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit</button>
+      {open && (
+        <Modal title="Edit content calendar" onClose={() => setOpen(false)}>
+          <form action={action} className="panel" style={{ gap: 10 }}>
+            <input type="hidden" name="id" value={id} />
+            <div className="row">
+              <div className="field"><label htmlFor={`ec-m-${id}`}>Month</label><input className="input" id={`ec-m-${id}`} name="month" type="month" defaultValue={month} required /></div>
+              <div className="field" style={{ flex: 2 }}><label htmlFor={`ec-u-${id}`}>Rella link</label><input className="input" id={`ec-u-${id}`} name="url" defaultValue={url} required /></div>
+            </div>
+            {state.error && <p className="error">{state.error}</p>}
+            {state.ok && <p className="flash">{state.ok}</p>}
+            <div className="row"><button className="btn sm" disabled={pending}>Save</button><button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button></div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -582,92 +602,106 @@ export function AddTeammate({ clientId, clientName, existing }: {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"existing" | "new">(existing.length ? "existing" : "new");
   const [state, action, pending] = useActionState(inviteTeammate, {});
+  // Close the pop-up once it worked; the confirmation shows on the page.
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
   const [adding, startAdding] = useTransition();
   const router = useRouter();
 
-  if (!open) {
-    return (
-      <div style={{ display: "grid", gap: 8 }}>
-        {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
-        <div><button type="button" className="btn sm" onClick={() => setOpen(true)}>＋ Add teammate</button></div>
-      </div>
-    );
-  }
-  return (
-    <div className="panel" style={{ gap: 12, background: "var(--bg)" }}>
-      <div className="tabs" role="tablist" style={{ margin: 0 }}>
-        {existing.length > 0 && <button type="button" role="tab" aria-selected={mode === "existing"} onClick={() => setMode("existing")}>Someone on the team</button>}
-        <button type="button" role="tab" aria-selected={mode === "new"} onClick={() => setMode("new")}>Invite someone new</button>
-      </div>
-      {mode === "existing" ? (
-        <form
-          className="row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const data = new FormData(e.currentTarget);
-            startAdding(async () => {
-              await addToClient(data);
-              setOpen(false);
-              router.refresh();
-            });
-          }}
-        >
-          <input type="hidden" name="client" value={clientId} />
-          <div className="field">
-            <label htmlFor={`at-${clientId}`}>Teammate</label>
-            <select className="sel" id={`at-${clientId}`} name="user">
-              {existing.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name} · {ROLE_NAMES[m.role] ?? m.role}</option>)}
-            </select>
-          </div>
-          <button className="btn sm" disabled={adding}>{adding ? "Adding…" : "Add to this account"}</button>
-        </form>
-      ) : (
-        <form action={action} style={{ display: "grid", gap: 10 }}>
-          <input type="hidden" name="clients" value={clientId} />
-          <div className="row">
-            <div className="field"><label htmlFor={`ic-name-${clientId}`}>Name</label><input className="input" id={`ic-name-${clientId}`} name="name" required /></div>
-            <div className="field"><label htmlFor={`ic-email-${clientId}`}>Email</label><input className="input" id={`ic-email-${clientId}`} name="email" type="email" required /></div>
-            <div className="field"><label htmlFor={`ic-role-${clientId}`}>Role</label>
-              <select className="sel" id={`ic-role-${clientId}`} name="role" defaultValue="account_manager">
-                <option value="account_manager">Account manager</option>
-                <option value="creator">Creator</option>
-              </select></div>
-          </div>
-          {state.error && <p className="error">{state.error}</p>}
-          {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
-          <div><button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button></div>
-        </form>
-      )}
-      <div><button type="button" className="linkbtn note" onClick={() => setOpen(false)}>Close</button></div>
+  const trigger = (
+    <div style={{ display: "grid", gap: 8 }}>
+      {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+      <div><button type="button" className="btn sm" onClick={() => setOpen(true)}>＋ Add teammate</button></div>
     </div>
+  );
+  return (
+    <>
+      {trigger}
+      {open && (
+        <Modal title={`Add a teammate to ${clientName}`} onClose={() => setOpen(false)}>
+          <div className="panel" style={{ gap: 12, background: "var(--bg)" }}>
+            <div className="tabs" role="tablist" style={{ margin: 0 }}>
+              {existing.length > 0 && <button type="button" role="tab" aria-selected={mode === "existing"} onClick={() => setMode("existing")}>Someone on the team</button>}
+              <button type="button" role="tab" aria-selected={mode === "new"} onClick={() => setMode("new")}>Invite someone new</button>
+            </div>
+            {mode === "existing" ? (
+              <form
+                className="row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const data = new FormData(e.currentTarget);
+                  startAdding(async () => {
+                    await addToClient(data);
+                    setOpen(false);
+                    router.refresh();
+                  });
+                }}
+              >
+                <input type="hidden" name="client" value={clientId} />
+                <div className="field">
+                  <label htmlFor={`at-${clientId}`}>Teammate</label>
+                  <select className="sel" id={`at-${clientId}`} name="user">
+                    {existing.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name} · {ROLE_NAMES[m.role] ?? m.role}</option>)}
+                  </select>
+                </div>
+                <button className="btn sm" disabled={adding}>{adding ? "Adding…" : "Add to this account"}</button>
+              </form>
+            ) : (
+              <form action={action} style={{ display: "grid", gap: 10 }}>
+                <input type="hidden" name="clients" value={clientId} />
+                <div className="row">
+                  <div className="field"><label htmlFor={`ic-name-${clientId}`}>Name</label><input className="input" id={`ic-name-${clientId}`} name="name" required /></div>
+                  <div className="field"><label htmlFor={`ic-email-${clientId}`}>Email</label><input className="input" id={`ic-email-${clientId}`} name="email" type="email" required /></div>
+                  <div className="field"><label htmlFor={`ic-role-${clientId}`}>Role</label>
+                    <select className="sel" id={`ic-role-${clientId}`} name="role" defaultValue="account_manager">
+                      <option value="account_manager">Account manager</option>
+                      <option value="creator">Creator</option>
+                    </select></div>
+                </div>
+                {state.error && <p className="error">{state.error}</p>}
+                {state.ok && <p className="flash">{state.ok} They&apos;re on {clientName}&apos;s team.</p>}
+                <div><button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button></div>
+              </form>
+            )}
+            <div><button type="button" className="linkbtn note" onClick={() => setOpen(false)}>Close</button></div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 export function AddClientContact({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(addClientContact, {});
-  if (!open) {
-    return (
-      <div style={{ display: "grid", gap: 8 }}>
-        {state.ok && <p className="flash">{state.ok}</p>}
-        <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Add a person to their portal</button></div>
-      </div>
-    );
-  }
-  return (
-    <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
-      <input type="hidden" name="client" value={clientId} />
-      <div className="row">
-        <div className="field"><label htmlFor={`cc-name-${clientId}`}>Name</label><input className="input" id={`cc-name-${clientId}`} name="name" required /></div>
-        <div className="field"><label htmlFor={`cc-email-${clientId}`}>Email</label><input className="input" id={`cc-email-${clientId}`} name="email" type="email" required /></div>
-      </div>
-      {state.error && <p className="error">{state.error}</p>}
+  // Close the pop-up once it worked; the confirmation shows on the page.
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  const trigger = (
+    <div style={{ display: "grid", gap: 8 }}>
       {state.ok && <p className="flash">{state.ok}</p>}
-      <div className="row">
-        <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
-        <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
-      </div>
-    </form>
+      <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Add a person to their portal</button></div>
+    </div>
+  );
+  return (
+    <>
+      {trigger}
+      {open && (
+        <Modal title="Add a person to their portal" onClose={() => setOpen(false)}>
+          <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
+            <input type="hidden" name="client" value={clientId} />
+            <div className="row">
+              <div className="field"><label htmlFor={`cc-name-${clientId}`}>Name</label><input className="input" id={`cc-name-${clientId}`} name="name" required /></div>
+              <div className="field"><label htmlFor={`cc-email-${clientId}`}>Email</label><input className="input" id={`cc-email-${clientId}`} name="email" type="email" required /></div>
+            </div>
+            {state.error && <p className="error">{state.error}</p>}
+            {state.ok && <p className="flash">{state.ok}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/app/Modal";
 import { useActionState, useState } from "react";
 import { addMyEvent, addMyOutOfOffice, saveBookingHours } from "./actions";
 
@@ -30,6 +31,7 @@ export function AddToSchedule({ today }: { today: string }) {
         {done && <p className="flash" role="status" style={{ margin: 0 }}>{eventState.ok || oooState.ok}</p>}
       </div>
       {open === "event" && (
+        <Modal title="Add to my calendar" onClose={() => setOpen(null)}>
         <form action={eventAction} className="panel">
           <h2>Add to my calendar</h2>
           <div className="field"><label htmlFor="ev-title">What</label><input className="input" id="ev-title" name="title" placeholder="Content shoot at Harris office" required /></div>
@@ -46,8 +48,10 @@ export function AddToSchedule({ today }: { today: string }) {
             <button type="button" className="btn sm line" onClick={() => setOpen(null)}>Cancel</button>
           </div>
         </form>
+        </Modal>
       )}
       {open === "ooo" && (
+        <Modal title="Mark out of office" onClose={() => setOpen(null)}>
         <form action={oooAction} className="panel">
           <h2>Mark out of office</h2>
           <div className="row">
@@ -62,6 +66,7 @@ export function AddToSchedule({ today }: { today: string }) {
             <button type="button" className="btn sm line" onClick={() => setOpen(null)}>Cancel</button>
           </div>
         </form>
+        </Modal>
       )}
     </div>
   );
