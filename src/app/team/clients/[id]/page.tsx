@@ -308,7 +308,8 @@ export default async function ClientDetail({
         )}
       </div>
 
-      <div className="cgrid">
+      {/* Side-by-side cards match heights. */}
+      <div className="cgrid pairs">
         <div className="panel">
           <h2>Content calendar</h2>
           <p className="note">
@@ -453,7 +454,7 @@ export default async function ClientDetail({
           )}
         </div>
 
-        <div className="panel" style={{ gridColumn: "1 / -1" }}>
+        <div className="panel">
           <h2>Team on this account</h2>
           <p className="note">Everyone listed here shows in the client&apos;s Members panel. Admins aren&apos;t shown to clients, and can open every account.</p>
           <ul className="list">
@@ -495,7 +496,9 @@ export default async function ClientDetail({
             <ClientInfoForm client={client} />
           </div>
         )}
-        {isAdmin && !client.archived_at && (
+        {isAdmin && (
+        <div style={{ display: "grid", gap: 18, alignContent: "start" }}>
+        {!client.archived_at && (
           <div className="panel">
             <h2>Archive client</h2>
             <p className="note">For clients whose term has ended. Their portal closes and reminders stop, but nothing is deleted. You can restore them any time.</p>
@@ -506,12 +509,12 @@ export default async function ClientDetail({
             </form>
           </div>
         )}
-        {isAdmin && (
           <div className="panel">
             <h2>Delete client</h2>
             <p className="note">Removes their portal and everything in it.</p>
             <DeleteClientForm clientId={client.id} name={client.name} />
           </div>
+        </div>
         )}
       </div>
 

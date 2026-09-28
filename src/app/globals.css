@@ -668,3 +668,4 @@ a.stat:hover { border-color: var(--primary); }
   .report-table[open] summary, .report-table:not([open]) { display: none; }
   .report-kpi { page-break-inside: avoid; }
 }
+.cgrid.pairs { align-items: stretch; }
