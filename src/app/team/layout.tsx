@@ -18,7 +18,7 @@ export default async function TeamLayout({ children, modal }: { children: React.
           <div className="brand" style={{ padding: 0 }}><Logo brand={agency.brand} name={agency.name} height={52} /></div>
           {notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
         </div>
-        <TeamNav isAdmin={member.role === "admin"} />
+        <TeamNav isAdmin={member.role === "admin"} isCreator={member.role === "creator"} />
       </aside>
       <main className="main">
         {/* Today's date, and you in the top right, on every page whatever its length. */}

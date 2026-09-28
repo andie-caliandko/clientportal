@@ -7,16 +7,17 @@ const LINKS = [
   { href: "/team", label: "Tasks" },
   { href: "/team/clients", label: "Clients" },
   { href: "/team/calendar", label: "Calendar" },
+  { href: "/team/engagement", label: "Daily engagement", hideForCreators: true },
   { href: "/team/templates", label: "Agency templates" },
   { href: "/team/team", label: "Team", adminOnly: true },
   { href: "/team/settings", label: "Agency settings", adminOnly: true },
 ];
 
-export function TeamNav({ isAdmin }: { isAdmin: boolean }) {
+export function TeamNav({ isAdmin, isCreator = false }: { isAdmin: boolean; isCreator?: boolean }) {
   const path = usePathname();
   return (
     <nav className="nav" aria-label="Workspace">
-      {LINKS.filter((l) => isAdmin || !l.adminOnly).map((l) => {
+      {LINKS.filter((l) => (isAdmin || !l.adminOnly) && !(isCreator && l.hideForCreators)).map((l) => {
         const active = l.href === "/team" ? path === "/team" : path.startsWith(l.href);
         return (
           <Link key={l.href} href={l.href} aria-current={active ? "page" : undefined}>

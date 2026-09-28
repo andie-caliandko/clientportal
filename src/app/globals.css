@@ -734,3 +734,36 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .team-edit { text-align: right; width: 1%; }
 .modal .teammate { display: grid; grid-template-columns: 1fr; gap: 12px; border-top: 0; padding: 0; justify-items: start; }
 .modal .teammate .field { width: 100%; }
+
+/* Daily engagement */
+.eg-month { font-weight: 600; min-width: 9em; text-align: center; }
+.eg-wrap { max-height: calc(100dvh - 220px); overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.eg-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .85rem; }
+.eg-table th, .eg-table td { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 4px; white-space: normal; vertical-align: top; }
+.eg-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); text-transform: none; letter-spacing: normal; font-size: .85rem; font-family: inherit; color: var(--ink); min-width: 210px; padding: 10px; text-align: left; }
+.eg-table thead th a { color: inherit; font-weight: 600; text-decoration: none; }
+.eg-table thead th small { display: block; font-weight: 400; color: var(--ink-2); font-size: .75rem; }
+.eg-table .eg-day { position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 92px; width: 92px; border-left: 0; padding: 8px 10px; text-transform: none; letter-spacing: normal; font-family: inherit; color: var(--ink); font-size: .85rem; }
+.eg-table thead .eg-day { z-index: 3; background: var(--surface-2); min-width: 92px; }
+.eg-day span { display: block; font-weight: 600; }
+.eg-day small { color: var(--ink-2); font-weight: 400; }
+.eg-table tr.weekend td, .eg-table tr.weekend .eg-day { background: color-mix(in srgb, var(--surface-2) 65%, var(--surface)); }
+.eg-table tr.today td, .eg-table tr.today .eg-day { background: color-mix(in srgb, var(--hi) 25%, var(--surface)); }
+.eg-table tr.today .eg-day { box-shadow: inset 3px 0 0 var(--primary); }
+.eg-cell { width: 100%; min-height: 34px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 0; background: none; padding: 4px 6px; border-radius: 8px; cursor: pointer; text-align: left; font: inherit; }
+.eg-cell:hover { background: var(--soft); }
+.eg-cell:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.eg-add { color: var(--ink-2); opacity: 0; font-size: 1.1rem; }
+.eg-cell:hover .eg-add, .eg-cell:focus-visible .eg-add { opacity: 1; }
+.eg-tag { display: inline-flex; align-items: center; gap: 5px; padding: .15em .55em; border-radius: 6px; font-size: .78rem; font-weight: 500; }
+.eg-links { font-size: .72rem; color: var(--ink-2); text-decoration: underline; }
+.eg-pick { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.eg-pick legend { margin-bottom: 8px; }
+.eg-pick label.eg-tag { font-size: .9rem; padding: .35em .75em; cursor: pointer; }
+.eg-pick label.eg-tag:has(input:not(:checked)) { opacity: .55; }
+.eg-liked { background: var(--who-7); color: var(--who-7-ink); }
+.eg-commented { background: var(--who-2); color: var(--who-2-ink); }
+.eg-followed { background: var(--who-1); color: var(--who-1-ink); }
+.eg-shared { background: var(--who-5); color: var(--who-5-ink); }
+.eg-dm { background: var(--who-4); color: var(--who-4-ink); }
+.eg-story { background: var(--who-3); color: var(--who-3-ink); }
