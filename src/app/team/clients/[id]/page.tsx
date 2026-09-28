@@ -151,6 +151,10 @@ export default async function ClientDetail({
           {headActions}
         </div>
         {tabs}
+        <div className="row" style={{ alignItems: "center" }}>
+          <Link className="btn sm" href={`/team/clients/${client.id}/report`}>Create a report</Link>
+          <span className="note">Pick a time frame, then share it with the client or the team.</span>
+        </div>
         <HealthTab clientId={client.id} clientName={client.name} kpis={byClient.get(client.id) ?? []}
           health={health.get(client.id) ?? null}
           notes={Object.fromEntries((noteRows ?? []).map((n) => [n.week, n.note]))}
