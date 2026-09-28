@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatMinutes, minutesBetween } from "@/lib/time";
 import { PersonSelect } from "../engagement/PersonSelect";
 import { AddTime, EditTime, TimerCard, type Running } from "./TimeForms";
+import { ClientDonut } from "./ClientDonut";
 
 const DAY = 86_400_000;
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -48,6 +49,11 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
     entries.forEach((e) => m.set(key(e), (m.get(key(e)) ?? 0) + mins(e)));
     return [...m].sort((a, b) => b[1] - a[1]);
   };
+  const clientSlices = (list: Entry[]) => {
+    const m = new Map<string, number>();
+    list.forEach((e) => m.set(e.client_id ?? "internal", (m.get(e.client_id ?? "internal") ?? 0) + mins(e)));
+    return [...m].map(([id, minutes]) => ({ id, name: clientName(id === "internal" ? null : id), minutes }));
+  };
   const q2 = (over: Record<string, string>) => `/team/time?${new URLSearchParams({ week: monday, ...(isAdmin && who !== userId ? { who } : {}), ...over })}`;
   const canEdit = (e: Entry) => e.user_id === userId && who === userId;
   const formFields = (e: Entry) => ({
@@ -86,9 +92,7 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
       <div className="cgrid">
         <div className="panel">
           <h2>By client</h2>
-          {entries.length ? (
-            <ul className="list">{sumBy((e) => clientName(e.client_id)).map(([name, m]) => <li key={name}><span>{name}</span><span className="r kn"><b>{formatMinutes(m)}</b></span></li>)}</ul>
-          ) : <p className="note">No time logged this week.</p>}
+          <ClientDonut emptyText="No time logged this week." slices={clientSlices(entries)} />
         </div>
         {who === "all" ? (
           <div className="panel">

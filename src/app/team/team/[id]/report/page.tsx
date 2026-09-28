@@ -10,6 +10,7 @@ import { formatMinutes, minutesBetween } from "@/lib/time";
 import { ROLE_LABEL, type Role } from "@/lib/types";
 import { Avatar } from "@/app/Avatar";
 import { PrintButton } from "@/app/team/clients/[id]/report/PrintButton";
+import { ClientDonut } from "@/app/team/time/ClientDonut";
 
 const DAY = 86_400_000;
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
@@ -49,8 +50,8 @@ export default async function TeammateReport({ params, searchParams }: {
   // Time
   const time = timeRows ?? [];
   const totalMins = time.reduce((n, e) => n + minutesBetween(e.started_at, e.ended_at), 0);
-  const byClient = new Map<string, number>();
-  time.forEach((e) => byClient.set(clientName(e.client_id), (byClient.get(clientName(e.client_id)) ?? 0) + minutesBetween(e.started_at, e.ended_at)));
+  const clientMinutes = new Map<string, number>();
+  time.forEach((e) => clientMinutes.set(e.client_id ?? "internal", (clientMinutes.get(e.client_id ?? "internal") ?? 0) + minutesBetween(e.started_at, e.ended_at)));
   const weekOf = (d: string) => addDays(d, -((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7));
   const byWeek = new Map<string, number>();
   time.forEach((e) => { const w = weekOf(dayOf(e.started_at)); byWeek.set(w, (byWeek.get(w) ?? 0) + minutesBetween(e.started_at, e.ended_at)); });
@@ -123,11 +124,7 @@ export default async function TeammateReport({ params, searchParams }: {
             <div className="cgrid">
               <div>
                 <h3>By client</h3>
-                <table className="report-list"><tbody>
-                  {[...byClient].sort((a, b) => b[1] - a[1]).map(([name, m]) => (
-                    <tr key={name}><td>{name}</td><td className="kn">{hours(m)}</td><td className="kn note">{Math.round((m / totalMins) * 100)}%</td></tr>
-                  ))}
-                </tbody></table>
+                <ClientDonut emptyText="No time tracked in this period." slices={[...clientMinutes].map(([cid, minutes]) => ({ id: cid, name: clientName(cid === "internal" ? null : cid), minutes }))} />
               </div>
               <div>
                 <h3>By week</h3>
