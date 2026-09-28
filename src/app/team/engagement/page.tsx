@@ -43,7 +43,8 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
         supabase.from("client_team").select("client_id, user_id").in("client_id", ids),
       ])
     : [{ data: [] as { client_id: string; day: string; actions: string[]; links: string[]; note: string | null; logged_by: string | null }[] }, { data: [] as { client_id: string; user_id: string }[] }];
-  // Each account's team, account manager first, for "Completed by".
+  const people = Object.fromEntries((members ?? []).map((m) => [m.user_id, m.display_name]));
+  // Each account's team, account manager first.
   const nameOf = (id: string) => members?.find((m) => m.user_id === id)?.display_name ?? "Former teammate";
   const teamFor = (c: { id: string; account_manager_id: string | null }) =>
     [...new Set([c.account_manager_id, ...(teamRows ?? []).filter((t) => t.client_id === c.id).map((t) => t.user_id)].filter(Boolean))]
@@ -104,7 +105,7 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
                     {accounts.map((c) => (
                       <td key={c.id}>
                         <EngagementCell clientId={c.id} clientName={c.name} day={d} dayLabel={label(d, { weekday: "long", month: "long", day: "numeric" })}
-                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit team={teamFor(c)} managerId={c.account_manager_id} />
+                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit team={teamFor(c)} managerId={c.account_manager_id} people={people} />
                       </td>
                     ))}
                   </tr>
