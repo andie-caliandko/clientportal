@@ -690,3 +690,4 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .tf[data-filter="all"] [data-empty-for="all"], .tf[data-filter="overdue"] [data-empty-for="overdue"],
 .tf[data-filter="today"] [data-empty-for="today"], .tf[data-filter="week"] [data-empty-for="week"] { display: block; }
 .tf { display: grid; gap: 22px; }
+.tf { overflow-anchor: none; align-content: start; }

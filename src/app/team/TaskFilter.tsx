@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const Ctx = createContext<{ filter: string; set: (f: string) => void } | null>(null);
@@ -12,8 +12,15 @@ const Ctx = createContext<{ filter: string; set: (f: string) => void } | null>(n
  */
 export function TaskFilterRoot({ initial, children }: { initial: string; children: React.ReactNode }) {
   const [filter, setFilter] = useState(initial);
+  const root = useRef<HTMLDivElement>(null);
   const set = (f: string) => {
+    // Hold the page at its tallest so hiding cards never shortens it and pulls the view up.
+    const el = root.current;
+    if (el) el.style.minHeight = `${Math.max(el.offsetHeight, parseFloat(el.style.minHeight) || 0)}px`;
+    const y = window.scrollY;
     setFilter(f);
+    // Stay exactly where you were.
+    requestAnimationFrame(() => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior }));
     const url = new URL(window.location.href);
     if (f === "all") url.searchParams.delete("due");
     else url.searchParams.set("due", f);
@@ -21,7 +28,7 @@ export function TaskFilterRoot({ initial, children }: { initial: string; childre
   };
   return (
     <Ctx.Provider value={{ filter, set }}>
-      <div className="tf" data-filter={filter}>{children}</div>
+      <div ref={root} className="tf" data-filter={filter}>{children}</div>
     </Ctx.Provider>
   );
 }
