@@ -824,3 +824,5 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .series-other { stroke: var(--series-other); background: var(--series-other); }
 .closing-bar { background: var(--warn-soft); color: var(--warn); }
 .kpi-table th.kn, .kpi-table td.kn { text-align: right; }
+/* A little room between the goals and the latest number. */
+.kpi-table .kpi-latest { padding-left: 2.25em; }
