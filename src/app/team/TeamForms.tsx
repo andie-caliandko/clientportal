@@ -12,6 +12,7 @@ import {
   addTask,
   addBrief,
   createClientAccount,
+  resendQuestionnaire,
   deleteClient,
   editCalendar,
   saveNewClientTasks,
@@ -809,6 +810,43 @@ export function AddClientButton({ members, agencyId }: { members: Opt[]; agencyI
       {open && (
         <Modal title="Add a client" onClose={() => setOpen(false)} wide>
           <NewClientForm members={members} agencyId={agencyId} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Client page: open the questionnaire back up and send it to one or more of their people. */
+export function ResendQuestionnaire({ clientId, contacts }: { clientId: string; contacts: { user_id: string; display_name: string; email: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(resendQuestionnaire, {});
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  return (
+    <>
+      <div className="row" style={{ alignItems: "center" }}>
+        <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Send the questionnaire again</button>
+        {state.ok && <p className="flash" role="status" style={{ margin: 0 }}>{state.ok}</p>}
+      </div>
+      {open && (
+        <Modal title="Send the questionnaire again" onClose={() => setOpen(false)}>
+          <form action={action} style={{ display: "grid", gap: 12 }}>
+            <input type="hidden" name="client" value={clientId} />
+            <fieldset className="checks">
+              <legend>Who should fill it out?</legend>
+              {contacts.map((c) => (
+                <label key={c.user_id}><input type="checkbox" name="contact" value={c.user_id} defaultChecked={contacts.length === 1} /> {c.display_name} · {c.email}</label>
+              ))}
+              {!contacts.length && <p className="note">No one has a portal login yet. Add them under People on their portal first.</p>}
+            </fieldset>
+            <label className="row" style={{ alignItems: "center", gap: 8 }}><input type="checkbox" name="fresh" /> Start fresh (clear their earlier answers)</label>
+            <p className="note">Otherwise their answers stay filled in so they can update them. Either way, it moves back to their to-do list and they get an email.</p>
+            <div className="field"><label htmlFor="rq-note">Note for them (optional)</label><textarea className="input" id="rq-note" name="note" style={{ minHeight: 60 }} placeholder="We've updated a few questions for your new location." /></div>
+            {state.error && <p className="error">{state.error}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
         </Modal>
       )}
     </>

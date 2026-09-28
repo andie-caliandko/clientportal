@@ -146,6 +146,34 @@ function StepAction({ step, primary, preview, contractUrl }: { step: Step; prima
   return href ? <Link className={cls} href={href}>{step.action_label}</Link> : null;
 }
 
+/** What a step says under its name, matched to what they can do now. */
+function stepHelp(step: Step, contractUrl: string | null, isDone: boolean) {
+  if (step.kind === "contract" && stepHref(step, contractUrl)) {
+    return isDone ? "Signed. Open it any time to look it over." : "Open your contract to review and sign it. This checks off once it's signed.";
+  }
+  if (step.kind === "questionnaire" && isDone) return "Thanks for filling this out. You can look over your answers any time.";
+  return step.help;
+}
+
+/** A finished step. The contract and questionnaire stay open to look at again. */
+function DoneAction({ step, preview, contractUrl }: { step: Step; preview: boolean; contractUrl: string | null }) {
+  const contract = step.kind === "contract" ? stepHref(step, contractUrl) : null;
+  const view = contract
+    ? { label: "View contract", href: contract, external: true }
+    : step.kind === "questionnaire"
+      ? { label: "View questionnaire", href: "/portal/questionnaire", external: false }
+      : null;
+  if (!view) return <span className="done-label">Done</span>;
+  return (
+    <span className="done-with-link">
+      <span className="done-label">{contract ? "Signed" : "Done"}</span>
+      {preview ? <button className="btn sm line" disabled>{view.label}</button>
+        : view.external ? <a className="btn sm line" href={view.href} target="_blank" rel="noreferrer">{view.label}</a>
+        : <Link className="btn sm line" href={view.href}>{view.label}</Link>}
+    </span>
+  );
+}
+
 function ApprovalCard({ cal, agency, preview }: { cal: Calendar; agency: Agency; preview: boolean }) {
   return (
     <section className="task-card approve" aria-label="Needs your approval">
@@ -188,8 +216,8 @@ function Steps({ steps, done, next, preview, contractUrl }: { steps: Step[]; don
         {steps.map((s, i) => (
           <li key={s.id} className={`step ${done.has(s.id) ? "done" : ""}`}>
             <span className="num">{done.has(s.id) ? "✓" : i + 1}</span>
-            <div><h3>{s.title}</h3><p>{s.help}</p></div>
-            <div className="act">{done.has(s.id) ? <span className="done-label">Done</span> : <StepAction step={s} primary={s.id === next?.id} preview={preview} contractUrl={contractUrl} />}</div>
+            <div><h3>{s.title}</h3><p>{stepHelp(s, contractUrl, done.has(s.id))}</p></div>
+            <div className="act">{done.has(s.id) ? <DoneAction step={s} preview={preview} contractUrl={contractUrl} /> : <StepAction step={s} primary={s.id === next?.id} preview={preview} contractUrl={contractUrl} />}</div>
           </li>
         ))}
       </ul>
@@ -262,7 +290,7 @@ export async function HomeSection(ctx: PortalCtx) {
           <div>
             <p className="eyebrow">Your next step to get started</p>
             <h2>{d.next.title}</h2>
-            <p>{d.next.help}</p>
+            <p>{stepHelp(d.next, ctx.client.dubsado_project_url, false)}</p>
           </div>
           <StepAction step={d.next} primary preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />
         </section>

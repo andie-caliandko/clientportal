@@ -971,3 +971,39 @@ export async function deleteBrief(form: FormData) {
   if (data.file_path) await supabase.storage.from("briefs").remove([data.file_path]);
   revalidatePath(`/team/clients/${data.client_id}`);
 }
+
+/**
+ * Open the onboarding questionnaire back up for a client and email the people
+ * chosen (say, a different teammate of theirs). Their earlier answers stay so
+ * they can update them, unless the team chooses to start fresh.
+ */
+export async function resendQuestionnaire(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const clientId = String(form.get("client") ?? "");
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const admin = createAdminClient();
+  const [{ data: step }, { data: contacts }] = await Promise.all([
+    admin.from("onboarding_steps").select("id").eq("agency_id", v.agency.id).eq("kind", "questionnaire").maybeSingle(),
+    admin.from("client_users").select("user_id, display_name, email").eq("client_id", clientId),
+  ]);
+  if (!step) return { error: "There's no questionnaire step in your onboarding." };
+  const picked = new Set(form.getAll("contact").map(String));
+  const to = (contacts ?? []).filter((c) => picked.has(c.user_id));
+  if (!to.length) return { error: "Choose who should fill it out." };
+
+  await admin.from("client_step_status").delete().eq("client_id", clientId).eq("step_id", step.id);
+  if (form.get("fresh") === "on") await admin.from("answers").delete().eq("client_id", clientId);
+  const note = String(form.get("note") ?? "").trim();
+  const short = v.agency.brand.shortName ?? v.agency.name;
+  await sendEmail(
+    to.map((c) => c.email),
+    `Please fill out your ${short} questionnaire`,
+    `${v.member.display_name} opened your onboarding questionnaire back up${form.get("fresh") === "on" ? "" : " so you can review and update your answers"}.${note ? `\n\n${note}` : ""}\n\nOpen it here:\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/questionnaire`,
+  );
+  await notifyClient(clientId, { kind: "task", title: "Your questionnaire is open again", body: note || null, link: "/portal/questionnaire" }, to.map((c) => c.user_id));
+  revalidatePath(`/team/clients/${clientId}`);
+  return { ok: `Sent to ${to.map((c) => c.display_name.split(" ")[0]).join(" and ")}.` };
+}

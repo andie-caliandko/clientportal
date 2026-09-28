@@ -12,7 +12,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, AddTeammate, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, AddTeammate, ResendQuestionnaire, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -371,10 +371,14 @@ export default async function ClientDetail({
             ))}
           </ul>
           {canEdit ? <ContractLinkForm clientId={client.id} url={client.dubsado_project_url} /> : null}
-          <div>
-            <Link className="btn sm line" href={sp.answers ? `/team/clients/${client.id}` : `/team/clients/${client.id}?answers=1#answers`}>
+          <div className="row" style={{ alignItems: "center" }}>
+            <Link className="btn sm line" href={sp.answers ? `/team/clients/${client.id}`  : `/team/clients/${client.id}?answers=1#answers`}>
               {sp.answers ? "Hide questionnaire answers" : "View questionnaire answers"}
             </Link>
+            {canEdit && (
+              <ResendQuestionnaire clientId={client.id}
+                contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
+            )}
           </div>
         </div>
 
