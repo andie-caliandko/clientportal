@@ -669,3 +669,6 @@ a.stat:hover { border-color: var(--primary); }
   .report-kpi { page-break-inside: avoid; }
 }
 .cgrid.pairs { align-items: stretch; }
+/* New task button and the due-date filter share a row; an open form drops below. */
+.task-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.task-bar > form.panel { flex-basis: 100%; order: 2; }

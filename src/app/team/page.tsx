@@ -116,16 +116,6 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           <button className="btn sm line">Show</button>
         </form>
       </div>
-      <nav className="view-switch due-filter" aria-label="Filter by due date">
-        {Object.entries(FILTERS).map(([key, f]) => {
-          const n = forWho.filter(f.test).length;
-          return (
-            <Link key={key} href={href({ due: key })} aria-current={filter === key ? "page" : undefined} className={key === "overdue" && n ? "has-overdue" : ""}>
-              {f.label}{key !== "all" ? ` · ${n}` : ""}
-            </Link>
-          );
-        })}
-      </nav>
 
       <RhythmPanel rhythm={rhythm} current={currentWeek} teamProgress={teamProgress}
         ranges={Object.fromEntries([1, 2, 3, 4].map((w) => [w, weekRange(w, agency.timezone)]))}
@@ -139,7 +129,19 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         <div className="stat"><b>{openApprovals ?? 0}</b><span>Content approvals open</span></div>
       </div>
 
-      {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
+      <div className="task-bar">
+        {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
+        <nav className="view-switch due-filter" aria-label="Filter by due date">
+          {Object.entries(FILTERS).map(([key, f]) => {
+            const n = forWho.filter(f.test).length;
+            return (
+              <Link key={key} href={href({ due: key })} aria-current={filter === key ? "page" : undefined} className={key === "overdue" && n ? "has-overdue" : ""}>
+                {f.label}{key !== "all" ? ` · ${n}` : ""}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       {canEdit && <p className="note">Drag a card to another column to change its status, or onto Done to finish it.</p>}
       <DragBoard enabled={canEdit}>
