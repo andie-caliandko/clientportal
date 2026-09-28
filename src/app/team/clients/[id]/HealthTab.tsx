@@ -92,13 +92,15 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
         {kpis.length ? (
           <div className="tablewrap">
             <table className="kpi-table">
-              <thead><tr><th>KPI</th><th>Good · Better · Best</th><th>Latest</th><th>Status</th><th>Trend</th><th>Last 8 weeks</th>{canEdit && <th />}</tr></thead>
+              <thead><tr><th>KPI</th><th className="kn">Good</th><th className="kn">Better</th><th className="kn">Best</th><th>Latest</th><th>Status</th><th>Trend</th><th>Last 8 weeks</th>{canEdit && <th />}</tr></thead>
               <tbody>
                 {kpis.map((k) => (
                   <tr key={k.id}>
                     <td><b>{k.name}</b>{k.benchmark && <><br /><span className="note">Industry: {k.benchmark}</span></>}
                       <br /><span className="note">{k.higher_is_better ? "Higher is better" : "Lower is better"}</span></td>
-                    <td className="kn">{formatKpi(k.good, k.unit)} · {formatKpi(k.better, k.unit)} · {formatKpi(k.best, k.unit)}</td>
+                    <td className="kn">{formatKpi(k.good, k.unit)}</td>
+                    <td className="kn">{formatKpi(k.better, k.unit)}</td>
+                    <td className="kn">{formatKpi(k.best, k.unit)}</td>
                     <td className="kn">{k.summary ? <b>{formatKpi(k.summary.latest, k.unit)}</b> : "—"}</td>
                     <td>{k.summary ? <><RatingPill rating={k.summary.rating} /><br /><span className="note">{TIER[k.summary.tier]}</span></> : "—"}</td>
                     <td>{k.summary?.trend ? <span className={`trend ${k.summary.trend}`}><span aria-hidden="true">{TREND[k.summary.trend].mark}</span> {TREND[k.summary.trend].label}</span> : <span className="note">Needs 2 weeks</span>}</td>
