@@ -28,7 +28,8 @@ export default async function TeamLayout({ children, modal }: { children: React.
           </p>
           <div className="me-top-text">
             <b>{member.display_name}</b>
-            <span className="note">{ROLE_LABEL[member.role]}{member.role === "admin" ? " · all clients" : member.role === "creator" ? " · view only" : ""}</span>
+            {/* Admins see their access; everyone else sees their job title (set on the Team page). */}
+            <span className="note">{member.role === "admin" ? "Admin · all clients" : member.title?.trim() || ROLE_LABEL[member.role]}</span>
             <span className="me-top-links">
               {!member.avatar_path && <label htmlFor="my-photo" className="linkbtn note" style={{ cursor: "pointer" }}>Add your photo</label>}
               <form action={signOut}><button className="linkbtn note">Sign out</button></form>
