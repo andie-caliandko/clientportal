@@ -720,7 +720,7 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .q-answers p { margin: 0; white-space: pre-wrap; }
 
 /* Team: you, in the top right of every page */
-.me-top { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: -8px; }
+.me-top { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .me-top-date { margin: 0 auto 0 0; font-family: var(--label); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .me-top-text { display: grid; justify-items: end; text-align: right; line-height: 1.25; font-size: .88rem; }
 .me-top-text .note { font-size: .8rem; }
