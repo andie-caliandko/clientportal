@@ -892,7 +892,7 @@ export async function setMyPhoto(path: string | null): Promise<Result> {
 }
 
 /** Admins add a template for the team: a link, a file, or both. */
-export async function addTemplate(input: { title: string; description: string; url: string; filePath: string | null; fileName: string | null }): Promise<Result> {
+export async function addTemplate(input: { title: string; description: string; url: string; filePath: string | null; fileName: string | null; visibleTo: string[] }): Promise<Result> {
   const v = await requireAdmin().catch(() => null);
   if (!v) return { error: "Only admins can add templates." };
   const title = input.title.trim();
@@ -905,6 +905,8 @@ export async function addTemplate(input: { title: string; description: string; u
   const { error } = await supabase.from("agency_templates").insert({
     agency_id: v.agency.id, title, description: input.description.trim() || null, url,
     file_path: input.filePath, file_name: input.fileName, created_by: v.userId,
+    // Admins always see templates; the others only when chosen.
+    visible_to: ["admin", ...input.visibleTo.filter((r) => r === "account_manager" || r === "creator")],
   });
   if (error) return { error: "The template couldn't be saved." };
   revalidatePath("/team/templates");

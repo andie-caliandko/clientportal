@@ -37,6 +37,7 @@ export function TemplateForm({ agencyId, agencyName }: { agencyId: string; agenc
               const res = await addTemplate({
                 title: String(data.get("title") ?? ""), description: String(data.get("description") ?? ""),
                 url: String(data.get("url") ?? ""), filePath, fileName,
+                visibleTo: data.getAll("visible").map(String),
               });
               setMsg(res);
               if (res.ok) setOpen(false);
@@ -47,7 +48,14 @@ export function TemplateForm({ agencyId, agencyName }: { agencyId: string; agenc
             <div className="field"><label htmlFor="tp-desc">When to use it (optional)</label><textarea className="input" id="tp-desc" name="description" style={{ minHeight: 60 }} placeholder="Duplicate this at the end of each month for every client." /></div>
             <div className="field"><label htmlFor="tp-url">Link</label><input className="input" id="tp-url" name="url" type="url" placeholder="https://docs.google.com/… or a Canva, Figma or Loom link" /></div>
             <div className="field"><label htmlFor="tp-file">Or upload a file</label><input className="input" id="tp-file" name="file" type="file" /></div>
-            <p className="note">Google Docs, Sheets, Slides and Drive files, Canva, Figma, Loom and YouTube links show right on the page. For Google files, set sharing to anyone at {agencyName} with the link.</p>
+            <fieldset className="daypick">
+        <legend className="note">Who can see it</legend>
+        <label><input type="checkbox" checked disabled /> Admins</label>
+        <label><input type="checkbox" name="visible" value="account_manager" defaultChecked /> Account managers</label>
+        <label><input type="checkbox" name="visible" value="creator" defaultChecked /> Creators</label>
+      </fieldset>
+      <p className="note">Admins always see every template. Untick the others for things like proposals that are admin-only.</p>
+      <p className="note">Google Docs, Sheets, Slides and Drive files, Canva, Figma, Loom and YouTube links show right on the page. For Google files, set sharing to anyone at {agencyName} with the link.</p>
             {msg.error && <p className="error">{msg.error}</p>}
             <div className="row">
               <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save template"}</button>

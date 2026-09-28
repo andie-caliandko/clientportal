@@ -15,6 +15,16 @@ type Template = {
   file_name: string | null;
   created_by: string | null;
   created_at: string;
+  visible_to: string[] | null;
+};
+
+/** "Admins only", "Admins and account managers", or null when it's for everyone. */
+const audienceLabel = (roles: string[] | null) => {
+  const r = new Set(roles ?? ["admin", "account_manager", "creator"]);
+  if (r.has("account_manager") && r.has("creator")) return null;
+  if (r.has("account_manager")) return "Admins and account managers";
+  if (r.has("creator")) return "Admins and creators";
+  return "Admins only";
 };
 
 /** Google Docs, Sheets and Slides can be copied straight into your own Drive. */
@@ -65,6 +75,7 @@ export default async function TemplatesPage() {
             <article key={t.id} className="panel template">
               <div>
                 <h2>{t.title}</h2>
+                {isAdmin && audienceLabel(t.visible_to) && <span className="pill info" style={{ marginTop: 6 }}>{audienceLabel(t.visible_to)}</span>}
                 {t.description && <p className="note">{t.description}</p>}
               </div>
               {embed && (
