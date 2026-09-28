@@ -35,7 +35,7 @@ export default async function ClientDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string; answers?: string; tab?: string; restored?: string }>;
+  searchParams: Promise<{ created?: string; answers?: string; tab?: string; restored?: string; invite?: string; brief?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -188,7 +188,9 @@ export default async function ClientDetail({
         </div>
       )}
       {sp.restored && <p className="flash">{client.name} is active again. Their portal is open.</p>}
-      {sp.created && <p className="flash">Client created. {people.data?.[0]?.display_name ?? "The main contact"} has an invite to set their password.</p>}
+      {sp.created && !sp.invite && <p className="flash">Client created. {people.data?.[0]?.display_name ?? "The main contact"} has an invite to set their password.</p>}
+      {sp.created && sp.invite === "failed" && <p className="readonly">Client created, but the portal invite didn&apos;t send. Check their email and add them under People on their portal.</p>}
+      {sp.brief && <p className="readonly">The project brief didn&apos;t save{sp.brief === "brief-file" ? " (the file didn't upload)" : ""}. Add it under Project briefs below.</p>}
 
       <div className="panel">
         <h2>Tasks</h2>

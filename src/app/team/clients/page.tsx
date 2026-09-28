@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadHealth } from "@/lib/healthData";
 import { clientLogoUrl } from "@/lib/links";
 import { RatingPill } from "./[id]/HealthTab";
+import { AddClientButton } from "../TeamForms";
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ archived?: string; done?: string }> }) {
   const { agency, member } = await requireTeam();
@@ -17,7 +18,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     supabase.from("onboarding_steps").select("id").eq("agency_id", agency.id),
     supabase.from("client_step_status").select("client_id"),
     supabase.from("content_calendars").select("client_id, status, month").order("month", { ascending: false }),
-    supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
+    supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
   ]);
   const { health } = await loadHealth(supabase);
   const all = clients ?? [];
@@ -39,7 +40,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     <section style={{ display: "grid", gap: 16 }}>
       <div className="top">
         <h1>Clients</h1>
-        {member.role === "admin" && !showArchived && <Link className="btn sm" href="/team/clients/new">Add client</Link>}
+        {member.role === "admin" && !showArchived && <AddClientButton members={members ?? []} agencyId={agency.id} />}
       </div>
       <div className="tabs" role="tablist" aria-label="Which clients">
         <Link href="/team/clients" role="tab" aria-selected={!showArchived}>Active</Link>

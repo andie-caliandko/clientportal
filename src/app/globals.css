@@ -706,3 +706,7 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 @media (prefers-reduced-motion: no-preference) { .modal { animation: modal-in .16s ease-out; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 .modal > .panel { border: 0; padding: 0; background: none !important; }
+/* Fields in a row line up at the top, even when one has a note under it. */
+.row.top { align-items: flex-start; }
+.modal .new-client { border: 0; padding: 0; background: none; }
+.modal form.panel.new-client > h2:first-child { display: block; }

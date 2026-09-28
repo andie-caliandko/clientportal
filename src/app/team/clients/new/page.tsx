@@ -17,7 +17,7 @@ export default async function NewClientPage() {
     <section style={{ display: "grid", gap: 16 }}>
       <Link href="/team/clients" className="note">← All clients</Link>
       <h1 style={{ fontSize: "2.5rem" }}>Add a client</h1>
-      <NewClientForm members={members ?? []} />
+      <div style={{ maxWidth: 760 }}><NewClientForm members={members ?? []} agencyId={agency.id} /></div>
     </section>
   );
 }

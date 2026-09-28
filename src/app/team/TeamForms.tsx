@@ -10,6 +10,7 @@ import {
   addClientContact,
   addToClient,
   addTask,
+  addBrief,
   createClientAccount,
   deleteClient,
   editCalendar,
@@ -199,8 +200,37 @@ function Connect({ id, label, hint, later, setLater, children }: {
   );
 }
 
-export function NewClientForm({ members }: { members: Opt[] }) {
-  const [state, action, pending] = useActionState(createClientAccount, {});
+export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId: string }) {
+  const [state, setState] = useState<{ error?: string }>({});
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  // Create the client, add the brief if there is one, then open their page.
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await createClientAccount({}, form);
+      if (!res.clientId) return setState({ error: res.error });
+      const file = form.get("brief_file");
+      const briefUrl = String(form.get("brief_url") ?? "").trim();
+      let briefNote = "";
+      if ((file instanceof File && file.size) || briefUrl) {
+        let filePath: string | null = null;
+        let fileName: string | null = null;
+        if (file instanceof File && file.size) {
+          fileName = file.name;
+          filePath = `${agencyId}/${res.clientId}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+          const { error } = await createClient().storage.from("briefs").upload(filePath, file, { contentType: file.type || undefined });
+          if (error) { filePath = null; fileName = null; briefNote = "brief-file"; }
+        }
+        if (filePath || briefUrl) {
+          const b = await addBrief({ clientId: res.clientId, title: String(form.get("brief_title") ?? "").trim() || "Project brief", notes: "", url: briefUrl, filePath, fileName });
+          if (b.error) briefNote = "brief";
+        }
+      }
+      router.push(`/team/clients/${res.clientId}?created=1${res.error ? "&invite=failed" : ""}${briefNote ? `&brief=${briefNote}` : ""}`);
+    });
+  };
   const [later, setLater] = useState<Record<string, boolean>>({});
   const set = (k: string) => (v: boolean) => setLater({ ...later, [k]: v });
   const [am, setAm] = useState("");
@@ -209,10 +239,10 @@ export function NewClientForm({ members }: { members: Opt[] }) {
     <div className="field"><label htmlFor={id}>{label}</label><input className="input" id={id} name={id} {...props} /></div>
   );
   return (
-    <form action={action} className="panel" style={{ maxWidth: 760, gap: 18 }}>
+    <form onSubmit={submit} className="panel new-client" style={{ gap: 18 }}>
       <h2>Business</h2>
       <div className="row">{f("name", "Business name", { required: true })}{f("website", "Website", { placeholder: "bloomfloralstudio.com" })}</div>
-      <div className="row">
+      <div className="row top">
         <div className="field"><label htmlFor="account_manager">Account manager</label>
           <select className="sel" id="account_manager" name="account_manager" required value={am} onChange={(e) => setAm(e.target.value)}>
             <option value="" disabled>Choose one</option>
@@ -253,6 +283,14 @@ export function NewClientForm({ members }: { members: Opt[] }) {
           <input className="input" name="dubsado_project" aria-label="Contract link" placeholder="Contract link" style={{ flex: 1, minWidth: 220 }} />
         </div>
       </Connect>
+
+      <h2>Project brief <span className="note" style={{ fontSize: ".9rem" }}>optional · internal</span></h2>
+      <p className="note">Already have a brief? Add it here and it&apos;s saved to their Project briefs, which only your team sees.</p>
+      <div className="row top">
+        {f("brief_title", "Brief name", { placeholder: "Project brief" })}
+        {f("brief_url", "Link", { type: "url", placeholder: "https://docs.google.com/…" })}
+      </div>
+      <div className="field"><label htmlFor="brief_file">Or upload a file</label><input className="input" id="brief_file" name="brief_file" type="file" /></div>
 
       <p className="note">
         Every new client automatically gets your onboarding checklist and questionnaire in their portal, plus your new-client
@@ -759,5 +797,20 @@ export function DriveSettings({ waiting, withoutFolder }: { waiting: number; wit
       </p>
       {withoutFolder > 0 && <p className="readonly">{withoutFolder} active client{withoutFolder === 1 ? " doesn't" : "s don't"} have a Drive folder link yet. Add it under Client info on their page and their files copy over automatically.</p>}
     </div>
+  );
+}
+
+/** Clients page: "Add client" opens the new-client form in a pop-up. */
+export function AddClientButton({ members, agencyId }: { members: Opt[]; agencyId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn sm" onClick={() => setOpen(true)}>Add client</button>
+      {open && (
+        <Modal title="Add a client" onClose={() => setOpen(false)} wide>
+          <NewClientForm members={members} agencyId={agencyId} />
+        </Modal>
+      )}
+    </>
   );
 }

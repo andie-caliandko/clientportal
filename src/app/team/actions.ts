@@ -241,7 +241,7 @@ const CONNECTIONS: Connection[] = [
   { key: "dubsado", label: "Contract", laterTask: "Set up the client in Dubsado and add their contract link and Dubsado email on their client page" },
 ];
 
-export async function createClientAccount(_: Result, form: FormData): Promise<Result> {
+export async function createClientAccount(_: Result, form: FormData): Promise<Result & { clientId?: string }> {
   const v = await requireTeam();
   if (v.member.role !== "admin") return { error: "Only admins can add clients." };
   const get = (k: string) => String(form.get(k) ?? "").trim();
@@ -327,7 +327,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     data: { display_name: contactName },
   });
   if (inviteErr || !invite.user) {
-    return { error: `${name} was created, but the invite to ${contactEmail} didn't send. Check the address and invite them from the client page.` };
+    return { clientId: client.id, error: `${name} was created, but the invite to ${contactEmail} didn't send. Check the address and invite them from the client page.` };
   }
   await admin.from("client_users").insert({
     client_id: client.id,
@@ -338,7 +338,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   });
   // Their Drive folder, with Branding and Content inside.
   after(() => ensureClientFolders({ clientId: client.id }));
-  redirect(`/team/clients/${client.id}?created=1`);
+  return { ok: `${name} is set up.`, clientId: client.id };
 }
 
 // ---------------------------------------------------------------------------
