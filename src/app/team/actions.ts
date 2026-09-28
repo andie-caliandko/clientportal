@@ -1016,3 +1016,26 @@ export async function resendQuestionnaire(_: Result, form: FormData): Promise<Re
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: `Sent to ${to.map((c) => c.display_name.split(" ")[0]).join(" and ")}.` };
 }
+
+/** Team page: set which clients a teammate is on, all at once. Account managers stay on their own accounts. */
+export async function setTeammateClients(_: Result, form: FormData): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can change this." };
+  const userId = String(form.get("user") ?? "");
+  const wanted = new Set(form.getAll("client").map(String));
+  const supabase = await createClient();
+  const [{ data: clients }, { data: current }] = await Promise.all([
+    supabase.from("clients").select("id, account_manager_id").eq("agency_id", v.agency.id).is("archived_at", null),
+    supabase.from("client_team").select("client_id").eq("user_id", userId),
+  ]);
+  const active = new Set((clients ?? []).map((c) => c.id));
+  const manages = new Set((clients ?? []).filter((c) => c.account_manager_id === userId).map((c) => c.id));
+  const now = new Set((current ?? []).map((r) => r.client_id).filter((id) => active.has(id)));
+  const add = [...wanted].filter((id) => active.has(id) && !now.has(id));
+  const remove = [...now].filter((id) => !wanted.has(id) && !manages.has(id));
+  if (add.length) await supabase.from("client_team").upsert(add.map((client_id) => ({ client_id, user_id: userId })), { ignoreDuplicates: true });
+  if (remove.length) await supabase.from("client_team").delete().eq("user_id", userId).in("client_id", remove);
+  revalidatePath("/team/team");
+  [...add, ...remove].forEach((id) => revalidatePath(`/team/clients/${id}`));
+  return { ok: add.length || remove.length ? "Clients updated." : "No changes." };
+}

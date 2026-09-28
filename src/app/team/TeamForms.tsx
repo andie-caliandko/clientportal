@@ -16,6 +16,7 @@ import {
   deleteClient,
   editCalendar,
   saveNewClientTasks,
+  setTeammateClients,
   setClientLogo,
   setMyPhoto,
   setContractLink,
@@ -865,12 +866,15 @@ export function ResendQuestionnaire({ clientId, contacts }: { clientId: string; 
 }
 
 /** Team page: each person's Edit button opens their details in a pop-up. */
-export function EditTeammate({ member, isMe, removeAction }: {
+export function EditTeammate({ member, isMe, removeAction, clients }: {
   member: { user_id: string; display_name: string; title: string | null; role: string; email: string };
   isMe: boolean;
   removeAction: (form: FormData) => Promise<void>;
+  /** Every active client, and whether this person is on it or manages it. */
+  clients: { id: string; name: string; on: boolean; manages: boolean }[];
 }) {
   const [open, setOpen] = useState(false);
+  const [clientState, clientAction, savingClients] = useActionState(setTeammateClients, {});
   return (
     <>
       <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Edit</button>
@@ -878,6 +882,30 @@ export function EditTeammate({ member, isMe, removeAction }: {
         <Modal title={isMe ? "Edit your details" : `Edit ${member.display_name}`} onClose={() => setOpen(false)}>
           <p className="note">{member.email}</p>
           <TeammateRow member={member} isMe={isMe} onSaved={() => setOpen(false)} />
+          <form action={clientAction} className="tm-clients">
+            <input type="hidden" name="user" value={member.user_id} />
+            <h3>Clients</h3>
+            {member.role === "admin" ? (
+              <p className="note">Admins can open every client. Tick the ones where {isMe ? "you" : "they"} should show in the client&apos;s Members panel.</p>
+            ) : (
+              <p className="note">{isMe ? "You" : "They"} can only open the clients ticked here.</p>
+            )}
+            <div className="tm-client-list">
+              {clients.map((c) => (
+                <label key={c.id}>
+                  <input type="checkbox" name="client" value={c.id} defaultChecked={c.on || c.manages} disabled={c.manages} />
+                  {c.manages && <input type="hidden" name="client" value={c.id} />}
+                  <span>{c.name}</span>
+                  {c.manages && <span className="pill info">Account manager</span>}
+                </label>
+              ))}
+              {!clients.length && <p className="note">No active clients yet.</p>}
+            </div>
+            {clients.some((c) => c.manages) && <p className="note">To change an account manager, open that client&apos;s page.</p>}
+            {clientState.error && <p className="error">{clientState.error}</p>}
+            {clientState.ok && <p className="flash">{clientState.ok}</p>}
+            <div><button className="btn sm" disabled={savingClients}>{savingClients ? "Saving…" : "Save clients"}</button></div>
+          </form>
           {!isMe && (
             <form action={removeAction} style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
               <input type="hidden" name="user" value={member.user_id} />

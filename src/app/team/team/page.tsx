@@ -13,9 +13,10 @@ export default async function TeamPage() {
   const [{ data: members }, { data: clients }, { data: onTeam }] = await Promise.all([
     // Everything, so this still works before newer columns (like joined_at) exist.
     supabase.from("agency_members").select("*").eq("agency_id", agency.id).order("display_name"),
-    supabase.from("clients").select("id, name").order("name"),
+    supabase.from("clients").select("id, name, account_manager_id, archived_at").order("name"),
     supabase.from("client_team").select("user_id, client_id"),
   ]);
+  const activeClients = (clients ?? []).filter((c) => !c.archived_at);
   const count = new Map<string, number>();
   (onTeam ?? []).forEach((t) => count.set(t.user_id, (count.get(t.user_id) ?? 0) + 1));
 
@@ -43,7 +44,7 @@ export default async function TeamPage() {
         </div>
       </div>
 
-      <InviteTeammateForm clients={clients ?? []} />
+      <InviteTeammateForm clients={activeClients} />
 
       <div className="panel">
         <h2>Your team</h2>
@@ -68,7 +69,8 @@ export default async function TeamPage() {
                     <td>{ROLE_LABEL[m.role]}</td>
                     <td className="note">{m.email}</td>
                     <td className="kn">{m.role === "admin" ? "All" : count.get(m.user_id) ?? 0}</td>
-                    <td className="team-edit"><EditTeammate member={m} isMe={self} removeAction={removeTeammate} /></td>
+                    <td className="team-edit"><EditTeammate member={m} isMe={self} removeAction={removeTeammate}
+                        clients={activeClients.map((c) => ({ id: c.id, name: c.name, manages: c.account_manager_id === m.user_id, on: (onTeam ?? []).some((t) => t.user_id === m.user_id && t.client_id === c.id) }))} /></td>
                   </tr>
                 );
               })}
