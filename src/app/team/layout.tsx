@@ -19,17 +19,25 @@ export default async function TeamLayout({ children, modal }: { children: React.
           {notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
         </div>
         <TeamNav isAdmin={member.role === "admin"} />
-        <div className="me">
-          <MyPhoto userId={member.user_id} name={member.display_name} path={member.avatar_path} />
-          <div>
-            <b>{member.display_name}</b>
-            <p className="note">{ROLE_LABEL[member.role]}{member.role === "admin" ? " · all clients" : member.role === "creator" ? " · view only" : ""}</p>
-            {!member.avatar_path && <label htmlFor="my-photo" className="linkbtn note" style={{ cursor: "pointer" }}>Add your photo</label>}
-            <form action={signOut}><button className="linkbtn note">Sign out</button></form>
-          </div>
-        </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        {/* Today's date, and you in the top right, on every page whatever its length. */}
+        <div className="me-top">
+          <p className="me-top-date">
+            {new Date().toLocaleDateString("en-US", { timeZone: agency.timezone, weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+          </p>
+          <div className="me-top-text">
+            <b>{member.display_name}</b>
+            <span className="note">{ROLE_LABEL[member.role]}{member.role === "admin" ? " · all clients" : member.role === "creator" ? " · view only" : ""}</span>
+            <span className="me-top-links">
+              {!member.avatar_path && <label htmlFor="my-photo" className="linkbtn note" style={{ cursor: "pointer" }}>Add your photo</label>}
+              <form action={signOut}><button className="linkbtn note">Sign out</button></form>
+            </span>
+          </div>
+          <MyPhoto userId={member.user_id} name={member.display_name} path={member.avatar_path} />
+        </div>
+        {children}
+      </main>
       {modal}
     </div>
   );
