@@ -21,6 +21,8 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
   canEdit: boolean;
 }) {
   const overdue = !!t.due_at && new Date(t.due_at).getTime() < Date.now();
+  const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(d);
+  const dueToday = !!t.due_at && !overdue && day(new Date(t.due_at)) === day(new Date());
   const due = t.due_at
     ? new Date(t.due_at).toLocaleString("en-US", { timeZone, weekday: "short", month: "short", day: "numeric" })
     : null;
@@ -39,13 +41,13 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
       : { cls: `who-${colorOf(t.created_by!) ?? 0}`, text: creator! };
 
   return (
-    <article className={`task ${clientFacing ? "client-task" : "team-task"} ${overdue ? "overdue" : ""}`}>
+    <article className={`task ${clientFacing ? "client-task" : "team-task"} ${overdue ? "overdue" : dueToday ? "due-today" : ""}`}>
       <span className={`kind ${badge.cls}`}>{badge.text}</span>
       <Link className="task-link" href={`/team/tasks/${t.id}`}>{t.title}</Link>
       {t.note && <p className="note" style={{ fontWeight: 400 }}>{t.note}</p>}
       <div className="meta">
         {showClientChip && !clientFacing && clientName && <span className="chip">{clientName}</span>}
-        {due && (overdue ? <span className="pill crit">Was due {due}</span> : <span>Due {due}</span>)}
+        {due && (overdue ? <span className="pill crit">Overdue · was due {due}</span> : dueToday ? <span className="pill warn">Due today</span> : <span>Due {due}</span>)}
         {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
       </div>
       {(clientFacing || automated) && (

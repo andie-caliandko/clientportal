@@ -616,3 +616,13 @@ td a:hover { text-decoration: underline; }
 .mg-day.today { background: color-mix(in srgb, var(--hi) 32%, transparent); box-shadow: inset 0 0 0 2px var(--primary); }
 .mg-top { display: flex; align-items: center; gap: 6px; }
 .mg-today { font-family: var(--label); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+
+/* Overdue and due-today tasks */
+.task.overdue { border-color: var(--crit); background: color-mix(in srgb, var(--crit-soft) 55%, var(--surface)); box-shadow: inset 4px 0 0 var(--crit); }
+.task.overdue .task-link { color: var(--crit); }
+.task.due-today { border-color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
+a.stat { text-decoration: none; color: inherit; transition: border-color .15s; }
+a.stat:hover { border-color: var(--primary); }
+.stat.warn b { color: var(--warn); }
+.due-filter { flex-wrap: wrap; justify-self: start; }
+.due-filter a.has-overdue:not([aria-current]) { color: var(--crit); font-weight: 600; }

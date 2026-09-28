@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { memberColors } from "@/lib/memberColors";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -17,10 +18,10 @@ const COLUMNS = [
   { key: "waiting", label: "Waiting on client" },
 ] as const;
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string }> }) {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ who?: string; due?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   const canEdit = member.role !== "creator";
-  const { who = "all" } = await searchParams;
+  const { who = "all", due: dueFilter = "all" } = await searchParams;
   const supabase = await createClient();
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
@@ -62,17 +63,30 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const colors = memberColors((members ?? []).map((m) => m.user_id));
   Object.values(people.contacts).flat().forEach((c) => names.set(c.user_id, c.display_name));
   // Archived clients drop off the board.
-  const list = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
+  const forWho = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || t.assignee_id === (who === "me" ? userId : who));
 
   const now = Date.now();
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
+  const dayOf = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(d);
+  const todayKey = dayOf(new Date());
+  const weekEnd = dayOf(new Date(now + 6 * 86_400_000));
   const overdue = (t: Task) => !!t.due_at && new Date(t.due_at).getTime() < now;
-  const dueToday = list.filter((t) => t.due_at && new Date(t.due_at) <= endOfToday && !overdue(t)).length;
+  const isToday = (t: Task) => !!t.due_at && !overdue(t) && dayOf(new Date(t.due_at)) === todayKey;
+  const inWeek = (t: Task) => !!t.due_at && dayOf(new Date(t.due_at)) <= weekEnd;
+  const dueToday = forWho.filter(isToday).length;
+  const FILTERS: Record<string, { label: string; test: (t: Task) => boolean }> = {
+    all: { label: "All", test: () => true },
+    overdue: { label: "Overdue", test: overdue },
+    today: { label: "Due today", test: isToday },
+    week: { label: "Due in the next 7 days", test: inWeek },
+  };
+  const filter = FILTERS[dueFilter] ? dueFilter : "all";
+  // Overdue first, then soonest due, then no date.
+  const list = forWho.filter(FILTERS[filter].test).sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
+  const href = (params: Record<string, string>) => `/team?${new URLSearchParams({ ...(who !== "all" ? { who } : {}), ...(filter !== "all" ? { due: filter } : {}), ...params })}`;
 
   // A friendly hello, like clients get in their portal. Counts are for this person.
   const mine = ((tasks ?? []) as Task[]).filter((t) => t.assignee_id === userId && (!t.client_id || t.client_id in clientName));
-  const myToday = mine.filter((t) => t.due_at && new Date(t.due_at) <= endOfToday && !overdue(t)).length;
+  const myToday = mine.filter(isToday).length;
   const myLate = mine.filter(overdue).length;
   const hour = +new Intl.DateTimeFormat("en-US", { timeZone: agency.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date());
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -98,9 +112,20 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             <option value="me">Me</option>
             {(members ?? []).map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
           </select>
+          {filter !== "all" && <input type="hidden" name="due" value={filter} />}
           <button className="btn sm line">Show</button>
         </form>
       </div>
+      <nav className="view-switch due-filter" aria-label="Filter by due date">
+        {Object.entries(FILTERS).map(([key, f]) => {
+          const n = forWho.filter(f.test).length;
+          return (
+            <Link key={key} href={href({ due: key })} aria-current={filter === key ? "page" : undefined} className={key === "overdue" && n ? "has-overdue" : ""}>
+              {f.label}{key !== "all" ? ` · ${n}` : ""}
+            </Link>
+          );
+        })}
+      </nav>
 
       <RhythmPanel rhythm={rhythm} current={currentWeek} teamProgress={teamProgress}
         ranges={Object.fromEntries([1, 2, 3, 4].map((w) => [w, weekRange(w, agency.timezone)]))}
@@ -108,9 +133,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         dueDates={describeDueDates(dueEvents, agency.timezone)} calendarName={google.calendarId ? google.calendarName : null} />
 
       <div className="stats">
-        <div className="stat"><b>{dueToday}</b><span>Due today</span></div>
-        <div className={`stat ${list.some(overdue) ? "crit" : ""}`}><b>{list.filter(overdue).length}</b><span>Overdue</span></div>
-        <div className="stat warn"><b>{list.filter(isClientFacing).length}</b><span>Waiting on clients</span></div>
+        <Link className={`stat ${dueToday ? "warn" : ""}`} href={href({ due: "today" })}><b>{dueToday}</b><span>Due today</span></Link>
+        <Link className={`stat ${forWho.some(overdue) ? "crit" : ""}`} href={href({ due: "overdue" })}><b>{forWho.filter(overdue).length}</b><span>Overdue</span></Link>
+        <div className="stat warn"><b>{forWho.filter(isClientFacing).length}</b><span>Waiting on clients</span></div>
         <div className="stat"><b>{openApprovals ?? 0}</b><span>Content approvals open</span></div>
       </div>
 
