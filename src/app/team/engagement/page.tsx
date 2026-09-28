@@ -36,10 +36,18 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
   const who = isAdmin ? (sp.am && (sp.am === "all" || managers.some((m) => m.user_id === sp.am)) ? sp.am : managers[0]?.user_id ?? "all") : userId;
   const accounts = clients.filter((c) => who === "all" || c.account_manager_id === who);
 
-  const { data: rows } = accounts.length
-    ? await supabase.from("engagement_logs").select("client_id, day, actions, links, note")
-        .in("client_id", accounts.map((c) => c.id)).gte("day", days[0]).lte("day", days[days.length - 1])
-    : { data: [] as { client_id: string; day: string; actions: string[]; links: string[]; note: string | null }[] };
+  const ids = accounts.map((c) => c.id);
+  const [{ data: rows }, { data: teamRows }] = ids.length
+    ? await Promise.all([
+        supabase.from("engagement_logs").select("client_id, day, actions, links, note, logged_by").in("client_id", ids).gte("day", days[0]).lte("day", days[days.length - 1]),
+        supabase.from("client_team").select("client_id, user_id").in("client_id", ids),
+      ])
+    : [{ data: [] as { client_id: string; day: string; actions: string[]; links: string[]; note: string | null; logged_by: string | null }[] }, { data: [] as { client_id: string; user_id: string }[] }];
+  // Each account's team, account manager first, for "Completed by".
+  const nameOf = (id: string) => members?.find((m) => m.user_id === id)?.display_name ?? "Former teammate";
+  const teamFor = (c: { id: string; account_manager_id: string | null }) =>
+    [...new Set([c.account_manager_id, ...(teamRows ?? []).filter((t) => t.client_id === c.id).map((t) => t.user_id)].filter(Boolean))]
+      .map((id) => ({ user_id: id as string, display_name: nameOf(id as string) }));
   const logs = new Map<string, EngagementEntry>((rows ?? []).map((r) => [`${r.client_id}|${r.day}`, r]));
   const daysLogged = (clientId: string) => days.filter((d) => logs.has(`${clientId}|${d}`)).length;
 
@@ -96,7 +104,7 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
                     {accounts.map((c) => (
                       <td key={c.id}>
                         <EngagementCell clientId={c.id} clientName={c.name} day={d} dayLabel={label(d, { weekday: "long", month: "long", day: "numeric" })}
-                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit />
+                          entry={logs.get(`${c.id}|${d}`) ?? null} canEdit team={teamFor(c)} managerId={c.account_manager_id} />
                       </td>
                     ))}
                   </tr>

@@ -18,11 +18,19 @@ export async function saveEngagement(_: Result, form: FormData): Promise<Result>
   const links = parseLinks(String(form.get("links") ?? ""));
   const note = String(form.get("note") ?? "").trim() || null;
   const supabase = await createClient();
+  // Completed by: someone on this account's team (the account manager by default).
+  const [{ data: team }, { data: client }] = await Promise.all([
+    supabase.from("client_team").select("user_id").eq("client_id", clientId),
+    supabase.from("clients").select("account_manager_id").eq("id", clientId).maybeSingle(),
+  ]);
+  const onAccount = new Set([client?.account_manager_id, ...(team ?? []).map((t) => t.user_id)].filter(Boolean));
+  const picked = String(form.get("by") ?? "");
+  const by = onAccount.has(picked) ? picked : client?.account_manager_id ?? v.userId;
   if (!actions.length && !links.length && !note) {
     await supabase.from("engagement_logs").delete().eq("client_id", clientId).eq("day", day);
   } else {
     const { error } = await supabase.from("engagement_logs").upsert(
-      { agency_id: v.agency.id, client_id: clientId, day, actions, links, note, logged_by: v.userId, updated_at: new Date().toISOString() },
+      { agency_id: v.agency.id, client_id: clientId, day, actions, links, note, logged_by: by, updated_at: new Date().toISOString() },
       { onConflict: "client_id,day" },
     );
     if (error) return { error: "That couldn't be saved. Are you on this account's team?" };

@@ -793,3 +793,6 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .report-section h3 { font-size: 1rem; margin-bottom: 6px; }
 .report-list { width: 100%; font-size: .9rem; }
 .report-list td, .report-list th { padding: 8px 10px; }
+.eg-by { font-size: .7rem; color: var(--ink-2); margin-left: auto; }
+.eg-byfield { border-top: 1px solid var(--line); padding-top: 12px; }
+.eg-by-fixed { margin: 0; font-weight: 600; }

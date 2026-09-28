@@ -887,11 +887,20 @@ export async function addClientContact(_: Result, form: FormData): Promise<Resul
   return { ok: `Invite sent to ${name}. They'll get an email to create a password.` };
 }
 
+/** Take someone off a client's portal, the owner included. If the owner goes, the other person becomes the owner. */
 export async function removeClientContact(form: FormData) {
   await requireEditor();
   const clientId = String(form.get("client"));
+  const userId = String(form.get("user"));
   const supabase = await createClient();
-  await supabase.from("client_users").delete().eq("client_id", clientId).eq("user_id", String(form.get("user")));
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return;
+  const admin = createAdminClient();
+  await admin.from("client_users").delete().eq("client_id", clientId).eq("user_id", userId);
+  const { data: left } = await admin.from("client_users").select("user_id, role").eq("client_id", clientId).order("created_at");
+  if (left?.length && !left.some((p) => p.role === "owner")) {
+    await admin.from("client_users").update({ role: "owner" }).eq("client_id", clientId).eq("user_id", left[0].user_id);
+  }
   revalidatePath(`/team/clients/${clientId}`);
 }
 

@@ -405,11 +405,11 @@ export default async function ClientDetail({
                 <span><b>{p.display_name}</b><br /><span className="note">{p.email}</span></span>
                 <span className="r">
                   <span className="pill info">{p.role === "owner" ? "Owner" : "Team member"}</span>
-                  {canEdit && p.role !== "owner" && (
+                  {canEdit && (
                     <form action={removeClientContact}>
                       <input type="hidden" name="client" value={client.id} />
                       <input type="hidden" name="user" value={p.user_id} />
-                      <ConfirmButton label="Remove" confirmLabel="Remove access?" />
+                      <ConfirmButton label="Remove" confirmLabel={`Remove ${p.display_name.split(" ")[0]}'s access?`} />
                     </form>
                   )}
                 </span>
