@@ -726,3 +726,11 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .me-top-text .note { font-size: .8rem; }
 .me-top-links { display: flex; gap: 12px; }
 .me-top-links form { display: inline; }
+
+/* Team page table */
+.team-table { width: 100%; }
+.team-table th, .team-table td { vertical-align: middle; }
+.team-who { display: flex; align-items: center; gap: 10px; }
+.team-edit { text-align: right; width: 1%; }
+.modal .teammate { display: grid; grid-template-columns: 1fr; gap: 12px; border-top: 0; padding: 0; justify-items: start; }
+.modal .teammate .field { width: 100%; }

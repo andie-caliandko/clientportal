@@ -2,14 +2,17 @@ import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { removeTeammate } from "../actions";
-import { ConfirmButton, InviteTeammateForm, TeammateRow } from "../TeamForms";
+import { EditTeammate, InviteTeammateForm } from "../TeamForms";
+import { Avatar } from "@/app/Avatar";
+import { ROLE_LABEL, type Role } from "@/lib/types";
 
 export default async function TeamPage() {
   const { agency, member: me } = await requireTeam();
   if (me.role !== "admin") redirect("/team");
   const supabase = await createClient();
   const [{ data: members }, { data: clients }, { data: onTeam }] = await Promise.all([
-    supabase.from("agency_members").select("user_id, display_name, title, role, email").eq("agency_id", agency.id).order("display_name"),
+    // Everything, so this still works before newer columns (like joined_at) exist.
+    supabase.from("agency_members").select("*").eq("agency_id", agency.id).order("display_name"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("client_team").select("user_id, client_id"),
   ]);
@@ -44,25 +47,34 @@ export default async function TeamPage() {
 
       <div className="panel">
         <h2>Your team</h2>
-        {(members ?? []).map((m) => {
-          const self = m.user_id === me.user_id;
-          return (
-            <div key={m.user_id} style={{ display: "grid", gap: 6 }}>
-              <TeammateRow member={m} isMe={self} />
-              <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
-                <span className="note">
-                  {m.email} · {m.role === "admin" ? "All clients" : `${count.get(m.user_id) ?? 0} client${count.get(m.user_id) === 1 ? "" : "s"}`}
-                </span>
-                {!self && (
-                  <form action={removeTeammate}>
-                    <input type="hidden" name="user" value={m.user_id} />
-                    <ConfirmButton label="Remove from team" confirmLabel={`Remove ${m.display_name.split(" ")[0]}?`} />
-                  </form>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <div className="tablewrap">
+          <table className="team-table">
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Job title</th><th scope="col">Access</th><th scope="col">Email</th><th scope="col">Clients</th><th scope="col"><span className="sr-only">Edit</span></th></tr>
+            </thead>
+            <tbody>
+              {((members ?? []) as { user_id: string; display_name: string; title: string | null; role: Role; email: string; avatar_path?: string | null; joined_at?: string | null }[]).map((m) => {
+                const self = m.user_id === me.user_id;
+                return (
+                  <tr key={m.user_id}>
+                    <td>
+                      <span className="team-who">
+                        <Avatar name={m.display_name} path={m.avatar_path} style={{ width: 32, height: 32 }} />
+                        <b>{m.display_name}{self ? " (you)" : ""}</b>
+                        {"joined_at" in m && !m.joined_at && <span className="pill warn">Invited</span>}
+                      </span>
+                    </td>
+                    <td>{m.title || <span className="note">—</span>}</td>
+                    <td>{ROLE_LABEL[m.role]}</td>
+                    <td className="note">{m.email}</td>
+                    <td className="kn">{m.role === "admin" ? "All" : count.get(m.user_id) ?? 0}</td>
+                    <td className="team-edit"><EditTeammate member={m} isMe={self} removeAction={removeTeammate} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
       <p className="note">Add account managers and creators to specific clients from each client&apos;s page.</p>
     </section>

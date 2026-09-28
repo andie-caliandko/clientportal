@@ -507,11 +507,13 @@ export function EditCalendar({ id, month, url }: { id: string; month: string; ur
   );
 }
 
-export function TeammateRow({ member, isMe }: {
+export function TeammateRow({ member, isMe, onSaved }: {
   member: { user_id: string; display_name: string; title: string | null; role: string; email: string };
   isMe: boolean;
+  onSaved?: () => void;
 }) {
   const [state, action, pending] = useActionState(updateTeammate, {});
+  useEffect(() => { if (state.ok) onSaved?.(); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   const id = member.user_id;
   return (
     <form action={action} className="teammate">
@@ -856,6 +858,32 @@ export function ResendQuestionnaire({ clientId, contacts }: { clientId: string; 
               <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Cancel</button>
             </div>
           </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Team page: each person's Edit button opens their details in a pop-up. */
+export function EditTeammate({ member, isMe, removeAction }: {
+  member: { user_id: string; display_name: string; title: string | null; role: string; email: string };
+  isMe: boolean;
+  removeAction: (form: FormData) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Edit</button>
+      {open && (
+        <Modal title={isMe ? "Edit your details" : `Edit ${member.display_name}`} onClose={() => setOpen(false)}>
+          <p className="note">{member.email}</p>
+          <TeammateRow member={member} isMe={isMe} onSaved={() => setOpen(false)} />
+          {!isMe && (
+            <form action={removeAction} style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+              <input type="hidden" name="user" value={member.user_id} />
+              <ConfirmButton label="Remove from team" confirmLabel={`Remove ${member.display_name.split(" ")[0]} from the team?`} />
+            </form>
+          )}
         </Modal>
       )}
     </>
