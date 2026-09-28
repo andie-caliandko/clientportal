@@ -354,7 +354,7 @@ export async function inviteTeammate(_: Result, form: FormData): Promise<Result>
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const role = String(form.get("role")) as (typeof ROLES)[number];
   const title = String(form.get("title") ?? "").trim() || null;
-  const clientIds = form.getAll("clients").map(String);
+  const picked = form.getAll("clients").map(String);
   if (!name || !email) return { error: "Add their name and email." };
   if (!ROLES.includes(role)) return { error: "Pick a role." };
 
@@ -366,6 +366,11 @@ export async function inviteTeammate(_: Result, form: FormData): Promise<Result>
   if (error || !data.user) return { error: "That invite didn't send. Check the email address, or they may already have an account." };
 
   const supabase = await createClient();
+  // Only active clients; archived portals can't get new teammates.
+  const { data: activeRows } = picked.length
+    ? await supabase.from("clients").select("id").in("id", picked).is("archived_at", null)
+    : { data: [] as { id: string }[] };
+  const clientIds = (activeRows ?? []).map((c) => c.id);
   const { error: memberErr } = await supabase.from("agency_members").insert({
     agency_id: v.agency.id,
     user_id: data.user.id,
@@ -432,6 +437,8 @@ export async function addToClient(form: FormData) {
   const userId = String(form.get("user"));
   if (!userId) return;
   const supabase = await createClient();
+  const { data: active } = await supabase.from("clients").select("id").eq("id", clientId).is("archived_at", null).maybeSingle();
+  if (!active) return; // Archived portals can't get new teammates.
   await supabase.from("client_team").upsert({ client_id: clientId, user_id: userId }, { ignoreDuplicates: true });
   revalidatePath(`/team/clients/${clientId}`);
 }
@@ -450,6 +457,8 @@ export async function setAccountManager(form: FormData) {
   await requireAdmin();
   const clientId = String(form.get("client"));
   const supabase = await createClient();
+  const { data: active } = await supabase.from("clients").select("id").eq("id", clientId).is("archived_at", null).maybeSingle();
+  if (!active) return;
   await supabase.from("clients").update({ account_manager_id: String(form.get("user")) }).eq("id", clientId);
   revalidatePath(`/team/clients/${clientId}`);
 }

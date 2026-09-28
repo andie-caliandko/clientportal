@@ -471,7 +471,7 @@ export default async function ClientDetail({
                 <span className="note">{m.user_id === client.account_manager_id ? "Account manager" : ROLE_LABEL[m.role]}</span>
                 <span className="r">
                   <span className="pill ok">Client sees them</span>
-                  {isAdmin && m.role !== "creator" && m.user_id !== client.account_manager_id && (
+                  {isAdmin && !client.archived_at && m.role !== "creator" && m.user_id !== client.account_manager_id && (
                     <form action={setAccountManager}>
                       <input type="hidden" name="client" value={client.id} />
                       <input type="hidden" name="user" value={m.user_id} />
@@ -493,7 +493,8 @@ export default async function ClientDetail({
           {otherAdmins.length > 0 && (
             <p className="note">Admins with access (not shown to the client): {otherAdmins.map((m) => m.display_name).join(", ")}.</p>
           )}
-          {isAdmin && <AddTeammate clientId={client.id} clientName={client.name} existing={addable} />}
+          {isAdmin && !client.archived_at && <AddTeammate clientId={client.id} clientName={client.name} existing={addable} />}
+          {client.archived_at && <p className="note">This client is archived, so no one new can be added. Restore them to change their team.</p>}
         </div>
 
         {isAdmin && (
