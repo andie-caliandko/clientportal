@@ -767,3 +767,20 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .eg-shared { background: var(--who-5); color: var(--who-5-ink); }
 .eg-dm { background: var(--who-4); color: var(--who-4-ink); }
 .eg-story { background: var(--who-3); color: var(--who-3-ink); }
+
+/* Time tracker */
+.timer-card { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; }
+.timer-card .field { min-width: 200px; flex: 1; }
+.timer-card.running { align-items: center; border-color: var(--ok); background: color-mix(in srgb, var(--ok-soft) 55%, var(--surface)); }
+.timer-time { font-family: var(--serif); font-weight: 400; font-size: 2.2rem; line-height: 1; font-variant-numeric: tabular-nums; color: var(--head); }
+.timer-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+@media (prefers-reduced-motion: no-preference) { .timer-dot { animation: timer-blink 1.6s ease-in-out infinite; } }
+@keyframes timer-blink { 50% { opacity: .35; } }
+.timer-pill { display: inline-flex; align-items: center; gap: 8px; padding: .3em .8em; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-size: .82rem; font-weight: 600; text-decoration: none; font-variant-numeric: tabular-nums; max-width: 280px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.timer-pill-label { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.time-total { margin: 0; }
+.time-total b { font-family: var(--serif); font-weight: 400; font-size: 2rem; font-variant-numeric: tabular-nums; color: var(--head); }
+.time-day { display: grid; gap: 6px; }
+.time-day h3 { font-size: 1rem; display: flex; gap: 10px; align-items: baseline; }
+.time-table { width: 100%; }
+.time-table td { white-space: nowrap; }

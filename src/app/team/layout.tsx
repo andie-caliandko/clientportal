@@ -4,13 +4,20 @@ import { ROLE_LABEL } from "@/lib/types";
 import { signOut } from "../login/actions";
 import { TeamNav } from "./TeamNav";
 import { MyPhoto } from "./TeamForms";
+import { RunningPill } from "./time/TimeForms";
+import { createClient } from "@/lib/supabase/server";
 import { Bell } from "../notifications/Bell";
 import { loadNotifications } from "@/lib/notificationsList";
 
 
 export default async function TeamLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const { agency, member } = await requireTeam();
-  const notes = await loadNotifications();
+  const supabase = await createClient();
+  const [notes, { data: running }] = await Promise.all([
+    loadNotifications(),
+    // A running timer shows in the top bar so it isn't forgotten.
+    supabase.from("time_entries").select("started_at, description, clients(name)").eq("user_id", member.user_id).is("ended_at", null).maybeSingle(),
+  ]);
   return (
     <div className="ws">
       <aside className="side">
@@ -26,6 +33,10 @@ export default async function TeamLayout({ children, modal }: { children: React.
           <p className="me-top-date">
             {new Date().toLocaleDateString("en-US", { timeZone: agency.timezone, weekday: "long", month: "long", day: "numeric", year: "numeric" })}
           </p>
+          {running && (
+            <RunningPill startedAt={running.started_at}
+              label={running.description || (running.clients as unknown as { name: string } | null)?.name || `${agency.brand.shortName ?? agency.name} (internal)`} />
+          )}
           <div className="me-top-text">
             <b>{member.display_name}</b>
             {/* Admins see their access; everyone else sees their job title (set on the Team page). */}
