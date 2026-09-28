@@ -2,12 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { REMINDER_DAYS, remindersDue } from "@/lib/approval";
 import { sendEmail } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/server";
+import { removeExpiredClientLogins } from "@/lib/archive";
 
 const LABEL = ["", "2 days", "5 days", "1 week"];
 
 // Runs once a day (see vercel.json). Tasks assigned to a client get a reminder
 // 2 days, 5 days and 1 week after their due date (or after they were assigned,
 // if there's no due date). At 1 week the account manager and admins hear too.
+// It also closes the portals of clients archived more than 30 days ago.
 export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -55,5 +57,7 @@ export async function GET(request: NextRequest) {
     await admin.from("tasks").update({ reminders_sent: due }).eq("id", t.id);
     sent++;
   }
-  return NextResponse.json({ reminded: sent });
+  // Archived clients whose 30 days are up lose their portal logins.
+  const loginsRemoved = await removeExpiredClientLogins();
+  return NextResponse.json({ reminded: sent, loginsRemoved });
 }

@@ -49,6 +49,14 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
           <Link className="btn sm" href={`/team/clients/${ctx.client.id}`}>Back to client page</Link>
         </div>
       )}
+      {ctx.client.archived_at && ctx.client.access_ends_at && (
+        <div className="preview-bar sticky closing-bar" role="status">
+          <span>
+            <b>Your portal closes on {new Date(ctx.client.access_ends_at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, weekday: "long", month: "long", day: "numeric" })}.</b>{" "}
+            Download your strategy, reports and anything else you&apos;d like to keep before then.
+          </span>
+        </div>
+      )}
       <div className="cp">
         <aside className="side cp-side">
           <div className="side-top">

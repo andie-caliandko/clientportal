@@ -822,3 +822,4 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .series-7 { stroke: var(--series-7); background: var(--series-7); }
 .series-8 { stroke: var(--series-8); background: var(--series-8); }
 .series-other { stroke: var(--series-other); background: var(--series-other); }
+.closing-bar { background: var(--warn-soft); color: var(--warn); }

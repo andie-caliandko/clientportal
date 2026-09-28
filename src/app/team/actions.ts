@@ -810,15 +810,35 @@ export async function setContractLink(_: Result, form: FormData): Promise<Result
   return { ok: url ? "Saved. The client now sees an Open contract button." : "Removed." };
 }
 
+/** Days an archived client can still get into their portal before their logins are removed. */
+const ARCHIVE_GRACE_DAYS = 30;
+
 export async function archiveClient(form: FormData) {
   const v = await requireAdmin();
   const clientId = String(form.get("client"));
   const archive = form.get("archive") === "1";
   const supabase = await createClient();
+  const now = new Date();
+  const endsAt = new Date(now.getTime() + ARCHIVE_GRACE_DAYS * 86_400_000);
   await supabase
     .from("clients")
-    .update(archive ? { archived_at: new Date().toISOString(), archived_by: v.userId } : { archived_at: null, archived_by: null })
+    .update(archive
+      ? { archived_at: now.toISOString(), archived_by: v.userId, access_ends_at: endsAt.toISOString() }
+      : { archived_at: null, archived_by: null, access_ends_at: null, logins_removed_at: null })
     .eq("id", clientId);
+  if (archive) {
+    // Let their people know how long they have to download what they need.
+    const { data: contacts } = await createAdminClient().from("client_users").select("email").eq("client_id", clientId);
+    const when = endsAt.toLocaleDateString("en-US", { timeZone: v.agency.timezone, weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    const short = v.agency.brand.shortName ?? v.agency.name;
+    if (contacts?.length) {
+      await sendEmail(
+        contacts.map((c) => c.email),
+        `Your ${short} portal closes on ${when}`,
+        `Thank you for working with ${short}.\n\nYour portal will stay open until ${when} so you can download your strategy, reports, content calendars and anything else you'd like to keep. After that, your login will be closed.\n\nOpen your portal:\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
+      );
+    }
+  }
   revalidatePath("/team", "layout");
   redirect(archive ? "/team/clients?archived=1&done=archived" : `/team/clients/${clientId}?restored=1`);
 }

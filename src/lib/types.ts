@@ -58,6 +58,9 @@ export type Client = {
   website: string | null;
   start_date: string | null;
   archived_at: string | null;
+  /** Archived clients can still sign in until this date (30 days after archiving). */
+  access_ends_at?: string | null;
+  logins_removed_at?: string | null;
   logo_path: string | null;
 };
 

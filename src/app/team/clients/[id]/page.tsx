@@ -177,7 +177,15 @@ export default async function ClientDetail({
       {tabs}
       {client.archived_at && (
         <div className="readonly" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-          <span>Archived on {new Date(client.archived_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric" })}. Their portal is closed; everything here is saved.</span>
+          <span>
+            Archived on {new Date(client.archived_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", year: "numeric" })}.{" "}
+            {client.logins_removed_at
+              ? `Their portal closed and their logins were removed on ${new Date(client.logins_removed_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}.`
+              : client.access_ends_at && new Date(client.access_ends_at).getTime() > Date.now()
+                ? `Their portal stays open until ${new Date(client.access_ends_at).toLocaleDateString("en-US", { timeZone: tz, month: "long", day: "numeric" })} so they can download what they need, then their logins are removed.`
+                : "Their portal is closed."}{" "}
+            Everything here is saved.
+          </span>
           {isAdmin && (
             <form action={archiveClient}>
               <input type="hidden" name="client" value={client.id} />
@@ -508,7 +516,7 @@ export default async function ClientDetail({
         {!client.archived_at && (
           <div className="panel">
             <h2>Archive client</h2>
-            <p className="note">For clients whose term has ended. Their portal closes and reminders stop, but nothing is deleted. You can restore them any time.</p>
+            <p className="note">For clients whose term has ended. Reminders stop right away. They get an email and have 30 days to download anything from their portal, then their logins are removed. Nothing on your side is deleted, and you can restore them any time.</p>
             <form action={archiveClient}>
               <input type="hidden" name="client" value={client.id} />
               <input type="hidden" name="archive" value="1" />
