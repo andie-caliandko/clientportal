@@ -89,7 +89,7 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
         {who === userId && <AddTime clients={clients ?? []} agencyName={short} today={today} />}
       </div>
 
-      <div className="cgrid">
+      <div className="cgrid pairs">
         <div className="panel">
           <h2>By client</h2>
           <ClientDonut emptyText="No time logged this week." slices={clientSlices(entries)} />
