@@ -626,3 +626,4 @@ a.stat:hover { border-color: var(--primary); }
 .stat.warn b { color: var(--warn); }
 .due-filter { flex-wrap: wrap; justify-self: start; }
 .due-filter a.has-overdue:not([aria-current]) { color: var(--crit); font-weight: 600; }
+.brief h3 { font-size: 1.15rem; }

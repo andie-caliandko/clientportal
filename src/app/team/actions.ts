@@ -939,3 +939,33 @@ export async function markCalendarApproved(form: FormData) {
   revalidatePath(`/team/clients/${data.client_id}`);
   revalidatePath("/portal", "layout");
 }
+
+/** Add an internal project brief to a client: a link, a file, or both. */
+export async function addBrief(input: { clientId: string; title: string; notes: string; url: string; filePath: string | null; fileName: string | null }): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const title = input.title.trim();
+  const url = input.url.trim() || null;
+  if (!title) return { error: "Give the brief a name." };
+  if (!url && !input.filePath) return { error: "Add a link or a file." };
+  if (url && !/^https:\/\/\S+$/.test(url)) return { error: "Links need to start with https://" };
+  if (input.filePath && !input.filePath.startsWith(`${v.agency.id}/${input.clientId}/`)) return { error: "That file is in the wrong place. Try again." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("client_briefs").insert({
+    agency_id: v.agency.id, client_id: input.clientId, title, notes: input.notes.trim() || null, url,
+    file_path: input.filePath, file_name: input.fileName, created_by: v.userId,
+  });
+  if (error) return { error: "The brief couldn't be saved." };
+  revalidatePath(`/team/clients/${input.clientId}`);
+  return { ok: "Brief added." };
+}
+
+export async function deleteBrief(form: FormData) {
+  await requireEditor();
+  const supabase = await createClient();
+  const { data } = await supabase.from("client_briefs").select("client_id, file_path").eq("id", String(form.get("id"))).maybeSingle();
+  if (!data) return;
+  await supabase.from("client_briefs").delete().eq("id", String(form.get("id")));
+  if (data.file_path) await supabase.storage.from("briefs").remove([data.file_path]);
+  revalidatePath(`/team/clients/${data.client_id}`);
+}

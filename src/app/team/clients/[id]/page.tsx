@@ -1,3 +1,4 @@
+import { BriefForm } from "../BriefForm";
 import { connectedMembers } from "@/lib/google";
 import { inviteReplies, type CallRequest } from "@/lib/calls";
 import { CallActions } from "../../calendar/CallRequestForm";
@@ -10,12 +11,12 @@ import { formatDue } from "@/lib/approval";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
-import { archiveClient, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
+import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
 import { AddClientContact, AddTeammate, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
-import { clientLogoUrl, driveFolderUrl } from "@/lib/links";
+import { clientLogoUrl, driveFolderUrl, embedUrl } from "@/lib/links";
 import { driveFileUrl } from "@/lib/drive";
 import { MessageComposer } from "@/app/portal/MessageComposer";
 import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
@@ -47,7 +48,7 @@ export default async function ClientDetail({
   if (!client) notFound();
   if (client.archived_at && member.role !== "admin") notFound();
 
-  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked] = await Promise.all([
+  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked, briefRows] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", id),
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
@@ -66,18 +67,23 @@ export default async function ClientDetail({
     supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
     supabase.from("call_requests").select("*").eq("client_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(10),
     connectedMembers(agency.id),
+    supabase.from("client_briefs").select("*").eq("client_id", id).order("created_at", { ascending: false }),
   ]);
+  const briefs = (briefRows.data ?? []) as { id: string; title: string; notes: string | null; url: string | null; file_path: string | null; file_name: string | null; created_by: string | null; created_at: string }[];
   const uploadRows = uploads.data ?? [];
   const calls = (callRows.data ?? []) as CallRequest[];
   // File links and invite replies from Google, all at once.
-  const [messageFileUrls, signedUploads, replyList] = await Promise.all([
+  const briefPaths = briefs.map((b) => b.file_path).filter(Boolean) as string[];
+  const [messageFileUrls, signedUploads, replyList, signedBriefs] = await Promise.all([
     signAttachments(supabase, (messages.data ?? []) as Message[]),
     uploadRows.length ? supabase.storage.from("uploads").createSignedUrls(uploadRows.map((u) => u.storage_path), 60 * 60) : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] }),
     Promise.all(
       calls.filter((c) => c.kind === "invite" && c.status === "booked" && c.event_end && new Date(c.event_end).getTime() > Date.now())
         .map(async (c) => [c.id, await inviteReplies(c)] as const),
     ),
+    briefPaths.length ? supabase.storage.from("briefs").createSignedUrls(briefPaths, 60 * 60) : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] }),
   ]);
+  const briefLinks = new Map((signedBriefs.data ?? []).map((u) => [u.path, u.signedUrl]));
   const uploadLinks = new Map<string | null, string>((signedUploads.data ?? []).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl as string]));
   const replies = new Map(replyList);
   const names = new Map<string, string>(members0(allMembers.data));
@@ -216,6 +222,45 @@ export default async function ClientDetail({
             </ul>
           </>
         )}
+      </div>
+
+      <div className="panel">
+        <div>
+          <p className="eyebrow">Internal · the client never sees this</p>
+          <h2 style={{ marginTop: 4 }}>Project briefs</h2>
+        </div>
+        {briefs.length > 0 && (
+          <div className="templates">
+            {briefs.map((b) => {
+              const embed = b.url ? embedUrl(b.url) : null;
+              const file = b.file_path ? briefLinks.get(b.file_path) : null;
+              return (
+                <article key={b.id} className="template brief">
+                  <div>
+                    <h3>{b.title}</h3>
+                    {b.notes && <p className="note">{b.notes}</p>}
+                  </div>
+                  {embed && <div className="template-embed"><iframe src={embed} title={b.title} loading="lazy" allowFullScreen /></div>}
+                  <div className="row" style={{ alignItems: "center" }}>
+                    {b.url && <a className="btn sm line" href={b.url} target="_blank" rel="noreferrer">Open</a>}
+                    {file && <FilePreview url={file} name={b.file_name ?? "Brief"} label={b.file_name ?? "Open file"} />}
+                  </div>
+                  <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <span className="task-by">Added by {b.created_by ? names.get(b.created_by) ?? "a former teammate" : "the team"} · {short(b.created_at)}</span>
+                    {canEdit && (
+                      <form action={deleteBrief}>
+                        <input type="hidden" name="id" value={b.id} />
+                        <ConfirmButton label="Delete" confirmLabel={`Delete "${b.title}"?`} />
+                      </form>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        {!briefs.length && <p className="note">No briefs yet. Add the first one for {client.name}.</p>}
+        {canEdit && <BriefForm agencyId={agency.id} clientId={client.id} />}
       </div>
 
       <div className="panel">
