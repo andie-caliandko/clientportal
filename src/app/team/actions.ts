@@ -604,6 +604,15 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
   return { ok: "Saved." };
 }
 
+/** Delete without leaving the page (the task pop-up closes itself). */
+export async function deleteTaskNow(id: string) {
+  await requireEditor();
+  const supabase = await createClient();
+  const { data } = await supabase.from("tasks").delete().eq("id", id).select("client_id").maybeSingle();
+  revalidatePath("/team");
+  if (data?.client_id) revalidatePath(`/team/clients/${data.client_id}`);
+}
+
 export async function deleteTask(form: FormData) {
   await requireEditor();
   const supabase = await createClient();

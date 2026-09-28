@@ -166,10 +166,10 @@ function DoneAction({ step, preview, contractUrl }: { step: Step; preview: boole
   if (!view) return <span className="done-label">Done</span>;
   return (
     <span className="done-with-link">
-      <span className="done-label">{contract ? "Signed" : "Done"}</span>
       {preview ? <button className="btn sm line" disabled>{view.label}</button>
         : view.external ? <a className="btn sm line" href={view.href} target="_blank" rel="noreferrer">{view.label}</a>
         : <Link className="btn sm line" href={view.href}>{view.label}</Link>}
+      <span className="done-label">{contract ? "Signed" : "Done"}</span>
     </span>
   );
 }

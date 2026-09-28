@@ -43,7 +43,7 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
   return (
     <article className={`task ${clientFacing ? "client-task" : "team-task"} ${overdue ? "overdue" : dueToday ? "due-today" : ""}`}>
       <span className={`kind ${badge.cls}`}>{badge.text}</span>
-      <Link className="task-link" href={`/team/tasks/${t.id}`}>{t.title}</Link>
+      <Link className="task-link" href={`/team/tasks/${t.id}`} scroll={false}>{t.title}</Link>
       {t.note && <p className="note" style={{ fontWeight: 400 }}>{t.note}</p>}
       <div className="meta">
         {showClientChip && !clientFacing && clientName && <span className="chip">{clientName}</span>}

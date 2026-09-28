@@ -8,7 +8,7 @@ import { Bell } from "../notifications/Bell";
 import { loadNotifications } from "@/lib/notificationsList";
 
 
-export default async function TeamLayout({ children }: { children: React.ReactNode }) {
+export default async function TeamLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const { agency, member } = await requireTeam();
   const notes = await loadNotifications();
   return (
@@ -30,6 +30,7 @@ export default async function TeamLayout({ children }: { children: React.ReactNo
         </div>
       </aside>
       <main className="main">{children}</main>
+      {modal}
     </div>
   );
 }

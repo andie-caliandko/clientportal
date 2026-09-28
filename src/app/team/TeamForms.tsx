@@ -413,15 +413,24 @@ export function DeleteClientForm({ clientId, name }: { clientId: string; name: s
   );
 }
 
-export function EditTaskForm({ task, clients, people, readOnly }: {
+export function EditTaskForm({ task, clients, people, readOnly, closeOnSave = false }: {
   task: { id: string; title: string; status: string; note: string; client: string; assignee: string; due: string };
   clients: Opt[];
   people: TaskPeople;
   readOnly: boolean;
+  /** In the task pop-up: close it after saving and refresh the page behind. */
+  closeOnSave?: boolean;
 }) {
   const [client, setClient] = useState(task.client);
   const [assignee, setAssignee] = useState(task.assignee);
   const [state, action, pending] = useActionState(updateTask, {});
+  const router = useRouter();
+  useEffect(() => {
+    if (closeOnSave && state.ok) {
+      router.back();
+      router.refresh();
+    }
+  }, [state, closeOnSave, router]);
   const team = people.team.filter((m) => !client || m.role === "admin" || people.onClient[client]?.includes(m.user_id));
   const contacts = client ? people.contacts[client] ?? [] : [];
   const clientName = clients.find((c) => c.id === client)?.name;
