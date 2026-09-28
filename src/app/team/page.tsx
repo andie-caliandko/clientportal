@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { memberColors } from "@/lib/memberColors";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +7,7 @@ import { getDueDates, googleStatus } from "@/lib/google";
 import { describeDueDates, monthKey, weekOfMonth, weekRange } from "@/lib/rhythm";
 import { RhythmPanel } from "./RhythmPanel";
 import { ApprovalCard, TaskCard } from "./TaskCard";
+import { FilterStat, FilterTabs, TaskFilterRoot, WhoSelect } from "./TaskFilter";
 import { DragBoard, DragCard, DropColumn } from "./DragBoard";
 import { NewTask } from "./TeamForms";
 import { isClientFacing } from "@/lib/tasks";
@@ -80,9 +80,13 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     week: { label: "Due in the next 7 days", test: inWeek },
   };
   const filter = FILTERS[dueFilter] ? dueFilter : "all";
-  // Overdue first, then soonest due, then no date.
-  const list = forWho.filter(FILTERS[filter].test).sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
-  const href = (params: Record<string, string>) => `/team?${new URLSearchParams({ ...(who !== "all" ? { who } : {}), ...(filter !== "all" ? { due: filter } : {}), ...params })}`;
+  // Overdue first, then soonest due, then no date. The due filter runs in the browser (see TaskFilter).
+  const list = [...forWho].sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
+  const tagsFor = (t: { due_at: string | null }) => {
+    const x = t as Task;
+    return ["all", ...(["overdue", "today", "week"] as const).filter((k) => FILTERS[k].test(x))].join(" ");
+  };
+  const counts = (items: { due_at: string | null }[]) => Object.fromEntries(Object.keys(FILTERS).map((k) => [k, items.filter((t) => FILTERS[k].test(t as Task)).length]));
 
   // A friendly hello, like clients get in their portal. Counts are for this person.
   const mine = ((tasks ?? []) as Task[]).filter((t) => t.assignee_id === userId && (!t.client_id || t.client_id in clientName));
@@ -105,16 +109,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       </div>
       <div className="top">
         <h2 style={{ fontSize: "2rem" }}>Tasks</h2>
-        <form className="row" style={{ alignItems: "center" }}>
-          <label htmlFor="who" className="note">Show tasks for</label>
-          <select className="sel" id="who" name="who" defaultValue={who}>
-            <option value="all">Everyone</option>
-            <option value="me">Me</option>
-            {(members ?? []).map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
-          </select>
-          {filter !== "all" && <input type="hidden" name="due" value={filter} />}
-          <button className="btn sm line">Show</button>
-        </form>
+        <WhoSelect value={who} options={[{ value: "all", label: "Everyone" }, { value: "me", label: "Me" }, ...(members ?? []).map((m) => ({ value: m.user_id, label: m.display_name }))]} />
       </div>
 
       <RhythmPanel rhythm={rhythm} current={currentWeek} teamProgress={teamProgress}
@@ -122,25 +117,20 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         checks={rhythmChecks} canEdit
         dueDates={describeDueDates(dueEvents, agency.timezone)} calendarName={google.calendarId ? google.calendarName : null} />
 
+      <TaskFilterRoot initial={filter}>
       <div className="stats">
-        <Link className={`stat ${dueToday ? "warn" : ""}`} href={href({ due: "today" })}><b>{dueToday}</b><span>Due today</span></Link>
-        <Link className={`stat ${forWho.some(overdue) ? "crit" : ""}`} href={href({ due: "overdue" })}><b>{forWho.filter(overdue).length}</b><span>Overdue</span></Link>
+        <FilterStat filter="today" className={dueToday ? "warn" : ""}><b>{dueToday}</b><span>Due today</span></FilterStat>
+        <FilterStat filter="overdue" className={forWho.some(overdue) ? "crit" : ""}><b>{forWho.filter(overdue).length}</b><span>Overdue</span></FilterStat>
         <div className="stat warn"><b>{forWho.filter(isClientFacing).length}</b><span>Waiting on clients</span></div>
         <div className="stat"><b>{openApprovals ?? 0}</b><span>Content approvals open</span></div>
       </div>
 
       <div className="task-bar">
         {canEdit ? <NewTask clients={clients ?? []} people={people} /> : <p className="note">You have view-only access. You can see tasks on your clients but can&apos;t change them.</p>}
-        <nav className="view-switch due-filter" aria-label="Filter by due date">
-          {Object.entries(FILTERS).map(([key, f]) => {
-            const n = forWho.filter(f.test).length;
-            return (
-              <Link key={key} href={href({ due: key })} aria-current={filter === key ? "page" : undefined} className={key === "overdue" && n ? "has-overdue" : ""}>
-                {f.label}{key !== "all" ? ` · ${n}` : ""}
-              </Link>
-            );
-          })}
-        </nav>
+        <FilterTabs options={Object.entries(FILTERS).map(([key, f]) => {
+          const n = forWho.filter(f.test).length;
+          return { key, label: f.label, count: key === "all" ? undefined : n, alert: key === "overdue" && n > 0 };
+        })} />
       </div>
 
       {canEdit && <p className="note">Drag a card to another column to change its status, or onto Done to finish it.</p>}
@@ -151,19 +141,26 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           const approvals = col.key === "waiting" ? pendingCals.filter((c) => c.client_id in clientName) : [];
           return (
             <DropColumn status={col.key} key={col.key}>
-              <h2>{col.label}<span>{items.length + approvals.length}</span></h2>
-              {approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={clientName[c.client_id]} timeZone={agency.timezone} canEdit={canEdit} />)}
+              <h2>{col.label}{Object.entries(counts([...items, ...approvals])).map(([k, n]) => <span key={k} data-count-for={k}>{n}</span>)}</h2>
+              {approvals.map((c) => (
+                <div key={c.id} data-due={tagsFor(c)}>
+                  <ApprovalCard cal={c} clientName={clientName[c.client_id]} timeZone={agency.timezone} canEdit={canEdit} />
+                </div>
+              ))}
               {items.map((t) => (
-                <DragCard id={t.id} key={t.id}>
+                <DragCard id={t.id} key={t.id} tags={tagsFor(t)}>
                   <TaskCard task={t} clientName={t.client_id ? clientName[t.client_id] : undefined} 
                     personName={(id) => names.get(id)} colorOf={(id) => colors.get(id)} timeZone={agency.timezone} canEdit={canEdit} />
                 </DragCard>
               ))}
-              {!items.length && !approvals.length && <p className="note" style={{ padding: 6 }}>Nothing here.</p>}
+              {Object.entries(counts([...items, ...approvals])).filter(([, n]) => !n).map(([k]) => (
+                <p key={k} className="note" data-empty-for={k} style={{ padding: 6 }}>{k === "all" ? "Nothing here." : "Nothing matches this filter."}</p>
+              ))}
             </DropColumn>
           );
         })}
       </DragBoard>
+      </TaskFilterRoot>
     </section>
   );
 }

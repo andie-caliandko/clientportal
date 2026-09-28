@@ -672,3 +672,21 @@ a.stat:hover { border-color: var(--primary); }
 /* New task button and the due-date filter share a row; an open form drops below. */
 .task-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .task-bar > form.panel { flex-basis: 100%; order: 2; }
+
+/* Task filter (runs in the browser; see TaskFilter.tsx) */
+.task-bar .due-filter { margin-left: auto; }
+.view-switch button { padding: .4em 1em; border-radius: 999px; border: 0; background: none; font-family: var(--label); font-size: .82rem; color: var(--ink); cursor: pointer; }
+.view-switch button[aria-pressed="true"] { background: var(--primary); color: var(--bg); }
+.due-filter button.has-overdue:not([aria-pressed="true"]) { color: var(--crit); font-weight: 600; }
+button.stat { font: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.stat:hover { border-color: var(--primary); }
+button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.tf[data-filter="overdue"] [data-due]:not([data-due~="overdue"]),
+.tf[data-filter="today"] [data-due]:not([data-due~="today"]),
+.tf[data-filter="week"] [data-due]:not([data-due~="week"]) { display: none; }
+.tf [data-count-for], .tf [data-empty-for] { display: none; }
+.tf[data-filter="all"] [data-count-for="all"], .tf[data-filter="overdue"] [data-count-for="overdue"],
+.tf[data-filter="today"] [data-count-for="today"], .tf[data-filter="week"] [data-count-for="week"] { display: inline; }
+.tf[data-filter="all"] [data-empty-for="all"], .tf[data-filter="overdue"] [data-empty-for="overdue"],
+.tf[data-filter="today"] [data-empty-for="today"], .tf[data-filter="week"] [data-empty-for="week"] { display: block; }
+.tf { display: grid; gap: 22px; }

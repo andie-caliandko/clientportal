@@ -57,10 +57,10 @@ export function DropColumn({ status, children }: { status: string; children: Rea
   );
 }
 
-export function DragCard({ id, children }: { id: string; children: React.ReactNode }) {
+export function DragCard({ id, tags, children }: { id: string; /** Due-date filter tags, e.g. "overdue week". */ tags?: string; children: React.ReactNode }) {
   const ctx = useContext(DragCtx)!;
   return (
-    <div draggable={ctx.enabled} className={ctx.dragging === id ? "dragging" : undefined}
+    <div draggable={ctx.enabled} data-due={tags} className={ctx.dragging === id ? "dragging" : undefined}
       onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id); ctx.setDragging(id); }}
       onDragEnd={() => ctx.setDragging(null)}>
       {children}
