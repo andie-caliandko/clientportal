@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Task } from "@/lib/types";
-import { markCalendarApproved, moveTask } from "./actions";
+import { markCalendarApproved } from "./actions";
+import { TaskMoves } from "./TaskMoves";
 import { isClientFacing } from "@/lib/tasks";
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
@@ -53,17 +54,7 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
       {(clientFacing || automated) && (
         <p className="task-by">{automated ? "Created automatically" : `Created by ${creator}`}</p>
       )}
-      {canEdit && (
-        <div className="task-actions">
-          {moves.map((m) => (
-            <form key={m.to} action={moveTask}>
-              <input type="hidden" name="id" value={t.id} />
-              <input type="hidden" name="status" value={m.to} />
-              <button>{m.label}</button>
-            </form>
-          ))}
-        </div>
-      )}
+      {canEdit && <TaskMoves id={t.id} moves={moves} />}
     </article>
   );
 }

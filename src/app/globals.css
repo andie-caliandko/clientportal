@@ -828,3 +828,5 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .kpi-table .kpi-goal { width: 1%; white-space: nowrap; }
 .kpi-table .kpi-best { padding-right: 1.75em; }
 .kpi-table th.kpi-latest, .kpi-table td.kpi-latest { text-align: left; }
+.task.moving, [draggable].moving { opacity: .45; transition: opacity .15s; pointer-events: none; }
+[hidden] { display: none !important; }

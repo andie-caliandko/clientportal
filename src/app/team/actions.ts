@@ -19,13 +19,6 @@ type Result = { error?: string; ok?: string };
 
 const VIEW_ONLY = "Creators have view-only access. Ask an admin or the account manager to make this change.";
 
-export async function moveTask(form: FormData) {
-  await requireEditor();
-  const supabase = await createClient();
-  await supabase.from("tasks").update({ status: String(form.get("status")) }).eq("id", String(form.get("id")));
-  revalidatePath("/team");
-}
-
 export async function addTask(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
   if (v.member.role === "creator") return { error: VIEW_ONLY };
