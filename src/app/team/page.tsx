@@ -3,7 +3,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
-import { getDueDates, googleStatus } from "@/lib/google";
+import { getDueDates, googleStatus, isPersonalCalendar } from "@/lib/google";
 import { describeDueDates, monthKey, weekOfMonth, weekRange } from "@/lib/rhythm";
 import { RhythmPanel } from "./RhythmPanel";
 import { ApprovalCard, TaskCard } from "./TaskCard";
@@ -121,7 +121,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <RhythmPanel rhythm={rhythm} current={currentWeek} teamProgress={teamProgress}
         ranges={Object.fromEntries([1, 2, 3, 4].map((w) => [w, weekRange(w, agency.timezone)]))}
         checks={rhythmChecks} canEdit
-        dueDates={describeDueDates(dueEvents, agency.timezone)} calendarName={google.calendarId ? google.calendarName : null} />
+        dueDates={describeDueDates(dueEvents, agency.timezone)} calendarName={google.calendarId && !isPersonalCalendar(google.calendarId) ? google.calendarName : null} />
 
       <TaskFilterRoot initial={filter}>
       <div className="stats">

@@ -103,8 +103,12 @@ export async function listCalendars(agencyId: string) {
   });
   if (!res.ok) return [];
   const data = (await res.json()) as { items?: { id: string; summary: string; description?: string }[] };
-  return (data.items ?? []).map((c) => ({ id: c.id, name: c.summary, description: c.description ?? "" }));
+  // Only shared calendars (like "C&K Due Dates"), never a person's own calendar.
+  return (data.items ?? []).filter((c) => !isPersonalCalendar(c.id)).map((c) => ({ id: c.id, name: c.summary, description: c.description ?? "" }));
 }
+
+/** A person's own calendar has their email as its id; shared and holiday calendars end in calendar.google.com. */
+export const isPersonalCalendar = (id: string) => /^[^@\s]+@[^@\s]+$/.test(id) && !/calendar\.google\.com$/i.test(id);
 
 export type DueDate = { id: string; title: string; date: string; allDay: boolean };
 
@@ -116,7 +120,7 @@ export const getDueDates = (agencyId: string, fromIso: string, toIso: string) =>
   unstable_cache(
     async (): Promise<DueDate[]> => {
       const i = await integration(agencyId);
-      if (!i?.google_refresh_token || !i.deadlines_calendar_id) return [];
+      if (!i?.google_refresh_token || !i.deadlines_calendar_id || isPersonalCalendar(i.deadlines_calendar_id)) return [];
       try {
         const token = await accessToken(i.google_refresh_token);
         const params = new URLSearchParams({

@@ -4,7 +4,7 @@ import { Logo } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { googleConfigured, googleStatus, listCalendars } from "@/lib/google";
+import { googleConfigured, googleStatus, isPersonalCalendar, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
 import { ConfirmButton, DriveSettings, NewClientTasksEditor } from "../TeamForms";
 import { ROLE_LABEL } from "@/lib/types";
@@ -78,7 +78,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </div>
                 <button className="btn sm">Save</button>
               </form>
-              {google.calendarName && <p className="note">Showing due dates from <b>{google.calendarName}</b>. Changes in Google show up here within 15 minutes.</p>}
+              {google.calendarId && isPersonalCalendar(google.calendarId) ? (
+                <p className="readonly">A person&apos;s own calendar ({google.calendarName}) was chosen for due dates, so nothing is showing. Choose C&amp;K Due Dates above and click Save.</p>
+              ) : google.calendarName && <p className="note">Showing due dates from <b>{google.calendarName}</b>. Changes in Google show up here within 15 minutes.</p>}
               <h3 style={{ marginTop: 8 }}>Google Drive</h3>
               <DriveSettings waiting={driveWaiting ?? 0} withoutFolder={noFolder ?? 0} />
               <form action={disconnectGoogle}><ConfirmButton label="Disconnect Google" confirmLabel="Disconnect?" /></form>

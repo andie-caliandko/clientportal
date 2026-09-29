@@ -12,6 +12,7 @@ import { weekStart } from "@/lib/health";
 import { driveFolderId, isUrl, slackChannelId } from "@/lib/links";
 import { monthKey } from "@/lib/rhythm";
 import { requireAdmin, requireEditor, requireTeam } from "@/lib/session";
+import { isPersonalCalendar } from "@/lib/google";
 import { postToSlack } from "@/lib/slack";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -630,6 +631,7 @@ export async function deleteTask(form: FormData) {
 export async function setDeadlinesCalendar(form: FormData) {
   const v = await requireAdmin();
   const [id, ...name] = String(form.get("calendar") ?? "").split("|");
+  if (id && isPersonalCalendar(id)) return; // Due dates come from a shared calendar, not someone's own.
   await createAdminClient()
     .from("agency_integrations")
     .update({ deadlines_calendar_id: id || null, deadlines_calendar_name: name.join("|") || null, updated_at: new Date().toISOString() })

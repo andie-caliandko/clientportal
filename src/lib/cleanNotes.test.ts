@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("./supabase/server", () => ({ createAdminClient: () => ({}) }));
 vi.mock("next/cache", () => ({ unstable_cache: (f: unknown) => f, revalidateTag: () => {} }));
-const { cleanNotes } = await import("./google");
+const { cleanNotes, isPersonalCalendar } = await import("./google");
 
 describe("cleanNotes", () => {
   it("removes invoice links and lines", () => {
@@ -15,5 +15,13 @@ describe("cleanNotes", () => {
   });
   it("returns nothing when only an invoice was there", () => {
     expect(cleanNotes("Invoice: https://dubsado.com/invoice/1")).toBeNull();
+  });
+});
+
+describe("isPersonalCalendar", () => {
+  it("spots a person's own calendar but not shared or holiday ones", () => {
+    expect(isPersonalCalendar("shayla@cali-ko.com")).toBe(true);
+    expect(isPersonalCalendar("c_1a2b3c@group.calendar.google.com")).toBe(false);
+    expect(isPersonalCalendar("en.usa#holiday@group.v.calendar.google.com")).toBe(false);
   });
 });
