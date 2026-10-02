@@ -830,3 +830,4 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .kpi-table th.kpi-latest, .kpi-table td.kpi-latest { text-align: left; }
 .task.moving, [draggable].moving { opacity: .45; transition: opacity .15s; pointer-events: none; }
 [hidden] { display: none !important; }
+.repeat-chip { font-size: .72rem; color: var(--ink-2); white-space: nowrap; }

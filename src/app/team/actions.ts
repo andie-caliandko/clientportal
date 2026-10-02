@@ -13,6 +13,8 @@ import { driveFolderId, isUrl, slackChannelId } from "@/lib/links";
 import { monthKey } from "@/lib/rhythm";
 import { requireAdmin, requireEditor, requireTeam } from "@/lib/session";
 import { isPersonalCalendar } from "@/lib/google";
+import { REPEATS } from "@/lib/recurring";
+import { scheduleNextRepeat } from "@/lib/repeatTasks";
 import { postToSlack } from "@/lib/slack";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -83,6 +85,7 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
     return { ok: `Sent to ${contact.display_name.split(" ")[0]}. They'll get an email and see it in their portal.` };
   }
 
+  const repeat = REPEATS.some((r) => r.key === form.get("repeat")) ? String(form.get("repeat")) : null;
   const { data: created, error } = await supabase.from("tasks").insert({
     agency_id: v.agency.id,
     client_id: clientId,
@@ -92,6 +95,7 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
     due_at: dueAt?.toISOString() ?? null,
     source: "manual",
     created_by: v.userId,
+    repeat,
   }).select("id").single();
   if (error) return { error: "That task couldn't be saved. Is that teammate on this client?" };
   await notifyUser(v.agency.id, clientId, assignee, {
@@ -575,8 +579,11 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
       completed_at: status === "done" ? (before.completed_at ?? new Date().toISOString()) : null,
       // Choosing a client (or everyone there) on purpose makes it a client task, even if it started automatic.
       ...(kind === "client" ? { auto: false } : {}),
+      // Only your team's own tasks repeat.
+      repeat: kind === "team" && REPEATS.some((r) => r.key === form.get("repeat")) ? String(form.get("repeat")) : null,
     })
     .eq("id", id);
+  if (status === "done" && before.status !== "done") await scheduleNextRepeat(id);
   if (error) return { error: "Those changes couldn't be saved. Is that teammate on this client?" };
 
   if (kind === "team" && assignee !== before.assignee_id && status !== "done") {
@@ -864,6 +871,7 @@ export async function setTaskStatus(id: string, status: string) {
     .from("tasks")
     .update({ status, completed_at: status === "done" ? new Date().toISOString() : null })
     .eq("id", id);
+  if (status === "done") await scheduleNextRepeat(id);
   if (status === "waiting" && before.client_id && !before.client_assignee_id && !before.auto && before.source !== "rella") {
     await notifyClient(before.client_id, { kind: "task", title: `New task: ${before.title}`, body: before.note, link: "/portal/tasks" });
     await emailClient(

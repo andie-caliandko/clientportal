@@ -5,6 +5,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { avatarUrl } from "@/app/Avatar";
+import { REPEATS } from "@/lib/recurring";
 import { PhotoCropper } from "@/app/PhotoCropper";
 import {
   addClientContact,
@@ -109,6 +110,13 @@ export function NewTask({ clients, people, clientId, startOpen = false }: {
                   </optgroup>
                 </select></div>
               <div className="field"><label htmlFor="t-due">Due</label><input className="input" id="t-due" name="due" type="date" /></div>
+              {!forClient && (
+                <div className="field"><label htmlFor="t-repeat">Repeats</label>
+                  <select className="sel" id="t-repeat" name="repeat" defaultValue="">
+                    <option value="">Doesn&apos;t repeat</option>
+                    {REPEATS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select></div>
+              )}
             </div>
             <div className="field"><label htmlFor="t-note">Note (optional)</label><textarea className="input" id="t-note" name="note" style={{ minHeight: 70 }} placeholder="Anything they need to know" /></div>
             <p className="note">
@@ -415,7 +423,7 @@ export function DeleteClientForm({ clientId, name }: { clientId: string; name: s
 }
 
 export function EditTaskForm({ task, clients, people, readOnly, closeOnSave = false }: {
-  task: { id: string; title: string; status: string; note: string; client: string; assignee: string; due: string };
+  task: { id: string; title: string; status: string; note: string; client: string; assignee: string; due: string; repeat?: string | null };
   clients: Opt[];
   people: TaskPeople;
   readOnly: boolean;
@@ -450,6 +458,13 @@ export function EditTaskForm({ task, clients, people, readOnly, closeOnSave = fa
               <option value="done">Done</option>
             </select></div>
           <div className="field"><label htmlFor="e-due">Due</label><input className="input" id="e-due" name="due" type="date" defaultValue={task.due} /></div>
+          {!assignee.startsWith("client:") && (
+            <div className="field"><label htmlFor="e-repeat">Repeats</label>
+              <select className="sel" id="e-repeat" name="repeat" defaultValue={task.repeat ?? ""}>
+                <option value="">Doesn&apos;t repeat</option>
+                {REPEATS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select></div>
+          )}
         </div>
         <div className="row">
           <div className="field"><label htmlFor="e-client">Client</label>

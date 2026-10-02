@@ -28,7 +28,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const monthStart = new Date(`${monthKey(agency.timezone)}T00:00:00Z`);
   const horizon = new Date(monthStart.getTime() + 75 * 86_400_000);
   const [{ data: tasks }, { data: clients }, { data: members }, people, { data: checks }, dueEvents, google, { data: openApprovalRows }] = await Promise.all([
-    supabase.from("tasks").select("*").neq("status", "done").order("due_at", { ascending: true, nullsFirst: false }),
+    // Recurring tasks stay hidden until a little before they're due.
+    supabase.from("tasks").select("*").neq("status", "done").or(`show_from.is.null,show_from.lte.${new Date().toISOString()}`).order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("clients").select("id, name").is("archived_at", null).order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
     loadTaskPeople(supabase, agency.id, userId),

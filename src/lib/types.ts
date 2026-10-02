@@ -111,6 +111,10 @@ export type Doc = { id: string; kind: "strategy" | "report"; title: string; stor
 
 export type Task = {
   id: string;
+  /** Recurring tasks: how often it comes back. */
+  repeat?: string | null;
+  /** A recurring task's next one stays off the board until this date. */
+  show_from?: string | null;
   /** Who added it; empty for tasks the system made. */
   created_by: string | null;
   client_id: string | null;

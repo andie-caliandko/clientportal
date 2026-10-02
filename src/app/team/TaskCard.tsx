@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Task } from "@/lib/types";
 import { markCalendarApproved } from "./actions";
 import { TaskMoves } from "./TaskMoves";
+import { repeatLabel } from "@/lib/recurring";
 import { isClientFacing } from "@/lib/tasks";
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
@@ -50,6 +51,7 @@ export function TaskCard({ task: t, clientName, showClientChip = true, personNam
         {showClientChip && !clientFacing && clientName && <span className="chip">{clientName}</span>}
         {due && (overdue ? <span className="pill crit">Overdue · was due {due}</span> : dueToday ? <span className="pill warn">Due today</span> : <span>Due {due}</span>)}
         {!client && t.assignee_id && <span>· {personName(t.assignee_id) ?? "Unassigned"}</span>}
+        {repeatLabel(t.repeat) && <span className="repeat-chip" title={`Repeats: ${repeatLabel(t.repeat)}`}>↻ {repeatLabel(t.repeat)}</span>}
       </div>
       {(clientFacing || automated) && (
         <p className="task-by">{automated ? "Created automatically" : `Created by ${creator}`}</p>

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
 import { isClientFacing } from "@/lib/tasks";
+import { repeatLabel } from "@/lib/recurring";
 import { deleteTask } from "../actions";
 import { ConfirmButton, EditTaskForm } from "../TeamForms";
 import { DeleteTaskInModal } from "./TaskModal";
@@ -52,7 +53,7 @@ export async function TaskDetail({ id, inModal = false }: { id: string; inModal?
     <section style={{ display: "grid", gap: 18, maxWidth: 760 }}>
       {!inModal && <Link href="/team" className="note">← All tasks</Link>}
       <div>
-        <p className="eyebrow">{SOURCE[task.source] ?? task.source} · {created}</p>
+        <p className="eyebrow">{SOURCE[task.source] ?? task.source} · {created}{repeatLabel(task.repeat) ? ` · Repeats ${repeatLabel(task.repeat)!.toLowerCase()}` : ""}</p>
         {inModal ? <h2 style={{ fontSize: "1.9rem", marginTop: 4 }}>{task.title}</h2> : <h1 style={{ fontSize: "2.4rem", marginTop: 6 }}>{task.title}</h1>}
       </div>
       <p className="note">
@@ -73,7 +74,7 @@ export async function TaskDetail({ id, inModal = false }: { id: string; inModal?
       )}
       <div className={inModal ? "" : "panel"}>
         <EditTaskForm
-          task={{ id: task.id, title: task.title, status: task.status, note: task.note ?? "", client: task.client_id ?? "", assignee, due: dueDate }}
+          task={{ id: task.id, title: task.title, status: task.status, note: task.note ?? "", client: task.client_id ?? "", assignee, due: dueDate, repeat: task.repeat }}
           clients={clients ?? []}
           people={people}
           readOnly={!canEdit}

@@ -3,6 +3,7 @@ import { REMINDER_DAYS, remindersDue } from "@/lib/approval";
 import { sendEmail } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/server";
 import { removeExpiredClientLogins } from "@/lib/archive";
+import { announceRecurringTasks } from "@/lib/repeatTasks";
 
 const LABEL = ["", "2 days", "5 days", "1 week"];
 
@@ -59,5 +60,7 @@ export async function GET(request: NextRequest) {
   }
   // Archived clients whose 30 days are up lose their portal logins.
   const loginsRemoved = await removeExpiredClientLogins();
-  return NextResponse.json({ reminded: sent, loginsRemoved });
+  // Recurring tasks coming back onto someone's board.
+  const recurring = await announceRecurringTasks();
+  return NextResponse.json({ reminded: sent, loginsRemoved, recurring });
 }

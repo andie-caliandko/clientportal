@@ -90,7 +90,7 @@ export default async function ClientDetail({
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
   const allTasks = (tasks.data ?? []) as Task[];
   // Overdue first, then soonest due, then no date.
-  const openTasks = allTasks.filter((t) => t.status !== "done").sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
+  const openTasks = allTasks.filter((t) => t.status !== "done" && (!t.show_from || new Date(t.show_from).getTime() <= Date.now())).sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
   const pendingCals = ((cals.data ?? []) as Calendar[]).filter((c) => c.status === "pending");
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
