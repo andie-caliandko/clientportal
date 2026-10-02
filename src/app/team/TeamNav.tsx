@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/team/calendar", label: "Calendar" },
   { href: "/team/engagement", label: "Daily engagement", hideForCreators: true },
   { href: "/team/time", label: "Time tracker" },
+  { href: "/team/goals", label: "Goals" },
   { href: "/team/templates", label: "Agency templates" },
   { href: "/team/team", label: "Team", adminOnly: true },
   { href: "/team/settings", label: "Settings", adminOnly: true },
