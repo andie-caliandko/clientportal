@@ -836,3 +836,15 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .review-list li { display: grid; grid-template-columns: minmax(0, 1fr) 150px 190px auto; gap: 8px; align-items: center; }
 @media (max-width: 720px) { .review-list li { grid-template-columns: 1fr 1fr; } .review-list li > input:first-child { grid-column: 1 / -1; } }
 .saved-invite { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; }
+
+/* CEO dashboard */
+.ceo-table { width: 100%; }
+.ceo-table td, .ceo-table th { vertical-align: middle; }
+.ceo-table a { color: inherit; text-decoration: none; }
+.ceo-bars { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; height: 200px; align-items: end; padding-top: 22px; }
+.ceo-bar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; }
+/* --h is the bar's share of the tallest month; the label rows take about 40px. */
+.ceo-bar i { width: 100%; max-width: 56px; height: calc((100% - 40px) * var(--h, 0)); background: var(--series-1); border-radius: 4px 4px 0 0; min-height: 2px; }
+.ceo-bar.now i { background: var(--primary); }
+.ceo-bar-val { font-size: .72rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ceo-bar-label { font-size: .75rem; color: var(--ink-2); }

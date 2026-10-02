@@ -14,11 +14,11 @@ const LINKS = [
   { href: "/team/settings", label: "Settings", adminOnly: true },
 ];
 
-export function TeamNav({ isAdmin, isCreator = false }: { isAdmin: boolean; isCreator?: boolean }) {
+export function TeamNav({ isAdmin, isCreator = false, showCeo = false }: { isAdmin: boolean; isCreator?: boolean; showCeo?: boolean }) {
   const path = usePathname();
   return (
     <nav className="nav" aria-label="Workspace">
-      {LINKS.filter((l) => (isAdmin || !l.adminOnly) && !(isCreator && l.hideForCreators)).map((l) => {
+      {[...(showCeo ? [{ href: "/team/ceo", label: "CEO dashboard" }] : []), ...LINKS].filter((l) => (isAdmin || !("adminOnly" in l && l.adminOnly)) && !(isCreator && "hideForCreators" in l && l.hideForCreators)).map((l) => {
         const active = l.href === "/team" ? path === "/team" : path.startsWith(l.href);
         return (
           <Link key={l.href} href={l.href} aria-current={active ? "page" : undefined}>

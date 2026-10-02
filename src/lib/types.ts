@@ -22,6 +22,9 @@ export type Agency = {
   monthly_rhythm: import("./rhythm").RhythmWeek[];
   new_client_tasks: { title: string; note?: string; days?: number; assignee?: string }[];
   plan: string;
+  /** The agency owner (sees the CEO dashboard), and admins they've shared it with. */
+  owner_id?: string | null;
+  ceo_shared_with?: string[] | null;
 };
 
 export type Role = "admin" | "account_manager" | "creator";

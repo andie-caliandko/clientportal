@@ -5,6 +5,7 @@ import { signOut } from "../login/actions";
 import { TeamNav } from "./TeamNav";
 import { MyPhoto } from "./TeamForms";
 import { RunningPill } from "./time/TimeForms";
+import { canSeeCeo } from "@/lib/ceo";
 import { createClient } from "@/lib/supabase/server";
 import { Bell } from "../notifications/Bell";
 import { loadNotifications } from "@/lib/notificationsList";
@@ -25,7 +26,7 @@ export default async function TeamLayout({ children, modal }: { children: React.
           <div className="brand" style={{ padding: 0 }}><Logo brand={agency.brand} name={agency.name} height={52} /></div>
           {notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
         </div>
-        <TeamNav isAdmin={member.role === "admin"} isCreator={member.role === "creator"} />
+        <TeamNav isAdmin={member.role === "admin"} isCreator={member.role === "creator"} showCeo={canSeeCeo(agency, member.user_id, member.role)} />
       </aside>
       <main className="main">
         {/* Today's date, and you in the top right, on every page whatever its length. */}
