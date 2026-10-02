@@ -520,7 +520,27 @@ export default async function ClientDetail({
           </ul>
           {!accountTeam.length && <p className="note">No one added yet.</p>}
           {otherAdmins.length > 0 && (
-            <p className="note">Admins with access (not shown to the client): {otherAdmins.map((m) => m.display_name).join(", ")}.</p>
+            <>
+              <p className="note" style={{ marginTop: 6 }}>Admins with access. They aren&apos;t shown to the client unless they&apos;re the account manager.</p>
+              <ul className="list">
+                {otherAdmins.map((m) => (
+                  <li key={m.user_id}>
+                    <Avatar name={m.display_name} path={m.avatar_path} style={{ width: 32, height: 32 }} />
+                    <b>{m.display_name}</b>
+                    <span className="note">Admin</span>
+                    {isAdmin && !client.archived_at && (
+                      <span className="r">
+                        <form action={setAccountManager}>
+                          <input type="hidden" name="client" value={client.id} />
+                          <input type="hidden" name="user" value={m.user_id} />
+                          <ConfirmButton label="Make account manager" confirmLabel={`Make ${m.display_name.split(" ")[0]} the account manager?`} />
+                        </form>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           {isAdmin && !client.archived_at && <AddTeammate clientId={client.id} clientName={client.name} existing={addable} />}
           {client.archived_at && <p className="note">This client is archived, so no one new can be added. Restore them to change their team.</p>}
