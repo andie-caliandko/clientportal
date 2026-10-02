@@ -69,6 +69,10 @@ export type Client = {
   /** Main contact saved when the client was set up without sending the invite yet. */
   contact_name?: string | null;
   contact_email?: string | null;
+  /** Their Google Drive folder is shared with them and linked in their portal. */
+  drive_shared?: boolean;
+  drive_branding_id?: string | null;
+  drive_content_id?: string | null;
   logo_path: string | null;
 };
 

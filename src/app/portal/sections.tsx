@@ -5,6 +5,7 @@ import { formatDue } from "@/lib/approval";
 import { bookedMeetings, requestSlots, type CallRequest } from "@/lib/calls";
 import { SlotPicker } from "./SlotPicker";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { driveFolderUrl } from "@/lib/links";
 import type { Agency, Calendar, Client, ClientUser, Doc, Message, Step } from "@/lib/types";
 import { approveCalendar, confirmBooked, sendMessage } from "./actions";
 import { ClientTasks, type ClientTask } from "./ClientTasks";
@@ -466,13 +467,27 @@ export async function FilesSection(ctx: PortalCtx) {
   return (
     <>
       <PageHead title="Files" sub={`Everything you've sent us. Your ${short} team can see all of it.`} />
+      {ctx.client.drive_shared && ctx.client.drive_folder_id && (
+        <section className="card drive-card">
+          <div>
+            <h2>Your Google Drive folder</h2>
+            <p className="note">Everything you send us is also filed here: Branding, Content and more. You can add files straight to it too.</p>
+          </div>
+          {ctx.preview ? <button className="btn" disabled>Open in Google Drive</button> : <a className="btn" href={driveFolderUrl(ctx.client.drive_folder_id)} target="_blank" rel="noreferrer">Open in Google Drive</a>}
+        </section>
+      )}
       {(["branding", "content"] as const).map((kind) => {
         const list = rows.filter((r) => r.kind === kind);
         return (
           <section className="card" key={kind}>
             <div className="sec-head">
               <h2>{kind === "branding" ? "Branding" : "Content"}</h2>
-              {ctx.preview ? <button className="btn sm" disabled>Upload {kind}</button> : <Link className="btn sm" href={`/portal/upload/${kind}`}>Upload {kind}</Link>}
+              <span className="row" style={{ alignItems: "center" }}>
+                {ctx.client.drive_shared && (kind === "branding" ? ctx.client.drive_branding_id : ctx.client.drive_content_id) && !ctx.preview && (
+                  <a className="btn sm line" href={driveFolderUrl((kind === "branding" ? ctx.client.drive_branding_id : ctx.client.drive_content_id)!)} target="_blank" rel="noreferrer">Open in Drive</a>
+                )}
+                {ctx.preview ? <button className="btn sm" disabled>Upload {kind}</button> : <Link className="btn sm" href={`/portal/upload/${kind}`}>Upload {kind}</Link>}
+              </span>
             </div>
             {list.length ? (
               <ul className="files">

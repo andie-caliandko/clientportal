@@ -12,7 +12,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, AddTeammate, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, AddTeammate, DriveShareToggle, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -394,7 +394,10 @@ export default async function ClientDetail({
         <div className="panel">
           <h2>Connected</h2>
           <dl className="kv">
-            <dt>Google Drive</dt><dd>{client.drive_folder_id ? <a href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open folder</a> : <span className="note">Not set</span>}</dd>
+            <dt>Google Drive</dt><dd style={{ display: "grid", gap: 6 }}>
+              {client.drive_folder_id ? <a href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open folder</a> : <span className="note">Not set</span>}
+              {canEdit && !client.archived_at && <DriveShareToggle clientId={client.id} shared={!!client.drive_shared} hasFolder={!!client.drive_folder_id} />}
+            </dd>
             <dt>Slack channel</dt><dd>{client.slack_channel_id ?? <span className="note">Not set</span>}</dd>
             <dt>Rella space</dt><dd>{client.rella_space_url ? <a href={client.rella_space_url} target="_blank" rel="noreferrer">Open</a> : <span className="note">Not set</span>}</dd>
             <dt>Contract</dt><dd>{client.dubsado_project_url ? <a href={client.dubsado_project_url} target="_blank" rel="noreferrer">Open contract</a> : <span className="note">No link yet</span>}</dd>

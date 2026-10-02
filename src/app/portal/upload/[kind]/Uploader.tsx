@@ -8,13 +8,15 @@ import { finishUploads } from "../../actions";
 
 type Item = { name: string; path?: string; state: "uploading" | "done" | "failed" };
 
-export function Uploader({ kind, title, help, folder, brand, agencyName }: {
+export function Uploader({ kind, title, help, folder, brand, agencyName, driveUrl }: {
   kind: "branding" | "content";
   title: string;
   help: string;
   folder: string;
   brand: Brand;
   agencyName: string;
+  /** Their own Google Drive folder, when the team has shared it with them. */
+  driveUrl?: string | null;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [over, setOver] = useState(false);
@@ -49,6 +51,7 @@ export function Uploader({ kind, title, help, folder, brand, agencyName }: {
         <p className="eyebrow">Upload your {kind}</p>
         <h2 style={{ marginTop: 8 }}>{title}</h2>
         <p>{help}</p>
+        {driveUrl && <p className="note" style={{ marginTop: 6 }}>Prefer Google Drive? <a href={driveUrl} target="_blank" rel="noreferrer">Open your {kind === "branding" ? "Branding" : "Content"} folder</a> and add files there.</p>}
       </div>
       <div
         className={`drop ${over ? "over" : ""}`}

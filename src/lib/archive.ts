@@ -10,13 +10,18 @@ export async function removeExpiredClientLogins(now = new Date()) {
   const admin = createAdminClient();
   const { data: clients } = await admin
     .from("clients")
-    .select("id")
+    .select("id, drive_shared")
     .not("archived_at", "is", null)
     .not("access_ends_at", "is", null)
     .lt("access_ends_at", now.toISOString())
     .is("logins_removed_at", null);
   let removed = 0;
   for (const c of clients ?? []) {
+    // Take away their Google Drive folder access while we still know who they are.
+    if (c.drive_shared) {
+      const { setClientDriveAccess } = await import("./drive");
+      await setClientDriveAccess(c.id, false).catch(() => null);
+    }
     const { data: people } = await admin.from("client_users").select("user_id").eq("client_id", c.id);
     await admin.from("client_users").delete().eq("client_id", c.id);
     for (const p of people ?? []) {

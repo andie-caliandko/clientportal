@@ -912,6 +912,9 @@ export async function addClientContact(_: Result, form: FormData): Promise<Resul
   if (linkErr) return { error: "They were invited but couldn't be added to this portal. Try again." };
   // The saved "invite later" contact has now been invited.
   await admin.from("clients").update({ contact_name: null, contact_email: null }).eq("id", clientId).ilike("contact_email", email);
+  // Their Drive folder is shared with the client: share it with this person too.
+  const { data: shared } = await admin.from("clients").select("drive_shared").eq("id", clientId).maybeSingle();
+  if (shared?.drive_shared) after(async () => { const { setClientDriveAccess } = await import("@/lib/drive"); await setClientDriveAccess(clientId, true); });
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: `Invite sent to ${name}. They'll get an email to create a password.` };
 }
@@ -1133,4 +1136,17 @@ export async function resendClientInvite(clientId: string, userId: string): Prom
   const { sendInviteReminder } = await import("@/lib/invites.server");
   const ok = await sendInviteReminder({ client_id: clientId, user_id: userId }, { manual: true });
   return ok ? { ok: "Invite sent again." } : { error: "That invite couldn't be sent." };
+}
+
+/** Share a client's Google Drive folder with the people on their portal (or stop sharing). */
+export async function setDriveShared(clientId: string, on: boolean): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const { data: canEdit } = await (await createClient()).rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const { setClientDriveAccess } = await import("@/lib/drive");
+  const r = await setClientDriveAccess(clientId, on);
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/portal", "layout");
+  return r;
 }

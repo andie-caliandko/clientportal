@@ -17,6 +17,7 @@ import {
   createClientAccount,
   resendQuestionnaire,
   resendClientInvite,
+  setDriveShared,
   deleteClient,
   editCalendar,
   saveNewClientTasks,
@@ -1022,5 +1023,30 @@ export function ResendInviteButton({ clientId, userId }: { clientId: string; use
       onClick={() => startTransition(async () => { const r = await resendClientInvite(clientId, userId); setMsg(r.ok ?? r.error ?? null); })}>
       {pending ? "Sending…" : "Resend invite"}
     </button>
+  );
+}
+
+/** Client page: share their Google Drive folder with the people on their portal. */
+export function DriveShareToggle({ clientId, shared, hasFolder }: { clientId: string; shared: boolean; hasFolder: boolean }) {
+  const [on, setOn] = useState(shared);
+  const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
+  const [pending, startTransition] = useTransition();
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <label className="row" style={{ alignItems: "center", gap: 8 }}>
+        <input type="checkbox" checked={on} disabled={pending || !hasFolder} onChange={(e) => {
+          const next = e.target.checked;
+          setOn(next);
+          startTransition(async () => {
+            const r = await setDriveShared(clientId, next);
+            setMsg(r);
+            if (r.error) setOn(!next);
+          });
+        }} />
+        Share their Drive folder with them
+      </label>
+      <span className="note">{!hasFolder ? "Add their Drive folder link under Client info first." : pending ? "Updating Google Drive…" : on ? "They can open it from their portal and add files." : "Only your team can open it."}</span>
+      {msg.error && <span className="error">{msg.error}</span>}
+    </div>
   );
 }

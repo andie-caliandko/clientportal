@@ -68,10 +68,13 @@ async function agencyDrive(agencyId: string): Promise<Agency | null> {
  * The client's Drive folder (the link saved on their page), with its Branding
  * and Content folders. Null when they don't have one.
  */
-async function clientFolder(agency: Agency, client: { drive_folder_id: string | null }) {
+async function clientFolder(agency: Agency, client: { id?: string; drive_folder_id: string | null }) {
   const folder = client.drive_folder_id;
   if (!folder) return null;
-  for (const name of STANDARD) await findOrCreateFolder(agency.token, folder, name);
+  const ids: Record<string, string> = {};
+  for (const name of STANDARD) ids[name] = await findOrCreateFolder(agency.token, folder, name);
+  // Remember the Branding and Content folders so the portal can link straight to them.
+  if (client.id) await createAdminClient().from("clients").update({ drive_branding_id: ids.Branding, drive_content_id: ids.Content }).eq("id", client.id);
   return folder;
 }
 
@@ -124,7 +127,7 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
       if (!agencies.has(client.agency_id)) agencies.set(client.agency_id, await agencyDrive(client.agency_id));
       const agency = agencies.get(client.agency_id);
       if (!agency) continue;
-      if (!clientFolders.has(row.client_id)) clientFolders.set(row.client_id, await clientFolder(agency, client));
+      if (!clientFolders.has(row.client_id)) clientFolders.set(row.client_id, await clientFolder(agency, { id: row.client_id, ...client }));
       const base = clientFolders.get(row.client_id);
       if (!base) continue;
       // Branding and content in their folders; everything else loose in the client's folder.
@@ -159,4 +162,38 @@ export async function catchUpDrive(opts: { agencyId?: string; clientId?: string 
     if (n < 25) break;
   }
   return total;
+}
+
+/**
+ * Give the people on a client's portal access to their Drive folder (as
+ * editors, so they can add files), or take that access away again.
+ */
+export async function setClientDriveAccess(clientId: string, on: boolean) {
+  const admin = createAdminClient();
+  const { data: client } = await admin.from("clients").select("agency_id, drive_folder_id").eq("id", clientId).maybeSingle();
+  if (!client?.drive_folder_id) return { error: "Add their Google Drive folder link under Client info first." };
+  const agency = await agencyDrive(client.agency_id);
+  if (!agency) return { error: "Connect Google in Settings first." };
+  const { data: people } = await admin.from("client_users").select("email").eq("client_id", clientId);
+  const emails = (people ?? []).map((p) => p.email.toLowerCase());
+  const folder = client.drive_folder_id;
+  const auth = { Authorization: `Bearer ${agency.token}` };
+  if (on) {
+    for (const email of emails) {
+      await fetch(`${API}/files/${folder}/permissions?supportsAllDrives=true&sendNotificationEmail=false`, {
+        method: "POST",
+        headers: { ...auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }),
+      });
+    }
+  } else {
+    const list = await fetch(`${API}/files/${folder}/permissions?supportsAllDrives=true&fields=permissions(id,emailAddress,role)`, { headers: auth }).then((r) => r.json());
+    for (const p of (list.permissions ?? []) as { id: string; emailAddress?: string; role: string }[]) {
+      if (p.role !== "owner" && p.emailAddress && emails.includes(p.emailAddress.toLowerCase())) {
+        await fetch(`${API}/files/${folder}/permissions/${p.id}?supportsAllDrives=true`, { method: "DELETE", headers: auth });
+      }
+    }
+  }
+  await admin.from("clients").update({ drive_shared: on }).eq("id", clientId);
+  return { ok: on ? "Shared. They can open their folder from their portal." : "No longer shared." };
 }
