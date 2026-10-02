@@ -212,7 +212,9 @@ function Connect({ id, label, hint, later, setLater, children }: {
   );
 }
 
-export function NewClientForm({ members, agencyId, meId }: { members: Opt[]; agencyId: string; meId: string }) {
+type ClientDefaults = { name?: string; contactName?: string; contactEmail?: string };
+
+export function NewClientForm({ members, agencyId, meId, defaults }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults }) {
   const [state, setState] = useState<{ error?: string }>({});
   const [review, setReview] = useState<{ clientId: string; next: string; tasks: (ProposedTask & { key: number })[] } | null>(null);
   const [sendNow, setSendNow] = useState(true);
@@ -258,7 +260,7 @@ export function NewClientForm({ members, agencyId, meId }: { members: Opt[]; age
   return (
     <form onSubmit={submit} className="panel new-client" style={{ gap: 18 }}>
       <h2>Business</h2>
-      <div className="row">{f("name", "Business name", { required: true })}{f("website", "Website", { placeholder: "bloomfloralstudio.com" })}</div>
+      <div className="row">{f("name", "Business name", { required: true, defaultValue: defaults?.name })}{f("website", "Website", { placeholder: "bloomfloralstudio.com" })}</div>
       <div className="row top">
         <div className="field"><label htmlFor="account_manager">Account manager</label>
           <select className="sel" id="account_manager" name="account_manager" required value={am} onChange={(e) => setAm(e.target.value)}>
@@ -280,7 +282,7 @@ export function NewClientForm({ members, agencyId, meId }: { members: Opt[]; age
       </fieldset>
 
       <h2>Main contact</h2>
-      <div className="row">{f("contact_name", "Name", { required: sendNow })}{f("contact_email", "Email", { type: "email", required: sendNow })}</div>
+      <div className="row">{f("contact_name", "Name", { required: sendNow, defaultValue: defaults?.contactName })}{f("contact_email", "Email", { type: "email", required: sendNow, defaultValue: defaults?.contactEmail })}</div>
       <label className="row" style={{ alignItems: "center", gap: 8 }}>
         <input type="checkbox" name="send_invite" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} /> Send them the portal invite now
       </label>
@@ -301,7 +303,7 @@ export function NewClientForm({ members, agencyId, meId }: { members: Opt[]; age
       </Connect>
       <Connect id="dubsado" label="Contract (Dubsado)" hint="The contract link shows as the client's Open contract button. When they sign, Zapier sends their email to the portal and the step checks off." later={!!later.dubsado} setLater={set("dubsado")}>
         <div className="row">
-          <input className="input" name="dubsado_email" type="email" aria-label="Client's email in Dubsado" placeholder="Client's email in Dubsado (defaults to the main contact)" style={{ flex: 1, minWidth: 220 }} />
+          <input className="input" name="dubsado_email" type="email" defaultValue={defaults?.contactEmail} aria-label="Client's email in Dubsado" placeholder="Client's email in Dubsado (defaults to the main contact)" style={{ flex: 1, minWidth: 220 }} />
           <input className="input" name="dubsado_project" aria-label="Contract link" placeholder="Contract link" style={{ flex: 1, minWidth: 220 }} />
         </div>
       </Connect>
@@ -841,14 +843,14 @@ export function DriveSettings({ waiting, withoutFolder }: { waiting: number; wit
 }
 
 /** Clients page: "Add client" opens the new-client form in a pop-up. */
-export function AddClientButton({ members, agencyId, meId }: { members: Opt[]; agencyId: string; meId: string }) {
+export function AddClientButton({ members, agencyId, meId, defaults, label = "Add client" }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="btn sm" onClick={() => setOpen(true)}>Add client</button>
+      <button type="button" className="btn sm" onClick={() => setOpen(true)}>{label}</button>
       {open && (
         <Modal title="Add a client" onClose={() => setOpen(false)} wide>
-          <NewClientForm members={members} agencyId={agencyId} meId={meId} />
+          <NewClientForm members={members} agencyId={agencyId} meId={meId} defaults={defaults} />
         </Modal>
       )}
     </>

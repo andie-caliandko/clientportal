@@ -4,6 +4,7 @@ import { canSeeCeo, invoiceState, isOwner, monthKeyDate } from "@/lib/ceo";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { EditBilling, PaidToggle, ShareCeo } from "./CeoForms";
+import { AddClientButton } from "../TeamForms";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const shiftMonth = (month: string, by: number) => {
@@ -22,11 +23,12 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : today.slice(0, 7);
 
   const supabase = await createClient();
-  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
     supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source").gte("month", monthKeyDate(shiftMonth(month, -5))).lte("month", monthKeyDate(month)),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
+    supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
   ]);
   const fees = new Map((billing ?? []).map((b) => [b.client_id, { fee: Number(b.monthly_fee), day: b.billing_day as number | null }]));
   const inv = (cid: string, m: string) => (invoices ?? []).find((i) => i.client_id === cid && i.month === monthKeyDate(m));
@@ -69,6 +71,34 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
         <div className={`stat ${owed ? "warn" : ""}`}><b>{money(owed)}</b><span>Still outstanding</span></div>
         <div className={`stat ${late.length ? "crit" : ""}`}><b>{paidCount} of {rows.length}</b><span>Paid this month{late.length ? ` · ${late.length} late` : ""}</span></div>
       </div>
+
+      {(signups ?? []).length > 0 && (
+        <div className="panel new-signups">
+          <div>
+            <p className="eyebrow">From Dubsado</p>
+            <h2 style={{ marginTop: 4 }}>New clients to set up</h2>
+            <p className="note">They signed or paid in Dubsado but don&apos;t have a portal yet. Setting one up links their contract and payment.</p>
+          </div>
+          <div className="tablewrap">
+            <table className="ceo-table">
+              <thead><tr><th scope="col">New client</th><th scope="col">Contract</th><th scope="col">Invoice</th><th scope="col"><span className="sr-only">Set up</span></th></tr></thead>
+              <tbody>
+                {(signups ?? []).map((n) => (
+                  <tr key={n.id}>
+                    <td><b>{n.name || n.project || n.email}</b><br /><span className="note">{n.email}{n.project && n.name ? ` · ${n.project}` : ""}</span></td>
+                    <td>{n.contract_signed_at ? <span className="pill ok">Signed {new Date(n.contract_signed_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}</span> : <span className="pill warn">Not yet</span>}</td>
+                    <td>{n.paid_at ? <span className="pill ok">Paid{n.amount ? ` ${money(Number(n.amount))}` : ""} · {new Date(n.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}</span> : <span className="pill warn">Not paid yet</span>}</td>
+                    <td className="team-edit">
+                      <AddClientButton label="Set up portal" members={members ?? []} agencyId={agency.id} meId={userId}
+                        defaults={{ name: n.project ?? n.name ?? "", contactName: n.name ?? "", contactEmail: n.email }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <h2>Clients this month</h2>

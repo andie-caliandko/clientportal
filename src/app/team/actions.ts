@@ -15,6 +15,7 @@ import { requireAdmin, requireEditor, requireTeam } from "@/lib/session";
 import { isPersonalCalendar } from "@/lib/google";
 import { REPEATS } from "@/lib/recurring";
 import { scheduleNextRepeat } from "@/lib/repeatTasks";
+import { linkSignup } from "@/lib/signups";
 import { postToSlack } from "@/lib/slack";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -291,6 +292,8 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (extraTeam.length) {
     await supabase.from("client_team").insert(extraTeam.map((user_id) => ({ client_id: client.id, user_id })));
   }
+  // Came in through Dubsado? Link their signed contract and payment, and check off the setup task.
+  after(() => linkSignup(client.id, v.agency.id, [dubsadoEmail, contactEmail], v.agency.timezone));
   // Let the account manager and anyone else on the account know.
   after(async () => {
     await tellAddedToClient(client.id, [am], v.userId, true);
