@@ -12,7 +12,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, AddTeammate, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, AddTeammate, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -414,9 +414,23 @@ export default async function ClientDetail({
           <ul className="list">
             {((people.data ?? []) as ClientUser[]).map((p) => (
               <li key={p.user_id}>
-                <span><b>{p.display_name}</b><br /><span className="note">{p.email}</span></span>
+                <span><b>{p.display_name}</b><br /><span className="note">{p.email} · {p.role === "owner" ? "Owner" : "Team member"}</span></span>
                 <span className="r">
-                  <span className="pill info">{p.role === "owner" ? "Owner" : "Team member"}</span>
+                  {(() => {
+                    // Joined, or still invited (and how long ago, with the reminders sent).
+                    const x = p as ClientUser & { joined_at?: string | null; created_at?: string; invite_reminders?: number };
+                    if (!("joined_at" in x)) return null;
+                    if (x.joined_at) return <span className="pill ok">Joined {short(x.joined_at).split(",")[0]}</span>;
+                    const days = x.created_at ? Math.floor((Date.now() - new Date(x.created_at).getTime()) / 86_400_000) : 0;
+                    return (
+                      <>
+                        <span className="pill warn" title={x.invite_reminders ? `${x.invite_reminders} reminder${x.invite_reminders === 1 ? "" : "s"} sent` : "No reminders yet"}>
+                          Invited {days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`}{x.invite_reminders ? ` · ${x.invite_reminders} reminder${x.invite_reminders === 1 ? "" : "s"}` : ""}
+                        </span>
+                        {canEdit && !client.archived_at && <ResendInviteButton clientId={client.id} userId={p.user_id} />}
+                      </>
+                    );
+                  })()}
                   {canEdit && (
                     <form action={removeClientContact}>
                       <input type="hidden" name="client" value={client.id} />

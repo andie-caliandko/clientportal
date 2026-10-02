@@ -1123,3 +1123,14 @@ export async function setSopFolder(_: Result, form: FormData): Promise<Result> {
   revalidatePath("/team/templates");
   return { ok: link ? "Saved." : "Removed." };
 }
+
+/** Send someone who hasn't joined their portal a fresh invite link. */
+export async function resendClientInvite(clientId: string, userId: string): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const { data: canEdit } = await (await createClient()).rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const { sendInviteReminder } = await import("@/lib/invites.server");
+  const ok = await sendInviteReminder({ client_id: clientId, user_id: userId }, { manual: true });
+  return ok ? { ok: "Invite sent again." } : { error: "That invite couldn't be sent." };
+}

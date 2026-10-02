@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { removeExpiredClientLogins } from "@/lib/archive";
 import { announceRecurringTasks } from "@/lib/repeatTasks";
 import { flagRenewals } from "@/lib/contracts.server";
+import { remindUnjoinedInvites } from "@/lib/invites.server";
 
 const LABEL = ["", "2 days", "5 days", "1 week"];
 
@@ -65,5 +66,7 @@ export async function GET(request: NextRequest) {
   const recurring = await announceRecurringTasks();
   // Contracts reaching their renewal point.
   const renewals = await flagRenewals();
-  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals });
+  // Portal invites not accepted yet: 48 hours, then a week later.
+  const inviteReminders = await remindUnjoinedInvites();
+  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders });
 }

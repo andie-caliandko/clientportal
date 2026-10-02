@@ -16,6 +16,7 @@ import {
   addReviewedTasks,
   createClientAccount,
   resendQuestionnaire,
+  resendClientInvite,
   deleteClient,
   editCalendar,
   saveNewClientTasks,
@@ -1008,5 +1009,18 @@ export function SendSavedInvite({ clientId, name, email }: { clientId: string; n
       <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send portal invite"}</button>
       {state.error && <p className="error" style={{ flexBasis: "100%" }}>{state.error}</p>}
     </form>
+  );
+}
+
+/** Someone hasn't joined their portal yet: email them a fresh invite link. */
+export function ResendInviteButton({ clientId, userId }: { clientId: string; userId: string }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  if (msg) return <span className="note">{msg}</span>;
+  return (
+    <button type="button" className="btn sm line" disabled={pending}
+      onClick={() => startTransition(async () => { const r = await resendClientInvite(clientId, userId); setMsg(r.ok ?? r.error ?? null); })}>
+      {pending ? "Sending…" : "Resend invite"}
+    </button>
   );
 }
