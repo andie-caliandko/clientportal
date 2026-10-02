@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/server";
 import { removeExpiredClientLogins } from "@/lib/archive";
 import { announceRecurringTasks } from "@/lib/repeatTasks";
+import { flagRenewals } from "@/lib/contracts.server";
 
 const LABEL = ["", "2 days", "5 days", "1 week"];
 
@@ -62,5 +63,7 @@ export async function GET(request: NextRequest) {
   const loginsRemoved = await removeExpiredClientLogins();
   // Recurring tasks coming back onto someone's board.
   const recurring = await announceRecurringTasks();
-  return NextResponse.json({ reminded: sent, loginsRemoved, recurring });
+  // Contracts reaching their renewal point.
+  const renewals = await flagRenewals();
+  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals });
 }

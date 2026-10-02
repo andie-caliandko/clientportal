@@ -5,12 +5,15 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { EditBilling, PaidToggle, ShareCeo } from "./CeoForms";
 import { AddClientButton } from "../TeamForms";
+import { RenewContract, SetContract } from "./ContractForms";
+import { contractStatus } from "@/lib/contracts";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const shiftMonth = (month: string, by: number) => {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
 };
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 const STATE = { paid: { label: "Paid", cls: "ok" }, due: { label: "Due", cls: "warn" }, late: { label: "Late", cls: "crit" }, upcoming: { label: "Not yet due", cls: "info" } } as const;
 
 /** The owner's view of the business this month: clients, recurring revenue, and who has paid. */
@@ -23,17 +26,24 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : today.slice(0, 7);
 
   const supabase = await createClient();
-  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
     supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source").gte("month", monthKeyDate(shiftMonth(month, -5))).lte("month", monthKeyDate(month)),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
+    supabase.from("client_contracts").select("id, client_id, kind, start_date, months, end_date, status, term_number, note").order("start_date", { ascending: false }),
   ]);
+  // Each client's current contract (the newest term), and how many terms they've had.
+  const contractFor = (cid: string) => (contractRows ?? []).find((c) => c.client_id === cid) ?? null;
+  const termsFor = (cid: string) => (contractRows ?? []).filter((c) => c.client_id === cid).length;
   const fees = new Map((billing ?? []).map((b) => [b.client_id, { fee: Number(b.monthly_fee), day: b.billing_day as number | null }]));
   const inv = (cid: string, m: string) => (invoices ?? []).find((i) => i.client_id === cid && i.month === monthKeyDate(m));
   const rows = (clients ?? []).map((c) => {
-    const f = fees.get(c.id) ?? { fee: 0, day: null };
+    const f0 = fees.get(c.id) ?? { fee: 0, day: null };
+    // One-time projects aren't monthly revenue.
+    const isProject = contractFor(c.id)?.kind === "project";
+    const f = { ...f0, fee: isProject ? 0 : f0.fee, projectFee: isProject ? f0.fee : 0 };
     const i = inv(c.id, month);
     const paid = i?.status === "paid";
     return { ...c, ...f, invoice: i, paid, state: invoiceState(paid, f.day, month, today), collected: paid ? Number(i?.amount ?? f.fee) : 0 };
@@ -110,7 +120,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                 <tr key={r.id}>
                   <td><Link href={`/team/clients/${r.id}`}><b>{r.name}</b></Link></td>
                   <td>{name(r.account_manager_id)}</td>
-                  <td className="kn">{r.fee ? money(r.fee) : <span className="note">Not set</span>}</td>
+                  <td className="kn">{r.fee ? money(r.fee) : r.projectFee ? <>{money(r.projectFee)}<br /><span className="note">project fee</span></> : <span className="note">Not set</span>}</td>
                   <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
                     <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
@@ -130,6 +140,54 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
           </table>
         </div>
         {!rows.length && <p className="note">No active clients.</p>}
+      </div>
+
+      <div className="panel">
+        <h2>Contracts</h2>
+        <p className="note">Where each client is in their contract. Renewal talks are flagged at the start of the second-to-last month (month 5 of 6); one-time projects get a follow-up two weeks before they wrap up.</p>
+        <div className="tablewrap">
+          <table className="ceo-table">
+            <thead><tr><th scope="col">Client</th><th scope="col">Contract</th><th scope="col">Where they are</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <tbody>
+              {(clients ?? []).map((cl) => {
+                const c = contractFor(cl.id);
+                const st = c ? contractStatus(c, today) : null;
+                const nice = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+                const terms = termsFor(cl.id);
+                const project = c?.kind === "project";
+                const label = !st ? null
+                  : st.state === "renewal" ? { t: project ? "Follow up" : "Renewal talk due", cls: "warn" }
+                  : st.state === "ending" ? { t: `${project ? "Wraps up" : "Ends"} in ${st.daysLeft} day${st.daysLeft === 1 ? "" : "s"}`, cls: "crit" }
+                  : st.state === "ended" ? { t: c!.status === "ended" ? "Not renewing" : "Ended", cls: "info" }
+                  : st.state === "upcoming" ? { t: `Starts ${nice(c!.start_date)}`, cls: "info" }
+                  : { t: "On track", cls: "ok" };
+                return (
+                  <tr key={cl.id}>
+                    <td><Link href={`/team/clients/${cl.id}`}><b>{cl.name}</b></Link></td>
+                    <td>
+                      {c ? <>{project ? "One-time project" : `${c.months}-month retainer`}{terms > 1 ? ` · ${ordinal(c.term_number ?? terms)} term` : ""}<br /><span className="note">{nice(c.start_date)} – {nice(st!.end)}</span></> : <span className="note">Not set</span>}
+                    </td>
+                    <td style={{ minWidth: 160 }}>
+                      {st && st.state !== "upcoming" && (
+                        <>
+                          <div className="goal-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(st.progress * 100)} aria-label="Contract progress"><i style={{ width: `${st.progress * 100}%` }} /></div>
+                          <span className="note">{project ? `${Math.max(0, st.daysLeft)} days left` : `Month ${st.month} of ${c!.months}`}</span>
+                        </>
+                      )}
+                    </td>
+                    <td>{label && <span className={`pill ${label.cls}`}>{label.t}</span>}</td>
+                    <td className="team-edit">
+                      <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
+                        {c && c.status === "active" && <RenewContract clientName={cl.name} contract={c} nextStartLabel={nice(new Date(Date.parse(`${st!.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10))} />}
+                        <SetContract clientId={cl.id} clientName={cl.name} contract={c && c.status === "active" ? c : null} />
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="cgrid pairs">

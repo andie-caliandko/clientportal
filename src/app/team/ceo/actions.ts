@@ -59,3 +59,70 @@ export async function saveCeoSharing(_: Result, form: FormData): Promise<Result>
   revalidatePath("/team", "layout");
   return { ok: ids.length ? `Shared with ${ids.length} admin${ids.length === 1 ? "" : "s"}.` : "Only you can see this dashboard." };
 }
+
+/** Read a contract's kind and dates from a form: a retainer (months) or a one-time project (end date). */
+function readTerm(form: FormData, start: string): { kind: "retainer" | "project"; months: number | null; end_date: string | null } | { error: string } {
+  const kind = form.get("kind") === "project" ? "project" : "retainer";
+  if (kind === "project") {
+    const end = String(form.get("end") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return { error: "Pick when the project wraps up." };
+    if (end < start) return { error: "The project has to end after it starts." };
+    return { kind, months: null, end_date: end };
+  }
+  const months = Number(form.get("months"));
+  if (!(Number.isInteger(months) && months >= 1 && months <= 60)) return { error: "Contract length is 1 to 60 months." };
+  return { kind, months, end_date: null };
+}
+
+/** Set (or correct) a client's current contract. */
+export async function saveContract(_: Result, form: FormData): Promise<Result> {
+  const v = await requireCeo();
+  const clientId = String(form.get("client") ?? "");
+  const id = String(form.get("id") ?? "");
+  const start = String(form.get("start") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return { error: "Pick the start date." };
+  const term = readTerm(form, start);
+  if ("error" in term) return { error: term.error };
+  const note = String(form.get("note") ?? "").trim() || null;
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("client_contracts").update({ start_date: start, ...term, note, renewal_flagged_at: null }).eq("id", id)
+    : await supabase.from("client_contracts").insert({ agency_id: v.agency.id, client_id: clientId, start_date: start, ...term, note });
+  if (error) return { error: "That contract couldn't be saved." };
+  revalidatePath("/team/ceo");
+  return { ok: "Saved." };
+}
+
+/** Renew: this term is marked renewed and the next starts the day after it ends (a retainer or another project). */
+export async function renewContract(_: Result, form: FormData): Promise<Result> {
+  const v = await requireCeo();
+  const id = String(form.get("id") ?? "");
+  const supabase = await createClient();
+  const { data: c } = await supabase.from("client_contracts").select("client_id, kind, start_date, months, end_date, term_number, status").eq("id", id).maybeSingle();
+  if (!c) return { error: "That contract wasn't found." };
+  const { endOf } = await import("@/lib/contracts");
+  const start = new Date(Date.parse(`${endOf(c)}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const term = readTerm(form, start);
+  if ("error" in term) return { error: term.error };
+  await supabase.from("client_contracts").update({ status: "renewed" }).eq("id", id);
+  const { error } = await supabase.from("client_contracts").insert({
+    agency_id: v.agency.id, client_id: c.client_id, start_date: start, ...term,
+    term_number: (c.term_number ?? 1) + 1, note: String(form.get("note") ?? "").trim() || null,
+  });
+  if (error) return { error: "The renewal couldn't be saved." };
+  // Any open renewal or follow-up task for this client is done.
+  await supabase.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("client_id", c.client_id).eq("source", "renewal").neq("status", "done");
+  revalidatePath("/team/ceo");
+  revalidatePath("/team");
+  return { ok: "Renewed." };
+}
+
+/** Not renewing: the contract ends as planned. */
+export async function endContract(id: string): Promise<Result> {
+  await requireCeo();
+  const supabase = await createClient();
+  const { data } = await supabase.from("client_contracts").update({ status: "ended" }).eq("id", id).select("client_id").maybeSingle();
+  if (data) await supabase.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("client_id", data.client_id).eq("source", "renewal").neq("status", "done");
+  revalidatePath("/team/ceo");
+  return { ok: "Marked as not renewing." };
+}
