@@ -885,3 +885,4 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .ct-key .ct-bar { position: static; width: 18px; height: 10px; }
 .ct-flag-key { display: inline-block; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
 .ct-today-key { display: inline-block; width: 2px; height: 14px; background: var(--ink); opacity: .55; }
+.template-embed.folder { aspect-ratio: auto; height: 420px; }

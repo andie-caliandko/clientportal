@@ -948,7 +948,7 @@ export async function setMyPhoto(path: string | null): Promise<Result> {
 }
 
 /** Admins add a template for the team: a link, a file, or both. */
-export async function addTemplate(input: { title: string; description: string; url: string; filePath: string | null; fileName: string | null; visibleTo: string[] }): Promise<Result> {
+export async function addTemplate(input: { title: string; description: string; url: string; filePath: string | null; fileName: string | null; visibleTo: string[]; section?: "templates" | "sops" }): Promise<Result> {
   const v = await requireAdmin().catch(() => null);
   if (!v) return { error: "Only admins can add templates." };
   const title = input.title.trim();
@@ -963,10 +963,11 @@ export async function addTemplate(input: { title: string; description: string; u
     file_path: input.filePath, file_name: input.fileName, created_by: v.userId,
     // Admins always see templates; the others only when chosen.
     visible_to: ["admin", ...input.visibleTo.filter((r) => r === "account_manager" || r === "creator")],
+    section: input.section === "sops" ? "sops" : "templates",
   });
   if (error) return { error: "The template couldn't be saved." };
   revalidatePath("/team/templates");
-  return { ok: "Template added." };
+  return { ok: input.section === "sops" ? "SOP added." : "Template added." };
 }
 
 export async function deleteTemplate(form: FormData) {

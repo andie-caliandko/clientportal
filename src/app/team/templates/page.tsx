@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { embedUrl } from "@/lib/links";
@@ -33,7 +34,9 @@ const copyUrl = (url: string) => {
   return m ? `https://docs.google.com/${m[1]}/d/${m[2]}/copy` : null;
 };
 
-export default async function TemplatesPage() {
+export default async function TemplatesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const section = tab === "sops" ? "sops" : "templates";
   const { agency, member } = await requireTeam();
   const isAdmin = member.role === "admin";
   const supabase = await createClient();
@@ -41,7 +44,8 @@ export default async function TemplatesPage() {
     supabase.from("agency_templates").select("*").eq("agency_id", agency.id).order("created_at", { ascending: false }),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id),
   ]);
-  const templates = (data ?? []) as Template[];
+  // Templates and SOPs share one list; each tab shows its own.
+  const templates = ((data ?? []) as (Template & { section?: string | null })[]).filter((t) => (t.section ?? "templates") === section);
   const names = new Map((members ?? []).map((m) => [m.user_id, m.display_name]));
   const paths = templates.map((t) => t.file_path).filter(Boolean) as string[];
   const { data: signed } = paths.length
@@ -52,18 +56,28 @@ export default async function TemplatesPage() {
 
   return (
     <section style={{ display: "grid", gap: 20 }}>
-      <div>
-        <p className="eyebrow">{short} · For the whole team</p>
-        <h1 style={{ marginTop: 6 }}>Agency templates</h1>
-        <p className="note" style={{ maxWidth: "62ch" }}>
-          The docs, decks and files we start from. Make a copy before you edit, so the template stays clean.
-        </p>
+      <div className="top">
+        <div>
+          <p className="eyebrow">{short} · For the whole team</p>
+          <h1 style={{ marginTop: 6 }}>{section === "sops" ? "SOPs" : "Agency templates"}</h1>
+          <p className="note" style={{ maxWidth: "62ch" }}>
+            {section === "sops"
+              ? "How we do things: step-by-step walkthroughs and our full SOPs folder."
+              : "The docs, decks and files we start from. Make a copy before you edit, so the template stays clean."}
+          </p>
+        </div>
+        <nav className="view-switch" aria-label="Templates or SOPs">
+          <Link href="/team/templates" aria-current={section === "templates" ? "page" : undefined} scroll={false}>Templates</Link>
+          <Link href="/team/templates?tab=sops" aria-current={section === "sops" ? "page" : undefined} scroll={false}>SOPs</Link>
+        </nav>
       </div>
 
-      {isAdmin && <TemplateForm agencyId={agency.id} agencyName={short} />}
+      {isAdmin && <TemplateForm agencyId={agency.id} agencyName={short} section={section} />}
 
       {!templates.length && (
-        <div className="panel"><p className="note">{isAdmin ? "No templates yet. Add the first one above." : "No templates yet. Your admins will add them here."}</p></div>
+        <div className="panel"><p className="note">{section === "sops"
+          ? isAdmin ? "No SOPs yet. Add a Tango walkthrough or your Google Drive SOPs folder above." : "No SOPs yet. Your admins will add them here."
+          : isAdmin ? "No templates yet. Add the first one above." : "No templates yet. Your admins will add them here."}</p></div>
       )}
 
       <div className="templates">
@@ -79,7 +93,7 @@ export default async function TemplatesPage() {
                 {t.description && <p className="note">{t.description}</p>}
               </div>
               {embed && (
-                <div className="template-embed">
+                <div className={`template-embed ${embed.includes("embeddedfolderview") ? "folder" : ""}`}>
                   <iframe src={embed} title={t.title} loading="lazy" allow="fullscreen" allowFullScreen />
                 </div>
               )}

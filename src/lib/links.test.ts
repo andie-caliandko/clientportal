@@ -41,6 +41,8 @@ describe("embedUrl", () => {
     expect(embedUrl("https://www.canva.com/design/DAF1/edit")).toBe("https://www.canva.com/design/DAF1/view?embed");
     expect(embedUrl("https://www.loom.com/share/xyz")).toBe("https://www.loom.com/embed/xyz");
     expect(embedUrl("https://youtu.be/vid")).toBe("https://www.youtube.com/embed/vid");
+    expect(embedUrl("https://app.tango.us/app/workflow/Posting-a-reel-in-Rella-abc123")).toBe("https://app.tango.us/app/embed/Posting-a-reel-in-Rella-abc123");
+    expect(embedUrl("https://drive.google.com/drive/folders/1AbC_def")).toBe("https://drive.google.com/embeddedfolderview?id=1AbC_def#list");
   });
   it("leaves other links alone", () => {
     expect(embedUrl("https://example.com/file.pdf")).toBeNull();
