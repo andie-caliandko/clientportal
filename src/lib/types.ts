@@ -61,6 +61,9 @@ export type Client = {
   /** Archived clients can still sign in until this date (30 days after archiving). */
   access_ends_at?: string | null;
   logins_removed_at?: string | null;
+  /** Main contact saved when the client was set up without sending the invite yet. */
+  contact_name?: string | null;
+  contact_email?: string | null;
   logo_path: string | null;
 };
 

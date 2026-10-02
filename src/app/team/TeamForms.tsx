@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { avatarUrl } from "@/app/Avatar";
 import { REPEATS } from "@/lib/recurring";
+import type { ProposedTask } from "./actions";
 import { PhotoCropper } from "@/app/PhotoCropper";
 import {
   addClientContact,
   addToClient,
   addTask,
   addBrief,
+  addReviewedTasks,
   createClientAccount,
   resendQuestionnaire,
   deleteClient,
@@ -210,8 +212,10 @@ function Connect({ id, label, hint, later, setLater, children }: {
   );
 }
 
-export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId: string }) {
+export function NewClientForm({ members, agencyId, meId }: { members: Opt[]; agencyId: string; meId: string }) {
   const [state, setState] = useState<{ error?: string }>({});
+  const [review, setReview] = useState<{ clientId: string; next: string; tasks: (ProposedTask & { key: number })[] } | null>(null);
+  const [sendNow, setSendNow] = useState(true);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   // Create the client, add the brief if there is one, then open their page.
@@ -221,6 +225,7 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
     startTransition(async () => {
       const res = await createClientAccount({}, form);
       if (!res.clientId) return setState({ error: res.error });
+      const go = (briefNote: string) => `/team/clients/${res.clientId}?created=1${res.error ? "&invite=failed" : ""}${form.get("send_invite") === "on" ? "" : "&invite=later"}${briefNote ? `&brief=${briefNote}` : ""}`;
       const file = form.get("brief_file");
       const briefUrl = String(form.get("brief_url") ?? "").trim();
       let briefNote = "";
@@ -238,7 +243,8 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
           if (b.error) briefNote = "brief";
         }
       }
-      router.push(`/team/clients/${res.clientId}?created=1${res.error ? "&invite=failed" : ""}${briefNote ? `&brief=${briefNote}` : ""}`);
+      // Look over the onboarding tasks before they're posted.
+      setReview({ clientId: res.clientId, next: go(briefNote), tasks: (res.proposed ?? []).map((t, i) => ({ ...t, key: i })) });
     });
   };
   const [later, setLater] = useState<Record<string, boolean>>({});
@@ -248,6 +254,7 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
   const f = (id: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="field"><label htmlFor={id}>{label}</label><input className="input" id={id} name={id} {...props} /></div>
   );
+  if (review) return <ReviewTasks review={review} members={members} am={am} agencyMe={meId} onDone={() => router.push(review.next)} />;
   return (
     <form onSubmit={submit} className="panel new-client" style={{ gap: 18 }}>
       <h2>Business</h2>
@@ -273,8 +280,13 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
       </fieldset>
 
       <h2>Main contact</h2>
-      <p className="note">They get an email invite to create their portal password. They can add one more person themselves.</p>
-      <div className="row">{f("contact_name", "Name", { required: true })}{f("contact_email", "Email", { type: "email", required: true })}</div>
+      <div className="row">{f("contact_name", "Name", { required: sendNow })}{f("contact_email", "Email", { type: "email", required: sendNow })}</div>
+      <label className="row" style={{ alignItems: "center", gap: 8 }}>
+        <input type="checkbox" name="send_invite" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} /> Send them the portal invite now
+      </label>
+      <p className="note">{sendNow
+        ? "They get an email invite to create their portal password. They can add one more person themselves."
+        : "Their portal gets set up without emailing them. Send the invite from their page when you're ready."}</p>
 
       <h2>Connections</h2>
       <p className="note">These power the automations. If one isn&apos;t ready yet, tick Set up later and the account manager gets a task for it.</p>
@@ -307,7 +319,7 @@ export function NewClientForm({ members, agencyId }: { members: Opt[]; agencyId:
         tasks for the team (see Settings).
       </p>
       {state.error && <p className="error">{state.error}</p>}
-      <div><button className="btn" disabled={pending}>{pending ? "Creating…" : "Create client and send invite"}</button></div>
+      <div><button className="btn" disabled={pending}>{pending ? "Creating…" : sendNow ? "Create client and send invite" : "Create client"}</button></div>
     </form>
   );
 }
@@ -829,14 +841,14 @@ export function DriveSettings({ waiting, withoutFolder }: { waiting: number; wit
 }
 
 /** Clients page: "Add client" opens the new-client form in a pop-up. */
-export function AddClientButton({ members, agencyId }: { members: Opt[]; agencyId: string }) {
+export function AddClientButton({ members, agencyId, meId }: { members: Opt[]; agencyId: string; meId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className="btn sm" onClick={() => setOpen(true)}>Add client</button>
       {open && (
         <Modal title="Add a client" onClose={() => setOpen(false)} wide>
-          <NewClientForm members={members} agencyId={agencyId} />
+          <NewClientForm members={members} agencyId={agencyId} meId={meId} />
         </Modal>
       )}
     </>
@@ -930,5 +942,69 @@ export function EditTeammate({ member, isMe, removeAction, clients }: {
         </Modal>
       )}
     </>
+  );
+}
+
+/** After creating a client: look over the onboarding tasks, change anything, then post them. */
+function ReviewTasks({ review, members, am, agencyMe, onDone }: {
+  review: { clientId: string; tasks: (ProposedTask & { key: number })[] };
+  members: Opt[];
+  am: string;
+  agencyMe: string;
+  onDone: () => void;
+}) {
+  const [rows, setRows] = useState(review.tasks);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const people = members.filter((m) => m.role !== "creator");
+  const set = (key: number, patch: Partial<ProposedTask>) => setRows(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+  return (
+    <div className="review-tasks">
+      <div>
+        <p className="flash" style={{ margin: 0 }}>Client created.</p>
+        <h2 style={{ marginTop: 12 }}>Onboarding tasks</h2>
+        <p className="note">These go on your team&apos;s board for this client. Change anything you&apos;d like first.</p>
+      </div>
+      <ul className="review-list">
+        {rows.map((r) => (
+          <li key={r.key}>
+            <input className="input" aria-label="Task" value={r.title} onChange={(e) => set(r.key, { title: e.target.value })} />
+            <input className="input" type="date" aria-label="Due" value={r.date} onChange={(e) => set(r.key, { date: e.target.value })} />
+            <select className="sel" aria-label="Who" value={r.assignee_id} onChange={(e) => set(r.key, { assignee_id: e.target.value })}>
+              {people.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}{m.user_id === am ? " (account manager)" : m.user_id === agencyMe ? " (you)" : ""}</option>)}
+            </select>
+            <button type="button" className="linkbtn note" onClick={() => setRows(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.title}`}>Remove</button>
+          </li>
+        ))}
+        {!rows.length && <li className="note">No onboarding tasks. Add one below, or skip.</li>}
+      </ul>
+      <div><button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: "", note: null, date: today, assignee_id: am }])}>Add a task</button></div>
+      {error && <p className="error">{error}</p>}
+      <div className="row">
+        <button type="button" className="btn" disabled={pending} onClick={() => startTransition(async () => {
+          const r = await addReviewedTasks(review.clientId, rows.map((r) => ({ title: r.title, note: r.note, date: r.date, assignee_id: r.assignee_id })));
+          if (r.error) return setError(r.error);
+          onDone();
+        })}>{pending ? "Adding…" : rows.length ? `Add ${rows.length} task${rows.length === 1 ? "" : "s"}` : "Continue"}</button>
+        <button type="button" className="btn line" disabled={pending} onClick={onDone}>Skip, add none</button>
+      </div>
+    </div>
+  );
+}
+
+/** A client set up without an invite: send it to the saved main contact in one click. */
+export function SendSavedInvite({ clientId, name, email }: { clientId: string; name: string; email: string }) {
+  const [state, action, pending] = useActionState(addClientContact, {});
+  if (state.ok) return <p className="flash">{state.ok}</p>;
+  return (
+    <form action={action} className="saved-invite">
+      <input type="hidden" name="client" value={clientId} />
+      <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="email" value={email} />
+      <p style={{ margin: 0 }}><b>Not invited yet.</b> <span className="note">{name} · {email}</span></p>
+      <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send portal invite"}</button>
+      {state.error && <p className="error" style={{ flexBasis: "100%" }}>{state.error}</p>}
+    </form>
   );
 }

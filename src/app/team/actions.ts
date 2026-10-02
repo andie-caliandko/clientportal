@@ -137,16 +137,7 @@ export async function sendCalendar(_: Result, form: FormData): Promise<Result> {
   });
   if (error) return { error: "That calendar couldn't be saved." };
 
-  await supabase.from("tasks").insert({
-    agency_id: v.agency.id,
-    client_id: client.id,
-    title: `${client.name}: approve ${monthLabel} content`,
-    source: "rella",
-    status: "waiting",
-    assignee_id: client.account_manager_id,
-    due_at: due.toISOString(),
-    auto: true,
-  });
+  // No separate team task: the approval shows as the client's approval card on the board.
 
   const dueText = formatDue(due, v.agency.timezone);
   await notifyClient(client.id, { kind: "approval", title: `Your ${monthLabel} content is ready for approval`, body: `Please approve by ${dueText}.`, link: "/portal" });
@@ -239,7 +230,9 @@ const CONNECTIONS: Connection[] = [
   { key: "dubsado", label: "Contract", laterTask: "Set up the client in Dubsado and add their contract link and Dubsado email on their client page" },
 ];
 
-export async function createClientAccount(_: Result, form: FormData): Promise<Result & { clientId?: string }> {
+export type ProposedTask = { title: string; note: string | null; date: string; assignee_id: string };
+
+export async function createClientAccount(_: Result, form: FormData): Promise<Result & { clientId?: string; proposed?: ProposedTask[] }> {
   const v = await requireTeam();
   if (v.member.role !== "admin") return { error: "Only admins can add clients." };
   const get = (k: string) => String(form.get(k) ?? "").trim();
@@ -250,7 +243,8 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   const contactEmail = get("contact_email").toLowerCase();
   const am = get("account_manager");
   if (!name) return { error: "Add the business name." };
-  if (!contactName || !contactEmail) return { error: "Add the main contact's name and email. They'll get the portal invite." };
+  const sendInvite = form.get("send_invite") === "on";
+  if (sendInvite && (!contactName || !contactEmail)) return { error: "Add the main contact's name and email to send the invite, or untick Send the invite now." };
   if (!am) return { error: "Choose an account manager." };
 
   const driveId = driveFolderId(get("drive_folder"));
@@ -287,6 +281,9 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
       dubsado_project_url: later("dubsado") ? null : get("dubsado_project") || null,
       website: website ? (/^https?:\/\//.test(website) ? website : `https://${website}`) : null,
       start_date: get("start_date") || null,
+      // Saved for later when the invite isn't sent now.
+      contact_name: sendInvite ? null : contactName || null,
+      contact_email: sendInvite ? null : contactEmail || null,
     })
     .select("id")
     .single();
@@ -300,28 +297,26 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     await tellAddedToClient(client.id, extraTeam, v.userId);
   });
 
-  // The agency's new-client checklist, plus a task for anything set up later.
+  // The agency's new-client checklist, plus a task for anything set up later. These come back for a
+  // look first (addReviewedTasks saves them), so the team can change them before they're posted.
   const today = new Date();
   const template = (v.agency.new_client_tasks ?? []) as { title: string; note?: string; days?: number; assignee?: string }[];
-  const due = (days: number) => dateAtHour(
-    new Intl.DateTimeFormat("en-CA", { timeZone: v.agency.timezone }).format(new Date(today.getTime() + days * 86_400_000)),
-    17,
-    v.agency.timezone,
-  ).toISOString();
-  const tasks = [
+  const dayAfter = (days: number) => new Intl.DateTimeFormat("en-CA", { timeZone: v.agency.timezone }).format(new Date(today.getTime() + days * 86_400_000));
+  const proposed: ProposedTask[] = [
     ...template.map((t) => ({
       title: t.title,
       note: t.note ?? null,
-      due_at: due(t.days ?? 0),
+      date: dayAfter(t.days ?? 0),
       // "me" goes to the admin adding the client; everything else to the account manager.
       assignee_id: t.assignee === "me" ? v.userId : am,
     })),
-    ...CONNECTIONS.filter((c) => later(c.key)).map((c) => ({ title: c.laterTask, note: null, due_at: due(1), assignee_id: am })),
+    ...CONNECTIONS.filter((c) => later(c.key)).map((c) => ({ title: c.laterTask, note: null, date: dayAfter(1), assignee_id: am })),
   ];
-  if (tasks.length) {
-    await supabase.from("tasks").insert(
-      tasks.map((t) => ({ ...t, agency_id: v.agency.id, client_id: client.id, source: "manual", auto: true, created_by: v.userId })),
-    );
+
+  // Their Drive folder, with Branding and Content inside.
+  after(() => ensureClientFolders({ clientId: client.id }));
+  if (!sendInvite) {
+    return { ok: `${name} is set up. Send their portal invite from their page when you're ready.`, clientId: client.id, proposed };
   }
 
   const admin = createAdminClient();
@@ -330,7 +325,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     data: { display_name: contactName },
   });
   if (inviteErr || !invite.user) {
-    return { clientId: client.id, error: `${name} was created, but the invite to ${contactEmail} didn't send. Check the address and invite them from the client page.` };
+    return { clientId: client.id, proposed, error: `${name} was created, but the invite to ${contactEmail} didn't send. Check the address and invite them from the client page.` };
   }
   await admin.from("client_users").insert({
     client_id: client.id,
@@ -339,9 +334,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     display_name: contactName,
     email: contactEmail,
   });
-  // Their Drive folder, with Branding and Content inside.
-  after(() => ensureClientFolders({ clientId: client.id }));
-  return { ok: `${name} is set up.`, clientId: client.id };
+  return { ok: `${name} is set up.`, clientId: client.id, proposed };
 }
 
 // ---------------------------------------------------------------------------
@@ -912,8 +905,10 @@ export async function addClientContact(_: Result, form: FormData): Promise<Resul
     data: { display_name: name },
   });
   if (error || !data.user) return { error: "That invite didn't send. Check the email address, or they may already have an account." };
-  const { error: linkErr } = await admin.from("client_users").insert({ client_id: clientId, user_id: data.user.id, role: "member", display_name: name, email });
+  const { error: linkErr } = await admin.from("client_users").insert({ client_id: clientId, user_id: data.user.id, role: count ? "member" : "owner", display_name: name, email });
   if (linkErr) return { error: "They were invited but couldn't be added to this portal. Try again." };
+  // The saved "invite later" contact has now been invited.
+  await admin.from("clients").update({ contact_name: null, contact_email: null }).eq("id", clientId).ilike("contact_email", email);
   revalidatePath(`/team/clients/${clientId}`);
   return { ok: `Invite sent to ${name}. They'll get an email to create a password.` };
 }
@@ -1090,4 +1085,25 @@ export async function setTeammateClients(_: Result, form: FormData): Promise<Res
   revalidatePath("/team/team");
   [...add, ...remove].forEach((id) => revalidatePath(`/team/clients/${id}`));
   return { ok: add.length || remove.length ? "Clients updated." : "No changes." };
+}
+
+/** Save the new client's onboarding tasks after the team has looked them over. */
+export async function addReviewedTasks(clientId: string, tasks: ProposedTask[]): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can add clients." };
+  const rows = tasks
+    .map((t) => ({ ...t, title: t.title.trim() }))
+    .filter((t) => t.title && /^\d{4}-\d{2}-\d{2}$/.test(t.date))
+    .map((t) => ({
+      agency_id: v.agency.id, client_id: clientId, title: t.title, note: t.note?.trim() || null,
+      due_at: dateAtHour(t.date, 17, v.agency.timezone).toISOString(), assignee_id: t.assignee_id || null,
+      source: "manual", auto: true, created_by: v.userId,
+    }));
+  if (rows.length) {
+    const { error } = await (await createClient()).from("tasks").insert(rows);
+    if (error) return { error: "Those tasks couldn't be saved." };
+  }
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/team");
+  return { ok: rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"} added.` : "No tasks added." };
 }

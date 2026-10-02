@@ -40,7 +40,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     <section style={{ display: "grid", gap: 16 }}>
       <div className="top">
         <h1>Clients</h1>
-        {member.role === "admin" && !showArchived && <AddClientButton members={members ?? []} agencyId={agency.id} />}
+        {member.role === "admin" && !showArchived && <AddClientButton members={members ?? []} agencyId={agency.id} meId={member.user_id} />}
       </div>
       <div className="tabs" role="tablist" aria-label="Which clients">
         <Link href="/team/clients" role="tab" aria-selected={!showArchived}>Active</Link>

@@ -10,7 +10,7 @@ import { ApprovalCard, TaskCard } from "./TaskCard";
 import { FilterStat, FilterTabs, TaskFilterRoot, WhoSelect } from "./TaskFilter";
 import { DragBoard, DragCard, DropColumn } from "./DragBoard";
 import { NewTask } from "./TeamForms";
-import { isClientFacing } from "@/lib/tasks";
+import { isClientFacing, isOldApprovalReminder } from "@/lib/tasks";
 
 const COLUMNS = [
   { key: "todo", label: "To do" },
@@ -68,7 +68,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   // Archived clients drop off the board.
   // Someone's tasks: assigned to them, or sent to a client by them (they follow up on it).
   const isFor = (t: Task, id: string) => t.assignee_id === id || (!t.assignee_id && t.created_by === id);
-  const forWho = ((tasks ?? []) as Task[]).filter((t) => !t.client_id || t.client_id in clientName).filter((t) => who === "all" || isFor(t, who === "me" ? userId : who));
+  const forWho = ((tasks ?? []) as Task[]).filter((t) => (!t.client_id || t.client_id in clientName) && !isOldApprovalReminder(t)).filter((t) => who === "all" || isFor(t, who === "me" ? userId : who));
 
   const now = Date.now();
   const dayOf = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(d);

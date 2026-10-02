@@ -12,7 +12,7 @@ import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, AddTeammate, ResendQuestionnaire, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, AddTeammate, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -25,7 +25,7 @@ import { FilePreview } from "@/app/portal/FilePreview";
 import { ApprovalCard, TaskCard } from "../../TaskCard";
 import { loadTaskPeople } from "@/lib/taskPeople";
 import type { Task } from "@/lib/types";
-import { isClientFacing } from "@/lib/tasks";
+import { isClientFacing, isOldApprovalReminder } from "@/lib/tasks";
 
 // Saving a Drive folder link copies the client's waiting files in the background.
 export const maxDuration = 300;
@@ -90,7 +90,7 @@ export default async function ClientDetail({
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
   const allTasks = (tasks.data ?? []) as Task[];
   // Overdue first, then soonest due, then no date.
-  const openTasks = allTasks.filter((t) => t.status !== "done" && (!t.show_from || new Date(t.show_from).getTime() <= Date.now())).sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
+  const openTasks = allTasks.filter((t) => t.status !== "done" && !isOldApprovalReminder(t) && (!t.show_from || new Date(t.show_from).getTime() <= Date.now())).sort((a, b) => (a.due_at ?? "9999").localeCompare(b.due_at ?? "9999"));
   const pendingCals = ((cals.data ?? []) as Calendar[]).filter((c) => c.status === "pending");
   const finishedByClient = allTasks.filter((t) => t.status === "done" && t.client_assignee_id).slice(0, 5);
   const onTeam = new Set((teamRows.data ?? []).map((t) => t.user_id));
@@ -196,6 +196,7 @@ export default async function ClientDetail({
         </div>
       )}
       {sp.restored && <p className="flash">{client.name} is active again. Their portal is open.</p>}
+      {sp.created && sp.invite === "later" && <p className="flash">Client created. Their portal is ready; send the invite under People on their portal when you&apos;re ready.</p>}
       {sp.created && !sp.invite && <p className="flash">Client created. {people.data?.[0]?.display_name ?? "The main contact"} has an invite to set their password.</p>}
       {sp.created && sp.invite === "failed" && <p className="readonly">Client created, but the portal invite didn&apos;t send. Check their email and add them under People on their portal.</p>}
       {sp.brief && <p className="readonly">The project brief didn&apos;t save{sp.brief === "brief-file" ? " (the file didn't upload)" : ""}. Add it under Project briefs below.</p>}
@@ -407,6 +408,9 @@ export default async function ClientDetail({
 
         <div className="panel">
           <h2>People on their portal</h2>
+          {!(people.data ?? []).length && client.contact_email && canEdit && !client.archived_at && (
+            <SendSavedInvite clientId={client.id} name={client.contact_name ?? client.contact_email} email={client.contact_email} />
+          )}
           <ul className="list">
             {((people.data ?? []) as ClientUser[]).map((p) => (
               <li key={p.user_id}>

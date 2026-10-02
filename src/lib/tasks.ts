@@ -9,3 +9,11 @@ import type { Task } from "./types";
 export function isClientFacing(t: Pick<Task, "client_assignee_id" | "status" | "source" | "auto">) {
   return !!t.client_assignee_id || (t.status === "waiting" && !t.auto && t.source !== "rella");
 }
+
+/**
+ * Old "approve this month's content" reminders (made before approval cards
+ * existed). The approval card on the board covers these, so they're hidden.
+ */
+export function isOldApprovalReminder(t: Pick<Task, "source" | "status">) {
+  return t.source === "rella" && t.status === "waiting";
+}
