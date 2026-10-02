@@ -61,6 +61,24 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   }));
   const peak = Math.max(1, ...trend.map((t) => t.total), mrr);
 
+  // Contracts: what each client is on and where they are in it.
+  const nice = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+  const contractInfo = (cid: string) => {
+    const c = contractFor(cid);
+    if (!c) return null;
+    const st = contractStatus(c, today);
+    const project = c.kind === "project";
+    const terms = termsFor(cid);
+    const label =
+      st.state === "renewal" ? { t: project ? "Follow up" : "Renewal talk due", cls: "warn" }
+      : st.state === "ending" ? { t: `${project ? "Wraps up" : "Ends"} in ${st.daysLeft} day${st.daysLeft === 1 ? "" : "s"}`, cls: "crit" }
+      : st.state === "ended" ? { t: c.status === "ended" ? "Not renewing" : "Ended", cls: "info" }
+      : st.state === "upcoming" ? { t: `Starts ${nice(c.start_date)}`, cls: "info" }
+      : { t: "On track", cls: "ok" };
+    const nextStart = new Date(Date.parse(`${st.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    return { c, st, project, terms, label, nextStart };
+  };
+
   return (
     <section style={{ display: "grid", gap: 18 }}>
       <div className="top">
@@ -114,12 +132,29 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
         <h2>Clients this month</h2>
         <div className="tablewrap">
           <table className="ceo-table">
-            <thead><tr><th scope="col">Client</th><th scope="col">Account manager</th><th scope="col" className="kn">Monthly fee</th><th scope="col">Invoice due</th><th scope="col">{monthLabel(month).split(" ")[0]} invoice</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col">Client</th><th scope="col">Account manager</th><th scope="col">Contract</th><th scope="col" className="kn">Monthly fee</th><th scope="col">Invoice due</th><th scope="col">{monthLabel(month).split(" ")[0]} invoice</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td><Link href={`/team/clients/${r.id}`}><b>{r.name}</b></Link></td>
                   <td>{name(r.account_manager_id)}</td>
+                  <td className="ceo-contract">
+                    {(() => {
+                      const k = contractInfo(r.id);
+                      if (!k) return <SetContract clientId={r.id} clientName={r.name} contract={null} />;
+                      return (
+                        <>
+                          <span>{k.project ? "One-time project" : `${k.c.months}-month retainer`}{k.terms > 1 ? ` · ${ordinal(k.c.term_number ?? k.terms)} term` : ""}</span>
+                          <span className="note">{k.st.state === "upcoming" ? `Starts ${nice(k.c.start_date)}` : k.project ? `${Math.max(0, k.st.daysLeft)} days left · ends ${nice(k.st.end)}` : `Month ${k.st.month} of ${k.c.months} · ends ${nice(k.st.end)}`}</span>
+                          <span className="ceo-contract-row">
+                            <span className={`pill ${k.label.cls}`}>{k.label.t}</span>
+                            {k.c.status === "active" && <RenewContract clientName={r.name} contract={k.c} nextStartLabel={nice(k.nextStart)} />}
+                            <SetContract clientId={r.id} clientName={r.name} contract={k.c.status === "active" ? k.c : null} />
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td className="kn">{r.fee ? money(r.fee) : r.projectFee ? <>{money(r.projectFee)}<br /><span className="note">project fee</span></> : <span className="note">Not set</span>}</td>
                   <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
@@ -142,53 +177,45 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
         {!rows.length && <p className="note">No active clients.</p>}
       </div>
 
-      <div className="panel">
-        <h2>Contracts</h2>
-        <p className="note">Where each client is in their contract. Renewal talks are flagged at the start of the second-to-last month (month 5 of 6); one-time projects get a follow-up two weeks before they wrap up.</p>
-        <div className="tablewrap">
-          <table className="ceo-table">
-            <thead><tr><th scope="col">Client</th><th scope="col">Contract</th><th scope="col">Where they are</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {(clients ?? []).map((cl) => {
-                const c = contractFor(cl.id);
-                const st = c ? contractStatus(c, today) : null;
-                const nice = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
-                const terms = termsFor(cl.id);
-                const project = c?.kind === "project";
-                const label = !st ? null
-                  : st.state === "renewal" ? { t: project ? "Follow up" : "Renewal talk due", cls: "warn" }
-                  : st.state === "ending" ? { t: `${project ? "Wraps up" : "Ends"} in ${st.daysLeft} day${st.daysLeft === 1 ? "" : "s"}`, cls: "crit" }
-                  : st.state === "ended" ? { t: c!.status === "ended" ? "Not renewing" : "Ended", cls: "info" }
-                  : st.state === "upcoming" ? { t: `Starts ${nice(c!.start_date)}`, cls: "info" }
-                  : { t: "On track", cls: "ok" };
-                return (
-                  <tr key={cl.id}>
-                    <td><Link href={`/team/clients/${cl.id}`}><b>{cl.name}</b></Link></td>
-                    <td>
-                      {c ? <>{project ? "One-time project" : `${c.months}-month retainer`}{terms > 1 ? ` · ${ordinal(c.term_number ?? terms)} term` : ""}<br /><span className="note">{nice(c.start_date)} – {nice(st!.end)}</span></> : <span className="note">Not set</span>}
-                    </td>
-                    <td style={{ minWidth: 160 }}>
-                      {st && st.state !== "upcoming" && (
-                        <>
-                          <div className="goal-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(st.progress * 100)} aria-label="Contract progress"><i style={{ width: `${st.progress * 100}%` }} /></div>
-                          <span className="note">{project ? `${Math.max(0, st.daysLeft)} days left` : `Month ${st.month} of ${c!.months}`}</span>
-                        </>
-                      )}
-                    </td>
-                    <td>{label && <span className={`pill ${label.cls}`}>{label.t}</span>}</td>
-                    <td className="team-edit">
-                      <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
-                        {c && c.status === "active" && <RenewContract clientName={cl.name} contract={c} nextStartLabel={nice(new Date(Date.parse(`${st!.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10))} />}
-                        <SetContract clientId={cl.id} clientName={cl.name} contract={c && c.status === "active" ? c : null} />
+      {(contractRows ?? []).length > 0 && (() => {
+        // A window from 3 months back to 12 months ahead, one column per month.
+        const first = shiftMonth(today.slice(0, 7), -3);
+        const months = Array.from({ length: 15 }, (_, k) => shiftMonth(first, k));
+        const from = Date.parse(`${first}-01T00:00:00Z`);
+        const to = Date.parse(`${shiftMonth(first, 15)}-01T00:00:00Z`);
+        const pos = (d: string) => Math.max(0, Math.min(100, ((Date.parse(`${d}T00:00:00Z`) - from) / (to - from)) * 100));
+        const withContracts = (clients ?? []).map((cl) => ({ cl, k: contractInfo(cl.id) })).filter((x) => x.k);
+        return (
+          <div className="panel">
+            <h2>Contract timeline</h2>
+            <p className="note">Each bar is a client&apos;s current term. The marker is when to start the renewal talk (month 5 of 6) or, for one-time projects, the follow-up.</p>
+            <div className="tablewrap">
+              <div className="ct-timeline">
+                <div className="ct-head">
+                  <span />
+                  <div className="ct-months">{months.map((m) => <span key={m}>{new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short" })}{m.endsWith("-01") ? ` ’${m.slice(2, 4)}` : ""}</span>)}</div>
+                </div>
+                {withContracts.map(({ cl, k }) => (
+                  <div className="ct-row" key={cl.id}>
+                    <span className="ct-name">{cl.name}</span>
+                    <div className="ct-track">
+                      <span className="ct-today" style={{ left: `${pos(today)}%` }} aria-hidden="true" />
+                      <span className={`ct-bar ${k!.label.cls}`} style={{ left: `${pos(k!.c.start_date)}%`, width: `${Math.max(1, pos(k!.st.end) - pos(k!.c.start_date))}%` }}
+                        title={`${cl.name}: ${nice(k!.c.start_date)} – ${nice(k!.st.end)} · ${k!.label.t}`}>
+                        <span className="ct-bar-label">{k!.project ? "Project" : `${k!.c.months} mo`}</span>
                       </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                      {k!.c.status === "active" && <span className="ct-flag" style={{ left: `${pos(k!.st.flag)}%` }} title={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} aria-label={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <ul className="ct-key" aria-label="Key">
+              <li><i className="ct-bar ok" /> On track</li><li><i className="ct-bar warn" /> Renewal talk due</li><li><i className="ct-bar crit" /> Ending soon</li><li><i className="ct-flag-key" /> Renewal marker</li><li><i className="ct-today-key" /> Today</li>
+            </ul>
+          </div>
+        );
+      })()}
 
       <div className="cgrid pairs">
         <div className="panel">

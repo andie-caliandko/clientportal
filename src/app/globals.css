@@ -861,3 +861,27 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .goal-bar i { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
 .goal-num { font-size: .85rem; color: var(--ink-2); white-space: nowrap; }
 .new-signups { border-color: var(--accent); }
+
+/* CEO dashboard: contract column and timeline */
+.ceo-contract { display: grid; gap: 3px; min-width: 210px; }
+.ceo-contract .note { font-size: .78rem; }
+.ceo-contract-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ct-timeline { display: grid; gap: 6px; min-width: 760px; }
+.ct-head, .ct-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: center; }
+.ct-months { display: grid; grid-template-columns: repeat(15, 1fr); font-size: .68rem; color: var(--ink-2); }
+.ct-months span { border-left: 1px solid var(--line); padding-left: 4px; white-space: nowrap; }
+.ct-name { font-size: .85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-track { position: relative; height: 26px; background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: calc(100% / 15) 100%; }
+.ct-bar { position: absolute; top: 4px; height: 18px; border-radius: 5px; background: var(--primary); display: flex; align-items: center; overflow: hidden; }
+.ct-bar.ok { background: var(--primary); }
+.ct-bar.warn { background: var(--warn); }
+.ct-bar.crit { background: var(--crit); }
+.ct-bar.info { background: var(--stone, #9a9a94); opacity: .7; }
+.ct-bar-label { color: #fff; font-size: .66rem; font-weight: 600; padding: 0 6px; white-space: nowrap; }
+.ct-flag { position: absolute; top: 0; width: 3px; height: 26px; margin-left: -1px; background: var(--accent); border-radius: 2px; box-shadow: 0 0 0 1.5px var(--surface); }
+.ct-today { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); opacity: .55; }
+.ct-key { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .78rem; color: var(--ink-2); }
+.ct-key li { display: flex; align-items: center; gap: 6px; }
+.ct-key .ct-bar { position: static; width: 18px; height: 10px; }
+.ct-flag-key { display: inline-block; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
+.ct-today-key { display: inline-block; width: 2px; height: 14px; background: var(--ink); opacity: .55; }
