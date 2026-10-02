@@ -1,9 +1,9 @@
 "use client";
 
 import { Modal } from "@/app/Modal";
-import { useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { addTemplate } from "../actions";
+import { addTemplate, setSopFolder } from "../actions";
 
 /** Admins: add a link (Google Doc, Canva, Figma…) and/or a file for the team to use. */
 export function TemplateForm({ agencyId, agencyName, section = "templates" }: { agencyId: string; agencyName: string; section?: "templates" | "sops" }) {
@@ -48,7 +48,7 @@ export function TemplateForm({ agencyId, agencyName, section = "templates" }: { 
             <h2>New template</h2>
             <div className="field"><label htmlFor="tp-title">Name</label><input className="input" id="tp-title" name="title" placeholder={sop ? "Posting a reel in Rella" : "Monthly analytics report"} required /></div>
             <div className="field"><label htmlFor="tp-desc">When to use it (optional)</label><textarea className="input" id="tp-desc" name="description" style={{ minHeight: 60 }} placeholder="Duplicate this at the end of each month for every client." /></div>
-            <div className="field"><label htmlFor="tp-url">Link</label><input className="input" id="tp-url" name="url" type="url" placeholder={sop ? "A Tango link, or your Google Drive SOPs folder" : "https://docs.google.com/… or a Canva, Figma or Loom link"} /></div>
+            <div className="field"><label htmlFor="tp-url">Link</label><input className="input" id="tp-url" name="url" type="url" placeholder="https://docs.google.com/… or a Canva, Figma or Loom link" /></div>
             <div className="field"><label htmlFor="tp-file">Or upload a file</label><input className="input" id="tp-file" name="file" type="file" /></div>
             <fieldset className="daypick">
         <legend className="note">Who can see it</legend>
@@ -57,7 +57,7 @@ export function TemplateForm({ agencyId, agencyName, section = "templates" }: { 
         <label><input type="checkbox" name="visible" value="creator" defaultChecked /> Creators</label>
       </fieldset>
       <p className="note">Admins always see every template. Untick the others for things like proposals that are admin-only.</p>
-      <p className="note">Google Docs, Sheets, Slides, Drive files and folders, Tango, Canva, Figma, Loom and YouTube links show right on the page. For Google files and folders, set sharing to anyone at {agencyName} with the link.</p>
+      <p className="note">Google Docs, Sheets, Slides, Drive files and folders, Canva, Figma, Loom and YouTube links show right on the page. For Google files and folders, set sharing to anyone at {agencyName} with the link.</p>
             {msg.error && <p className="error">{msg.error}</p>}
             <div className="row">
               <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save template"}</button>
@@ -67,5 +67,21 @@ export function TemplateForm({ agencyId, agencyName, section = "templates" }: { 
         </Modal>
       )}
     </>
+  );
+}
+
+/** Admins: the Google Drive folder that holds every SOP. */
+export function SopFolderForm({ current }: { current: string | null }) {
+  const [state, action, pending] = useActionState(setSopFolder, {});
+  return (
+    <form action={action} className="row" style={{ alignItems: "flex-end" }}>
+      <div className="field" style={{ flex: 1, minWidth: "min(100%, 320px)" }}>
+        <label htmlFor="sop-folder">{current ? "SOPs folder" : "Add your Google Drive SOPs folder"}</label>
+        <input className="input" id="sop-folder" name="folder" defaultValue={current ?? ""} placeholder="https://drive.google.com/drive/folders/…" />
+      </div>
+      <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+      {state.error && <p className="error" style={{ flexBasis: "100%" }}>{state.error}</p>}
+      {state.ok && <p className="flash" style={{ flexBasis: "100%" }}>{state.ok}</p>}
+    </form>
   );
 }

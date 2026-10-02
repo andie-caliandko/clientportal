@@ -5,7 +5,7 @@ import { embedUrl } from "@/lib/links";
 import { FilePreview } from "@/app/portal/FilePreview";
 import { ConfirmButton } from "../TeamForms";
 import { deleteTemplate } from "../actions";
-import { TemplateForm } from "./TemplateForm";
+import { SopFolderForm, TemplateForm } from "./TemplateForm";
 
 type Template = {
   id: string;
@@ -54,30 +54,58 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
   const fileUrl = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
   const short = agency.brand.shortName ?? agency.name;
 
+  const head = (
+    <>
+        <div className="top">
+          <div>
+            <p className="eyebrow">{short} · For the whole team</p>
+            <h1 style={{ marginTop: 6 }}>{section === "sops" ? "SOPs" : "Agency templates"}</h1>
+            <p className="note" style={{ maxWidth: "62ch" }}>
+              {section === "sops"
+                ? "How we do things. Everything lives in our Google Drive SOPs folder."
+                : "The docs, decks and files we start from. Make a copy before you edit, so the template stays clean."}
+            </p>
+          </div>
+          <nav className="view-switch" aria-label="Templates or SOPs">
+            <Link href="/team/templates" aria-current={section === "templates" ? "page" : undefined} scroll={false}>Templates</Link>
+            <Link href="/team/templates?tab=sops" aria-current={section === "sops" ? "page" : undefined} scroll={false}>SOPs</Link>
+          </nav>
+        </div>
+    </>
+  );
+
+  // SOPs: the one Google Drive folder that holds all of them, shown big.
+  if (section === "sops") {
+    const folder = agency.sop_folder_url ?? null;
+    const embed = folder ? embedUrl(folder) : null;
+    return (
+      <section style={{ display: "grid", gap: 20 }}>
+        {head}
+        {isAdmin && <SopFolderForm current={folder} />}
+        {embed ? (
+          <div className="panel" style={{ gap: 10 }}>
+            <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+              <h2>All SOPs</h2>
+              <a className="btn sm line" href={folder!} target="_blank" rel="noreferrer">Open in Google Drive</a>
+            </div>
+            <div className="sop-folder"><iframe src={embed} title="SOPs folder" loading="lazy" /></div>
+            <p className="note">Click any file to open it in Google Drive. If you see a sign-in box, sign into your {short} Google account in this browser.</p>
+          </div>
+        ) : (
+          <div className="panel"><p className="note">{isAdmin ? "Paste the link to your Google Drive SOPs folder above and everything in it shows here." : "Your admins haven't added the SOPs folder yet."}</p></div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section style={{ display: "grid", gap: 20 }}>
-      <div className="top">
-        <div>
-          <p className="eyebrow">{short} · For the whole team</p>
-          <h1 style={{ marginTop: 6 }}>{section === "sops" ? "SOPs" : "Agency templates"}</h1>
-          <p className="note" style={{ maxWidth: "62ch" }}>
-            {section === "sops"
-              ? "How we do things: step-by-step walkthroughs and our full SOPs folder."
-              : "The docs, decks and files we start from. Make a copy before you edit, so the template stays clean."}
-          </p>
-        </div>
-        <nav className="view-switch" aria-label="Templates or SOPs">
-          <Link href="/team/templates" aria-current={section === "templates" ? "page" : undefined} scroll={false}>Templates</Link>
-          <Link href="/team/templates?tab=sops" aria-current={section === "sops" ? "page" : undefined} scroll={false}>SOPs</Link>
-        </nav>
-      </div>
+      {head}
 
-      {isAdmin && <TemplateForm agencyId={agency.id} agencyName={short} section={section} />}
+      {isAdmin && <TemplateForm agencyId={agency.id} agencyName={short} />}
 
       {!templates.length && (
-        <div className="panel"><p className="note">{section === "sops"
-          ? isAdmin ? "No SOPs yet. Add a Tango walkthrough or your Google Drive SOPs folder above." : "No SOPs yet. Your admins will add them here."
-          : isAdmin ? "No templates yet. Add the first one above." : "No templates yet. Your admins will add them here."}</p></div>
+        <div className="panel"><p className="note">{isAdmin ? "No templates yet. Add the first one above." : "No templates yet. Your admins will add them here."}</p></div>
       )}
 
       <div className="templates">

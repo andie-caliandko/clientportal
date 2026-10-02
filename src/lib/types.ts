@@ -25,6 +25,8 @@ export type Agency = {
   /** The agency owner (sees the CEO dashboard), and admins they've shared it with. */
   owner_id?: string | null;
   ceo_shared_with?: string[] | null;
+  /** The Google Drive folder with every SOP, shown on the SOPs tab. */
+  sop_folder_url?: string | null;
 };
 
 export type Role = "admin" | "account_manager" | "creator";

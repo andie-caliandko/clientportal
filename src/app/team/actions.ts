@@ -1111,3 +1111,15 @@ export async function addReviewedTasks(clientId: string, tasks: ProposedTask[]):
   revalidatePath("/team");
   return { ok: rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"} added.` : "No tasks added." };
 }
+
+/** Admins: the one Google Drive folder the SOPs tab shows. */
+export async function setSopFolder(_: Result, form: FormData): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can change this." };
+  const link = String(form.get("folder") ?? "").trim();
+  if (link && !driveFolderId(link)) return { error: "That doesn't look like a Google Drive folder link. It should have /folders/ in it." };
+  const { error } = await (await createClient()).from("agencies").update({ sop_folder_url: link || null }).eq("id", v.agency.id);
+  if (error) return { error: "That couldn't be saved." };
+  revalidatePath("/team/templates");
+  return { ok: link ? "Saved." : "Removed." };
+}

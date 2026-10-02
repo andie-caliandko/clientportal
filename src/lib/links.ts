@@ -31,7 +31,7 @@ export const clientLogoUrl = (path: string | null | undefined) =>
 
 /**
  * A version of a shared link that can be shown inside the page (Google Docs,
- * Sheets, Slides, Drive files and folders, Canva, Figma, Loom, Tango, YouTube). Null when the
+ * Sheets, Slides, Drive files and folders, Canva, Figma, Loom, YouTube). Null when the
  * site doesn't allow embedding; those just get an Open button.
  */
 export function embedUrl(input: string): string | null {
@@ -54,8 +54,6 @@ export function embedUrl(input: string): string | null {
   if (host === "canva.com" && (m = path.match(/^\/design\/([\w-]+)\/([\w-]+)?/))) return `https://www.canva.com/design/${m[1]}/${m[2] && m[2] !== "edit" ? `${m[2]}/` : ""}view?embed`;
   if (host === "figma.com" && /^\/(file|design|proto|board)\//.test(path)) return `https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(u.toString())}`;
   if (host === "loom.com" && (m = path.match(/^\/share\/([\w-]+)/))) return `https://www.loom.com/embed/${m[1]}`;
-  // Tango walkthroughs (app.tango.us/app/workflow/…).
-  if (host === "app.tango.us" && (m = path.match(/^\/app\/(?:workflow|embed)\/([\w-]+)/))) return `https://app.tango.us/app/embed/${m[1]}`;
   // A Google Drive folder shows as a list of its files.
   if (host === "drive.google.com" && (m = path.match(/^\/drive\/(?:u\/\d+\/)?folders\/([\w-]+)/))) return `https://drive.google.com/embeddedfolderview?id=${m[1]}#list`;
   if (host === "youtube.com" && u.searchParams.get("v")) return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
