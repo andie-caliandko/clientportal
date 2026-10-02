@@ -103,3 +103,24 @@ export async function emailClient(clientId: string, subject: string, body: strin
   const { data } = await admin.from("client_users").select("email").eq("client_id", clientId);
   await sendEmail((data ?? []).map((u) => u.email), subject, `${body}\n\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`);
 }
+
+/** Tell teammates they've been put on a client (a notification and an email). Skips whoever did it. */
+export async function tellAddedToClient(clientId: string, userIds: string[], byUserId: string, asManager = false) {
+  const admin = createAdminClient();
+  const ids = [...new Set(userIds)].filter((id) => id && id !== byUserId);
+  if (!ids.length) return;
+  const [{ data: client }, { data: people }, { data: by }] = await Promise.all([
+    admin.from("clients").select("id, name, agency_id").eq("id", clientId).maybeSingle(),
+    admin.from("agency_members").select("user_id, email, display_name").in("user_id", ids),
+    admin.from("agency_members").select("display_name").eq("user_id", byUserId).maybeSingle(),
+  ]);
+  if (!client) return;
+  const { notifyUser } = await import("./notifications");
+  const who = by?.display_name?.split(" ")[0] ?? "Your team";
+  const link = `${process.env.NEXT_PUBLIC_SITE_URL}/team/clients/${client.id}`;
+  for (const p of people ?? []) {
+    const what = asManager ? `the account manager for ${client.name}` : `on ${client.name}'s account`;
+    await notifyUser(client.agency_id, client.id, p.user_id, { kind: "task", title: `You're now ${what}`, body: `Added by ${who}`, link: `/team/clients/${client.id}` });
+    await sendEmail([p.email], `You're now ${what}`, `Hi ${p.display_name.split(" ")[0]},\n\n${who} added you ${asManager ? `as the account manager for ${client.name}` : `to ${client.name}'s account`}. You can see their portal, tasks, files and messages here:\n${link}`);
+  }
+}

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { catchUpDrive, ensureClientFolders } from "@/lib/drive";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
-import { emailClient, sendEmail } from "@/lib/notify";
+import { emailClient, sendEmail, tellAddedToClient } from "@/lib/notify";
 import { notifyClient, notifyUser } from "@/lib/notifications";
 import { afterMessageFiles, readAttachments } from "@/lib/messageFiles";
 import { weekStart } from "@/lib/health";
@@ -294,6 +294,11 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (extraTeam.length) {
     await supabase.from("client_team").insert(extraTeam.map((user_id) => ({ client_id: client.id, user_id })));
   }
+  // Let the account manager and anyone else on the account know.
+  after(async () => {
+    await tellAddedToClient(client.id, [am], v.userId, true);
+    await tellAddedToClient(client.id, extraTeam, v.userId);
+  });
 
   // The agency's new-client checklist, plus a task for anything set up later.
   const today = new Date();
@@ -430,14 +435,16 @@ export async function removeTeammate(form: FormData) {
 }
 
 export async function addToClient(form: FormData) {
-  await requireAdmin();
+  const v = await requireAdmin();
   const clientId = String(form.get("client"));
   const userId = String(form.get("user"));
   if (!userId) return;
   const supabase = await createClient();
   const { data: active } = await supabase.from("clients").select("id").eq("id", clientId).is("archived_at", null).maybeSingle();
   if (!active) return; // Archived portals can't get new teammates.
+  const { data: already } = await supabase.from("client_team").select("user_id").eq("client_id", clientId).eq("user_id", userId).maybeSingle();
   await supabase.from("client_team").upsert({ client_id: clientId, user_id: userId }, { ignoreDuplicates: true });
+  if (!already) await tellAddedToClient(clientId, [userId], v.userId);
   revalidatePath(`/team/clients/${clientId}`);
 }
 
@@ -452,12 +459,13 @@ export async function removeFromClient(form: FormData) {
 }
 
 export async function setAccountManager(form: FormData) {
-  await requireAdmin();
+  const v = await requireAdmin();
   const clientId = String(form.get("client"));
   const supabase = await createClient();
   const { data: active } = await supabase.from("clients").select("id").eq("id", clientId).is("archived_at", null).maybeSingle();
   if (!active) return;
   await supabase.from("clients").update({ account_manager_id: String(form.get("user")) }).eq("id", clientId);
+  await tellAddedToClient(clientId, [String(form.get("user"))], v.userId, true);
   revalidatePath(`/team/clients/${clientId}`);
 }
 
@@ -1074,7 +1082,10 @@ export async function setTeammateClients(_: Result, form: FormData): Promise<Res
   const now = new Set((current ?? []).map((r) => r.client_id).filter((id) => active.has(id)));
   const add = [...wanted].filter((id) => active.has(id) && !now.has(id));
   const remove = [...now].filter((id) => !wanted.has(id) && !manages.has(id));
-  if (add.length) await supabase.from("client_team").upsert(add.map((client_id) => ({ client_id, user_id: userId })), { ignoreDuplicates: true });
+  if (add.length) {
+    await supabase.from("client_team").upsert(add.map((client_id) => ({ client_id, user_id: userId })), { ignoreDuplicates: true });
+    for (const id of add) await tellAddedToClient(id, [userId], v.userId);
+  }
   if (remove.length) await supabase.from("client_team").delete().eq("user_id", userId).in("client_id", remove);
   revalidatePath("/team/team");
   [...add, ...remove].forEach((id) => revalidatePath(`/team/clients/${id}`));
