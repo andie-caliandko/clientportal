@@ -40,7 +40,7 @@ export async function sendEmail(to: string[], subject: string, text: string) {
 
 /**
  * Something happened on a client's account that the team should know about:
- * creates a task for the account manager and emails the team.
+ * creates a task for the account manager (not for messages, which only notify) and emails the team.
  */
 export async function clientActivity(clientId: string, activity: {
   task: string;
@@ -60,7 +60,8 @@ export async function clientActivity(clientId: string, activity: {
     .single();
   if (!client) return;
 
-  const { data: created } = await admin.from("tasks").insert({
+  // Messages show up in Messages and notifications; they don't become tasks.
+  const { data: created } = activity.notify === "message" ? { data: null } : await admin.from("tasks").insert({
     agency_id: client.agency_id,
     client_id: client.id,
     title: activity.task,
