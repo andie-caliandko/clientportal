@@ -173,7 +173,7 @@ export default async function ClientDetail({
         <HealthTab clientId={client.id} clientName={client.name} kpis={byClient.get(client.id) ?? []}
           health={health.get(client.id) ?? null}
           notes={Object.fromEntries((noteRows ?? []).map((n) => [n.week, n.note]))}
-          thisWeek={weekStart(todayLocal)} canEdit={canEdit} />
+          thisWeek={weekStart(todayLocal)} canEdit={canEdit} tracked={(client as { health_tracked?: boolean }).health_tracked !== false} />
       </section>
     );
   }

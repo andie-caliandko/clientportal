@@ -14,7 +14,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const showArchived = isAdmin && sp.archived === "1";
   const supabase = await createClient();
   const [{ data: clients }, { data: steps }, { data: status }, { data: cals }, { data: members }, { data: portalPeople }] = await Promise.all([
-    supabase.from("clients").select("id, name, account_manager_id, archived_at, logo_path").order("name"),
+    // Everything, so this still works before health_tracked exists.
+    supabase.from("clients").select("*").order("name"),
     supabase.from("onboarding_steps").select("id").eq("agency_id", agency.id),
     supabase.from("client_step_status").select("client_id"),
     supabase.from("content_calendars").select("client_id, status, month").order("month", { ascending: false }),
@@ -71,7 +72,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     {c.logo_path && <img className="client-logo-sm" src={clientLogoUrl(c.logo_path)!} alt="" />}
                     <Link href={`/team/clients/${c.id}`}>{c.name}</Link>
                   </td>
-                  <td>{health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
+                  <td>{c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
+                    : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
                   <td>{portalStatus(c.id)}</td>
                   <td><span className="bar"><i style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>{done} of {total}</td>

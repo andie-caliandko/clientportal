@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/app/Modal";
-import { saveKpi, saveScorecard } from "../../actions";
+import { saveKpi, saveScorecard, setHealthTracked } from "../../actions";
 
 type KpiLite = {
   id: string;
@@ -146,5 +147,18 @@ export function ScorecardForm({ clientId, kpis, notes, thisWeek, onSaved }: {
       {state.ok && <p className="flash">{state.ok}</p>}
       <div><button className="btn" disabled={pending}>{pending ? "Saving…" : "Save scorecard"}</button></div>
     </form>
+  );
+}
+
+/** Switch a client's red / yellow / green health rating on or off. */
+export function TrackHealthToggle({ clientId, tracked }: { clientId: string; tracked: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <label className="row note" style={{ alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <input type="checkbox" checked={!tracked} disabled={pending}
+        onChange={(e) => startTransition(async () => { await setHealthTracked(clientId, !e.target.checked); router.refresh(); })} />
+      Not tracking health for this client
+    </label>
   );
 }

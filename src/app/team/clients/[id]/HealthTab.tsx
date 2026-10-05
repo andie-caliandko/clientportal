@@ -2,7 +2,7 @@ import { formatKpi, type Rating, type Tier, type Trend } from "@/lib/health";
 import type { KpiWithHistory } from "@/lib/healthData";
 import { deleteKpi } from "../../actions";
 import { ConfirmButton } from "../../TeamForms";
-import { AddKpi, EditKpi, EditScorecardWeek, ScorecardForm } from "./HealthForms";
+import { AddKpi, EditKpi, EditScorecardWeek, ScorecardForm, TrackHealthToggle } from "./HealthForms";
 
 const RATING: Record<Rating, { label: string; meaning: string }> = {
   green: { label: "Green", meaning: "Healthy" },
@@ -57,8 +57,9 @@ function Sparkline({ kpi }: { kpi: KpiWithHistory }) {
   );
 }
 
-export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek, canEdit }: {
+export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek, canEdit, tracked = true }: {
   clientId: string;
+  tracked?: boolean;
   clientName: string;
   kpis: KpiWithHistory[];
   health: { rating: Rating; score: number } | null;
@@ -79,7 +80,9 @@ export function HealthTab({ clientId, clientName, kpis, health, notes, thisWeek,
       <div className="panel health-head">
         <div>
           <p className="eyebrow">Account health</p>
-          {health ? <RatingPill rating={health.rating} big /> : <p className="note">Add KPIs and enter a scorecard to see {clientName}&apos;s health.</p>}
+          {!tracked ? <p className="not-tracked big">Not tracked</p>
+            : health ? <RatingPill rating={health.rating} big /> : <p className="note">Add KPIs and enter a scorecard to see {clientName}&apos;s health.</p>}
+          {canEdit && <div style={{ marginTop: 10 }}><TrackHealthToggle clientId={clientId} tracked={tracked} /></div>}
         </div>
         <p className="note" style={{ maxWidth: "52ch" }}>
           Each KPI is Red below Good, Yellow at Good, and Green at Better or Best. Improving week over week adds a

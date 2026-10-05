@@ -961,6 +961,19 @@ export async function renameClientContact(_: Result, form: FormData): Promise<Re
   return { ok: "Name saved." };
 }
 
+/** Turn a client's health rating on or off (off shows "Not tracked"). */
+export async function setHealthTracked(clientId: string, tracked: boolean): Promise<Result> {
+  await requireEditor();
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You can't change this client." };
+  const { error } = await createAdminClient().from("clients").update({ health_tracked: tracked }).eq("id", clientId);
+  if (error) return { error: "That couldn't be saved." };
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/team/clients");
+  return { ok: tracked ? "Tracking health." : "Not tracking health." };
+}
+
 /** A teammate adds, replaces or removes their own photo. */
 export async function setMyPhoto(path: string | null): Promise<Result> {
   const v = await requireTeam();
