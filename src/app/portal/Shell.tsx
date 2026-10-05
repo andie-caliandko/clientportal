@@ -1,7 +1,7 @@
 import { Avatar } from "@/app/Avatar";
 import Link from "next/link";
 import { Logo } from "@/lib/brand";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { ClientUser } from "@/lib/types";
 import { signOut } from "../login/actions";
 import { PortalNav } from "./PortalNav";
@@ -37,6 +37,9 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
   const team = teamIds
     .map((id) => (teamPeople ?? []).find((p) => p.user_id === id))
     .filter((p): p is TeamPerson => !!p && (p.role !== "admin" || p.user_id === ctx.client.account_manager_id));
+  // Their sign-in email, so clients can write to them directly.
+  const admin = createAdminClient();
+  const emails = new Map(await Promise.all(team.map(async (p) => [p.user_id, (await admin.auth.admin.getUserById(p.user_id)).data.user?.email ?? null] as const)));
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
@@ -95,6 +98,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
                   <span>
                     <b>{p.display_name}</b>
                     <span className="note">{p.user_id === ctx.client.account_manager_id ? "Account manager" : p.title ?? "Your team"}</span>
+                    {emails.get(p.user_id) && <a className="note rail-email" href={`mailto:${emails.get(p.user_id)}`}>{emails.get(p.user_id)}</a>}
                   </span>
                 </li>
               ))}

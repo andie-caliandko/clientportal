@@ -907,3 +907,9 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .onb-progress .goal-bar { max-width: none; }
 .onb-left { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .onb-left li { font-size: .8rem; padding: .2em .6em; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.pw { font-family: ui-monospace, Menlo, monospace; background: var(--surface-2); padding: .25em .5em; border-radius: 6px; user-select: all; overflow-wrap: anywhere; }
+.rail-email { display: block; font-size: .8rem; overflow-wrap: anywhere; color: inherit; }
+.logins { list-style: none; margin: 0; padding: 0; display: grid; }
+.logins li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.logins li:first-child { border-top: 0; }
+.logins li > span:first-child { display: grid; gap: 2px; min-width: 0; }

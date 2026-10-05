@@ -13,6 +13,8 @@ import { MessageComposer } from "./MessageComposer";
 import { ScrollToLatest } from "./ScrollToLatest";
 import { MessageFiles, signAttachments } from "./MessageFiles";
 import { FilePreview } from "./FilePreview";
+import { LoginEditor, RemoveLogin } from "@/app/logins/LoginForms";
+import { loadLogins } from "@/app/logins/data";
 
 /** Everything a portal page needs to know about who's looking. */
 export type PortalCtx = {
@@ -28,7 +30,7 @@ export type PortalCtx = {
   params: { doc?: string; done?: string };
 };
 
-export const SECTIONS = ["home", "tasks", "messages", "activity", "files", "strategy", "analytics", "meetings"] as const;
+export const SECTIONS = ["home", "tasks", "messages", "activity", "files", "strategy", "analytics", "meetings", "logins"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 const DONE_MESSAGES: Record<string, string> = {
@@ -613,6 +615,42 @@ export async function MeetingsSection(ctx: PortalCtx) {
           <ul className="list">{past.map((m) => row(m, false))}</ul>
         </section>
       )}
+    </>
+  );
+}
+
+export async function LoginsSection(ctx: PortalCtx) {
+  const logins = await loadLogins(ctx.client.id);
+  const short = ctx.agency.brand.shortName ?? ctx.agency.name;
+  return (
+    <>
+      <PageHead title="Logins" sub={`Share the accounts ${short} manages for you. Passwords are encrypted, hidden once saved, and never sent by email or messages.`} />
+      <section className="card" style={{ display: "grid", gap: 14 }}>
+        <div className="sec-head">
+          <h2>Your accounts</h2>
+          {ctx.preview ? <button className="btn sm" disabled>Add a login</button> : <LoginEditor clientId={ctx.client.id} label="Add a login" />}
+        </div>
+        {logins.length ? (
+          <ul className="logins">
+            {logins.map((l) => (
+              <li key={l.id}>
+                <span>
+                  <b>{l.service}</b>
+                  <span className="note">{l.username ?? "No username"} · {l.has_secret ? "Password saved" : "No password"}</span>
+                  {l.note && <span className="note">{l.note}</span>}
+                </span>
+                {!ctx.preview && (
+                  <span className="row" style={{ gap: 12 }}>
+                    <LoginEditor clientId={ctx.client.id} login={l} label="Edit" />
+                    <RemoveLogin clientId={ctx.client.id} id={l.id} service={l.service} />
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : <p className="note">Nothing shared yet. Add the logins for your social accounts, website or anything else we&apos;ll be working in.</p>}
+        <p className="note">To change a password, click Edit and type the new one. If you change it on the account itself, update it here too.</p>
+      </section>
     </>
   );
 }

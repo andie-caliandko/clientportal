@@ -14,10 +14,11 @@ const ICONS: Record<Section, React.ReactNode> = {
   strategy: <><path d="M6 3h8l4 4v14H6z" /><path d="M9 12h6M9 16h6" /></>,
   analytics: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   meetings: <><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3" /></>,
+  logins: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
 };
 const LABELS: Record<Section, string> = {
   home: "Home", tasks: "Tasks", messages: "Messages", activity: "Activity",
-  files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings",
+  files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings", logins: "Logins",
 };
 
 export function PortalNav({ base, openTasks, newMessages }: { base: string; openTasks: number; newMessages: number }) {

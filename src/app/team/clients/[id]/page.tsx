@@ -1,3 +1,5 @@
+import { LoginEditor, RemoveLogin, RevealPassword } from "@/app/logins/LoginForms";
+import { loadLogins } from "@/app/logins/data";
 import { BriefForm } from "../BriefForm";
 import { connectedMembers } from "@/lib/google";
 import { inviteReplies, type CallRequest } from "@/lib/calls";
@@ -9,7 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatDue } from "@/lib/approval";
 import { requireTeam } from "@/lib/session";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
 import { AddClientContact, AddTeammate, DriveShareToggle, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
@@ -100,6 +102,14 @@ export default async function ClientDetail({
   // Account managers and creators added here show to the client; admins never do
   // (unless an admin is the account manager). Admins can open every account anyway.
   const accountTeam = members.filter((m) => onTeam.has(m.user_id) && (m.role !== "admin" || m.user_id === client.account_manager_id));
+  // Shared account logins (no passwords) and who last revealed each one.
+  const canReveal = isAdmin || client.account_manager_id === userId;
+  const logins = canEdit ? await loadLogins(client.id) : [];
+  const { data: revealRows } = logins.length
+    ? await createAdminClient().from("client_login_reveals").select("login_id, user_id, revealed_at").eq("client_id", client.id).order("revealed_at", { ascending: false }).limit(200)
+    : { data: [] as { login_id: string; user_id: string; revealed_at: string }[] };
+  const lastReveal = new Map<string, { user_id: string; revealed_at: string }>();
+  for (const r of revealRows ?? []) if (!lastReveal.has(r.login_id)) lastReveal.set(r.login_id, r);
   const otherAdmins = members.filter((m) => m.role === "admin" && m.user_id !== client.account_manager_id);
   const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
 
@@ -421,7 +431,7 @@ export default async function ClientDetail({
             <dt>Dubsado email</dt><dd>{client.dubsado_email ?? <span className="note">Not set</span>}</dd>
             <dt>Website</dt><dd>{client.website ? <a href={client.website} target="_blank" rel="noreferrer">{client.website.replace(/^https?:\/\//, "")}</a> : <span className="note">Not set</span>}</dd>
             <dt>Start date</dt><dd>{client.start_date ? new Date(`${client.start_date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : <span className="note">Not set</span>}</dd>
-            <dt>Client logins</dt>
+            <dt>Portal accounts</dt>
             <dd>{((people.data ?? []) as ClientUser[]).map((p) => `${p.display_name}${p.role === "owner" ? " (owner)" : ""}`).join(" · ") || "None"}</dd>
           </dl>
         </div>
@@ -476,6 +486,41 @@ export default async function ClientDetail({
             </div>
           )}
         </div>
+
+        {canEdit && (
+          <div className="panel" id="logins" style={{ gridColumn: "1 / -1" }}>
+            <div className="sec-head">
+              <h2>Logins</h2>
+              {!client.archived_at && <LoginEditor clientId={client.id} label="Add a login" />}
+            </div>
+            <p className="note">
+              Accounts the client shared with us. Passwords are encrypted and stay hidden.{" "}
+              {canReveal ? "Each reveal is recorded." : "Only admins and the account manager can reveal them."}
+            </p>
+            {logins.length ? (
+              <ul className="logins">
+                {logins.map((l) => {
+                  const seen = lastReveal.get(l.id);
+                  return (
+                    <li key={l.id}>
+                      <span>
+                        <b>{l.url ? <a href={l.url} target="_blank" rel="noreferrer">{l.service}</a> : l.service}</b>
+                        <span className="note">{l.username ?? "No username"}{l.note ? ` · ${l.note}` : ""}</span>
+                        {seen && <span className="note">Last revealed by {names.get(seen.user_id) ?? "a teammate"}, {short(seen.revealed_at)}</span>}
+                      </span>
+                      <span className="row" style={{ gap: 12, alignItems: "center" }}>
+                        {canReveal && l.has_secret && <RevealPassword id={l.id} />}
+                        {!l.has_secret && <span className="pill warn">No password</span>}
+                        <LoginEditor clientId={client.id} login={l} label="Edit" />
+                        <RemoveLogin clientId={client.id} id={l.id} service={l.service} />
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="note">No logins shared yet. Clients can add them from Logins in their portal.</p>}
+          </div>
+        )}
 
         <div className="panel">
           <h2>Files from the client</h2>
