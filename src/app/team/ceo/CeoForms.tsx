@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/app/Modal";
 import { saveBilling, saveCeoSharing, setInvoicePaid } from "./actions";
 
-export type PastMonth = { month: string; label: string; paid: boolean; amount: number | null; source: string | null };
+export type PastMonth = { month: string; label: string; paid: boolean; amount: number | null; source: string | null; paidOn: string | null };
 
 /** A client's fee, invoice day and payment history (for months before the portal, too). */
 export function EditBilling({ clientId, clientName, fee, day, history, label }: {
@@ -29,16 +29,17 @@ export function EditBilling({ clientId, clientName, fee, day, history, label }: 
             </div>
             <div className="pay-history">
               <h3>Payment history</h3>
-              <p className="note">Tick the months they&apos;ve paid, including before this platform. Change the amount if it was different from their fee. Payments from Dubsado tick themselves.</p>
+              <p className="note">Tick the months they&apos;ve paid, including before this platform, and add the date if you know it. Change the amount if it was different from their fee. Payments from Dubsado tick themselves.</p>
               <div className="tablewrap">
                 <table>
-                  <thead><tr><th scope="col">Month</th><th scope="col">Paid</th><th scope="col">Amount</th></tr></thead>
+                  <thead><tr><th scope="col">Month</th><th scope="col">Paid</th><th scope="col">Paid on</th><th scope="col">Amount</th></tr></thead>
                   <tbody>
                     {history.map((h) => (
                       <tr key={h.month}>
                         <td>{h.label}<input type="hidden" name="month" value={h.month} /></td>
                         <td><label className="row" style={{ alignItems: "center", gap: 6 }}><input type="checkbox" name={`paid:${h.month}`} defaultChecked={h.paid} />{h.source === "dubsado" && h.paid && <span className="note">from Dubsado</span>}</label></td>
-                        <td><input className="input pay-amt" name={`amount:${h.month}`} inputMode="decimal" defaultValue={h.amount ?? (fee || "")} aria-label={`${h.label} amount`} /></td>
+                        <td><input className="input pay-amt" type="date" name={`date:${h.month}`} defaultValue={h.paidOn ?? ""} min={`${h.month}-01`} max={`${h.month}-31`} aria-label={`${h.label} paid on`} /></td>
+                        <td><input className="input pay-amt" name={`amount:${h.month}`} inputMode="decimal" defaultValue={h.amount ?? (h.paid ? "" : fee || "")} aria-label={`${h.label} amount`} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -58,14 +59,14 @@ export function EditBilling({ clientId, clientName, fee, day, history, label }: 
 }
 
 /** Mark paid (with the date and amount) or mark unpaid. */
-export function PaidToggle({ clientId, clientName, month, paid, amount }: { clientId: string; clientName: string; month: string; paid: boolean; amount: number | null }) {
+export function PaidToggle({ clientId, clientName, month, paid, amount, project = false }: { clientId: string; clientName: string; month: string; paid: boolean; amount: number | null; project?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const today = new Intl.DateTimeFormat("en-CA").format(new Date());
   // Viewing a past month: start on that month's first day; this month: today.
-  const defaultDate = today.slice(0, 7) === month ? today : `${month}-01`;
+  const defaultDate = project || today.slice(0, 7) === month ? today : `${month}-01`;
   if (paid) {
     return (
       <button type="button" className="btn sm line" disabled={pending}
@@ -76,9 +77,9 @@ export function PaidToggle({ clientId, clientName, month, paid, amount }: { clie
   }
   return (
     <>
-      <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Mark paid</button>
+      <button type="button" className="btn sm line" onClick={() => setOpen(true)}>{project ? "Record payment" : "Mark paid"}</button>
       {open && (
-        <Modal title={`${clientName} · payment`} onClose={() => setOpen(false)}>
+        <Modal title={`${clientName} · ${project ? "project payment" : "payment"}`} onClose={() => setOpen(false)}>
           <form style={{ display: "grid", gap: 12 }} onSubmit={(e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
@@ -92,7 +93,7 @@ export function PaidToggle({ clientId, clientName, month, paid, amount }: { clie
           }}>
             <div className="row top">
               <div className="field"><label htmlFor="pd-date">Date paid</label><input className="input" id="pd-date" name="date" type="date" defaultValue={defaultDate} required />
-                <span className="note">It counts toward the month of this date.</span></div>
+                <span className="note">It counts toward the month of this date{project ? " only, and shows as paid from then on" : ""}.</span></div>
               <div className="field"><label htmlFor="pd-amt">Amount</label><input className="input" id="pd-amt" name="amount" inputMode="decimal" defaultValue={amount ?? ""} placeholder="2500" /></div>
             </div>
             {error && <p className="error">{error}</p>}

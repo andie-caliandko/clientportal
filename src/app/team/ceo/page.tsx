@@ -44,18 +44,26 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
     // One-time projects aren't monthly revenue.
     const isProject = contractFor(c.id)?.kind === "project";
     const f = { ...f0, fee: isProject ? 0 : f0.fee, projectFee: isProject ? f0.fee : 0 };
+    if (isProject) {
+      // A one-time project is paid once: show that payment (whenever it was), not a bill every month.
+      const payment = (invoices ?? []).filter((x) => x.client_id === c.id && x.status === "paid").sort((a, b) => String(b.paid_at).localeCompare(String(a.paid_at)))[0];
+      return { ...c, ...f, isProject, invoice: payment, paid: !!payment, paidMonth: payment ? payment.month.slice(0, 7) : month, state: (payment ? "paid" : "due") as ReturnType<typeof invoiceState> };
+    }
     const i = inv(c.id, month);
     const paid = i?.status === "paid";
-    return { ...c, ...f, invoice: i, paid, state: invoiceState(paid, f.day, month, today) };
+    return { ...c, ...f, isProject, invoice: i, paid, paidMonth: month, state: invoiceState(paid, f.day, month, today) };
   });
+  const projectClients = new Set(rows.filter((r) => r.isProject).map((r) => r.id));
   const mrr = rows.reduce((n, r) => n + r.fee, 0);
   // Collected in a month: every invoice marked paid for it, at the amount paid (or the client's fee
   // if no amount was entered). One calculation for the number up top and the chart, so they always match.
+  // A project payment with no amount entered never borrows the fee, so it can't be counted twice.
   const collectedIn = (m: string) =>
-    (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid").reduce((n, i) => n + Number(i.amount ?? fees.get(i.client_id)?.fee ?? 0), 0);
+    (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid")
+      .reduce((n, i) => n + Number(i.amount ?? (projectClients.has(i.client_id) ? 0 : fees.get(i.client_id)?.fee ?? 0)), 0);
   const collected = collectedIn(month);
   const owed = rows.filter((r) => !r.paid && r.fee > 0).reduce((n, r) => n + r.fee, 0);
-  const paidCount = rows.filter((r) => r.paid).length;
+  const paidCount = rows.filter((r) => r.paid && (!r.isProject || r.paidMonth === month)).length;
   const late = rows.filter((r) => r.state === "late" && r.fee > 0);
   const name = (id: string | null) => members?.find((m) => m.user_id === id)?.display_name ?? "—";
   const monthLabel = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", year: "numeric" });
@@ -72,7 +80,8 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
     const list: PastMonth[] = [];
     for (let m = month; m >= first; m = shiftMonth(m, -1)) {
       const i = inv(cid, m);
-      list.push({ month: m, label: monthLabel(m), paid: i?.status === "paid", amount: i?.amount != null ? Number(i.amount) : null, source: i?.source ?? null });
+      list.push({ month: m, label: monthLabel(m), paid: i?.status === "paid", amount: i?.amount != null ? Number(i.amount) : null, source: i?.source ?? null,
+        paidOn: i?.status === "paid" && i.paid_at ? new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(i.paid_at)) : null });
     }
     return list;
   };
@@ -181,14 +190,14 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                   </td>
                   <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
-                    <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
+                    {r.isProject && !r.paid ? <span className="pill warn">Not paid yet</span> : <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>}
                     {r.paid && r.invoice?.paid_at && (
-                      <span className="note"> {new Date(r.invoice.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })} · {r.invoice.source === "dubsado" ? "Dubsado" : "marked by hand"}</span>
+                      <span className="note"> {new Date(r.invoice.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", ...(r.isProject ? { year: "numeric" } : {}) })} · {r.isProject ? "project payment" : r.invoice.source === "dubsado" ? "Dubsado" : "marked by hand"}</span>
                     )}
                   </td>
                   <td className="team-edit">
                     <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
-                      <PaidToggle clientId={r.id} clientName={r.name} month={month} paid={r.paid} amount={r.fee || r.projectFee || null} />
+                      <PaidToggle clientId={r.id} clientName={r.name} month={r.paidMonth} paid={r.paid} amount={(r.paid ? Number(r.invoice?.amount ?? 0) || null : null) ?? (r.fee || r.projectFee || null)} project={r.isProject} />
                     </span>
                   </td>
                 </tr>

@@ -43,7 +43,9 @@ export async function saveBilling(_: Result, form: FormData): Promise<Result> {
     const was = new Map((existing ?? []).map((e) => [e.month, e]));
     const upserts = rows.filter((r) => r.status === "paid" || was.has(r.month)).map((r) => {
       const prev = was.get(r.month);
-      return { ...r, paid_at: r.status === "paid" ? prev?.paid_at ?? `${r.month}T12:00:00Z` : null, source: prev?.status === "paid" && r.status === "paid" ? prev.source : "manual" };
+      const on = String(form.get(`date:${r.month.slice(0, 7)}`) ?? "");
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(on) && on.slice(0, 7) === r.month.slice(0, 7) ? `${on}T12:00:00Z` : null;
+      return { ...r, paid_at: r.status === "paid" ? date ?? prev?.paid_at ?? `${r.month}T12:00:00Z` : null, source: prev?.status === "paid" && r.status === "paid" && !date ? prev.source : "manual" };
     });
     if (upserts.length) {
       const { error: invErr } = await supabase.from("client_invoices").upsert(upserts, { onConflict: "client_id,month" });
