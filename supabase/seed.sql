@@ -27,7 +27,8 @@ update agencies set monthly_rhythm = '[
     {"title": "Schedule strategy calls", "detail": "With each client, for the month ahead"},
     {"title": "Gather content", "detail": "Photos, videos and updates from every client"},
     {"title": "Content shoots for local clients", "detail": "Book and shoot on site"},
-    {"title": "Plan next month''s content calendar", "detail": "Themes, key dates and post ideas"}]},
+    {"title": "Plan next month''s content calendar", "detail": "Themes, key dates and post ideas"},
+    {"title": "Record your monthly goals", "detail": "On the Goals page, for the month ahead"}]},
   {"week": 2, "title": "Build", "items": [
     {"title": "Build all content in the content calendar", "detail": "Captions, graphics and video for every post"}]},
   {"week": 3, "title": "Review and send", "items": [
