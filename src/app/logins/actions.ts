@@ -19,7 +19,7 @@ async function editorFor(clientId: string) {
 }
 
 const refresh = (clientId: string) => {
-  revalidatePath("/portal/logins");
+  revalidatePath("/portal", "layout");
   revalidatePath(`/team/clients/${clientId}`);
 };
 
@@ -45,6 +45,11 @@ export async function saveLogin(_: Result, form: FormData): Promise<Result> {
   } else {
     const { error } = await admin.from("client_logins").insert({ ...fields, agency_id: v.agency.id, client_id: clientId, created_by: v.userId });
     if (error) return { error: "That login couldn't be saved." };
+  }
+  // A client's first login checks off their onboarding step.
+  if (v.kind === "client" && !id) {
+    const { data: step } = await admin.from("onboarding_steps").select("id").eq("agency_id", v.agency.id).eq("kind", "logins").maybeSingle();
+    if (step) await admin.from("client_step_status").upsert({ client_id: clientId, step_id: step.id, completed_by: v.userId }, { ignoreDuplicates: true });
   }
   // Let the account manager know a client shared something (never the password itself).
   if (v.kind === "client" && v.client.account_manager_id) {

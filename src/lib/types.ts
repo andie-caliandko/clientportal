@@ -87,7 +87,7 @@ export type ClientUser = {
 export type Step = {
   id: string;
   position: number;
-  kind: "contract" | "questionnaire" | "upload_branding" | "upload_content" | "booking" | "custom";
+  kind: "contract" | "questionnaire" | "upload_branding" | "upload_content" | "booking" | "custom" | "logins";
   title: string;
   help: string;
   action_label: string;

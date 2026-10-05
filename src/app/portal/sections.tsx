@@ -129,6 +129,7 @@ function stepHref(step: Step, contractUrl: string | null): string | null {
   if (step.kind === "questionnaire") return "/portal/questionnaire";
   if (step.kind === "upload_branding") return "/portal/upload/branding";
   if (step.kind === "upload_content") return "/portal/upload/content";
+  if (step.kind === "logins") return "/portal/logins";
   return step.action_url;
 }
 
@@ -155,17 +156,20 @@ function stepHelp(step: Step, contractUrl: string | null, isDone: boolean) {
     return isDone ? "Signed. Open it any time to look it over." : "Open your contract to review and sign it. This checks off once it's signed.";
   }
   if (step.kind === "questionnaire" && isDone) return "Thanks for filling this out. You can look over your answers any time.";
+  if (step.kind === "logins" && isDone) return "Thanks! Add more or update a password any time from Logins.";
   return step.help;
 }
 
-/** A finished step. The contract and questionnaire stay open to look at again. */
+/** A finished step. The contract, questionnaire and logins stay open to look at again. */
 function DoneAction({ step, preview, contractUrl }: { step: Step; preview: boolean; contractUrl: string | null }) {
   const contract = step.kind === "contract" ? stepHref(step, contractUrl) : null;
   const view = contract
     ? { label: "View contract", href: contract, external: true }
     : step.kind === "questionnaire"
       ? { label: "View questionnaire", href: "/portal/questionnaire", external: false }
-      : null;
+      : step.kind === "logins"
+        ? { label: "View logins", href: "/portal/logins", external: false }
+        : null;
   if (!view) return <span className="done-label">Done</span>;
   return (
     <span className="done-with-link">
