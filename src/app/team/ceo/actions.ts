@@ -170,3 +170,41 @@ export async function endContract(id: string): Promise<Result> {
   revalidatePath("/team/ceo");
   return { ok: "Marked as not renewing." };
 }
+
+/**
+ * Save past revenue from a spreadsheet. Lines for a portal client and month that's
+ * already logged as paid are left out, so nothing is counted twice.
+ */
+export async function importRevenue(batchName: string, rows: { paid_on: string; amount: number; client_name: string | null; note: string | null }[]): Promise<Result & { added?: number; skipped?: number }> {
+  const v = await requireCeo();
+  const clean = rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.paid_on) && Number.isFinite(r.amount) && r.amount !== 0).slice(0, 5000);
+  if (!clean.length) return { error: "There were no lines with a date and an amount." };
+  const supabase = await createClient();
+  const [{ data: clients }, { data: paid }] = await Promise.all([
+    supabase.from("clients").select("id, name"),
+    supabase.from("client_invoices").select("client_id, month").eq("status", "paid"),
+  ]);
+  const byName = new Map((clients ?? []).map((c) => [c.name.trim().toLowerCase(), c.id]));
+  const logged = new Set((paid ?? []).map((p) => `${p.client_id}|${String(p.month).slice(0, 7)}`));
+  const batch = crypto.randomUUID();
+  let skipped = 0;
+  const insert = clean.flatMap((r) => {
+    const clientId = r.client_name ? byName.get(r.client_name.trim().toLowerCase()) ?? null : null;
+    if (clientId && logged.has(`${clientId}|${r.paid_on.slice(0, 7)}`)) { skipped++; return []; }
+    return [{ agency_id: v.agency.id, paid_on: r.paid_on, amount: r.amount, client_name: r.client_name?.slice(0, 200) ?? null, client_id: clientId, note: r.note?.slice(0, 300) ?? null, batch_id: batch, batch_name: batchName.slice(0, 120) || "Imported revenue", created_by: v.userId }];
+  });
+  for (let i = 0; i < insert.length; i += 500) {
+    const { error } = await supabase.from("revenue_entries").insert(insert.slice(i, i + 500));
+    if (error) return { error: "The import couldn't be saved. Nothing was added." };
+  }
+  revalidatePath("/team/ceo");
+  return { ok: `Added ${insert.length} line${insert.length === 1 ? "" : "s"}${skipped ? `, left out ${skipped} already logged in the portal` : ""}.`, added: insert.length, skipped };
+}
+
+/** Take back a whole import. */
+export async function removeRevenueBatch(batchId: string): Promise<Result> {
+  await requireCeo();
+  await (await createClient()).from("revenue_entries").delete().eq("batch_id", batchId);
+  revalidatePath("/team/ceo");
+  return { ok: "Import removed." };
+}

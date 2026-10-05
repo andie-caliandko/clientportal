@@ -7,6 +7,7 @@ import { EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
 import { AddClientButton } from "../TeamForms";
 import { RenewContract, SetContract } from "./ContractForms";
 import { contractStatus } from "@/lib/contracts";
+import { ImportRevenue, RemoveBatch } from "./RevenueImport";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const shiftMonth = (month: string, by: number) => {
@@ -26,13 +27,14 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : today.slice(0, 7);
 
   const supabase = await createClient();
-  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }, { data: imported }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
-    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source").lte("month", monthKeyDate(month)),
+    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source"),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
     supabase.from("client_contracts").select("id, client_id, kind, start_date, months, end_date, status, term_number, note").order("start_date", { ascending: false }),
+    supabase.from("revenue_entries").select("paid_on, amount, batch_id, batch_name, created_at"),
   ]);
   // Each client's current contract (the newest term), and how many terms they've had.
   const contractFor = (cid: string) => (contractRows ?? []).find((c) => c.client_id === cid) ?? null;
@@ -60,8 +62,21 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   // A project payment with no amount entered never borrows the fee, so it can't be counted twice.
   const collectedIn = (m: string) =>
     (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid")
-      .reduce((n, i) => n + Number(i.amount ?? (projectClients.has(i.client_id) ? 0 : fees.get(i.client_id)?.fee ?? 0)), 0);
+      .reduce((n, i) => n + Number(i.amount ?? (projectClients.has(i.client_id) ? 0 : fees.get(i.client_id)?.fee ?? 0)), 0)
+    + (imported ?? []).filter((r) => r.paid_on.startsWith(m)).reduce((n, r) => n + Number(r.amount), 0);
   const collected = collectedIn(month);
+  // Year to date: everything logged in the portal this year, plus revenue imported from a spreadsheet.
+  const portalPaid = (invoices ?? []).filter((i) => i.status === "paid");
+  const portalTotal = (filter: (month: string) => boolean) =>
+    portalPaid.filter((i) => filter(String(i.month).slice(0, 7))).reduce((n, i) => n + Number(i.amount ?? (projectClients.has(i.client_id) ? 0 : fees.get(i.client_id)?.fee ?? 0)), 0);
+  const importedTotal = (filter: (day: string) => boolean) => (imported ?? []).filter((r) => filter(r.paid_on)).reduce((n, r) => n + Number(r.amount), 0);
+  const year = today.slice(0, 4);
+  const yearTotal = portalTotal((m) => m.startsWith(year)) + importedTotal((d) => d.startsWith(year));
+  const batches = [...new Map((imported ?? []).map((r) => [r.batch_id, r])).values()].map((b) => ({
+    id: b.batch_id, name: b.batch_name ?? "Imported revenue", created: b.created_at,
+    lines: (imported ?? []).filter((r) => r.batch_id === b.batch_id).length,
+    total: (imported ?? []).filter((r) => r.batch_id === b.batch_id).reduce((n, r) => n + Number(r.amount), 0),
+  }));
   const owed = rows.filter((r) => !r.paid && r.fee > 0).reduce((n, r) => n + r.fee, 0);
   const paidCount = rows.filter((r) => r.paid && (!r.isProject || r.paidMonth === month)).length;
   const late = rows.filter((r) => r.state === "late" && r.fee > 0);
@@ -117,6 +132,10 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
           {month !== today.slice(0, 7) && <Link className="btn sm line" href="/team/ceo" scroll={false}>This month</Link>}
           <Link className="btn sm line" href={`/team/ceo?month=${shiftMonth(month, 1)}`} aria-label="Next month" scroll={false}>→</Link>
         </div>
+      </div>
+
+      <div className="stats ceo-totals">
+        <div className="stat"><b>{money(yearTotal)}</b><span>Brought in this year, {year} year to date{(imported ?? []).some((r) => r.paid_on.startsWith(year)) ? " · includes imported revenue" : ""}</span></div>
       </div>
 
       <div className="stats">
@@ -270,6 +289,19 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
             with the same secret as the contract zap, sending the client&apos;s email, the amount and the payment date. Matching is by the client&apos;s Dubsado email.
             You can also mark a client paid by hand.
           </p>
+          <h3 style={{ marginTop: 8 }}>Past revenue</h3>
+          <p className="note">Money from earlier this year, before the portal, imported from a spreadsheet. It counts toward the year-to-date total and the 6-month chart.</p>
+          <ImportRevenue clients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))} loggedKeys={portalPaid.map((i) => `${i.client_id}|${String(i.month).slice(0, 7)}`)} />
+          {batches.length > 0 && (
+            <ul className="list">
+              {batches.map((b) => (
+                <li key={b.id}>
+                  <span><b>{b.name}</b><br /><span className="note">{b.lines} lines · imported {new Date(b.created).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}</span></span>
+                  <span className="r kn"><b>{money(b.total)}</b> <RemoveBatch batchId={b.id} name={b.name} /></span>
+                </li>
+              ))}
+            </ul>
+          )}
           {isOwner(agency, userId) && (
             <>
               <h3 style={{ marginTop: 8 }}>Share this dashboard</h3>
