@@ -13,8 +13,11 @@ function TermFields({ kind, setKind, months, end, startLabel }: { kind: string; 
         <legend className="note">Type</legend>
         <label><input type="radio" name="kind" value="retainer" checked={kind === "retainer"} onChange={() => setKind("retainer")} /> Retainer (monthly)</label>
         <label><input type="radio" name="kind" value="project" checked={kind === "project"} onChange={() => setKind("project")} /> One-time project</label>
+        <label><input type="radio" name="kind" value="ongoing" checked={kind === "ongoing"} onChange={() => setKind("ongoing")} /> Ongoing (no set end)</label>
       </fieldset>
-      {kind === "retainer" ? (
+      {kind === "ongoing" ? (
+        <p className="note" style={{ margin: 0 }}>Month to month with no end date, so there&apos;s no renewal reminder. Switch it to a retainer any time to set a term.</p>
+      ) : kind === "retainer" ? (
         <div className="field"><label htmlFor="ct-months">Length</label>
           <select className="sel" id="ct-months" name="months" defaultValue={String(months ?? 6)}>
             {[1, 2, 3, 4, 6, 9, 12, 18, 24].map((m) => <option key={m} value={m}>{m} month{m === 1 ? "" : "s"}</option>)}
@@ -29,7 +32,7 @@ function TermFields({ kind, setKind, months, end, startLabel }: { kind: string; 
 }
 
 /** Set or correct a client's contract. */
-export function SetContract({ clientId, clientName, contract }: { clientId: string; clientName: string; contract?: Contract | null }) {
+export function SetContract({ clientId, clientName, contract, clientStart }: { clientId: string; clientName: string; contract?: Contract | null; clientStart?: string | null }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState(contract?.kind ?? "retainer");
   const [state, action, pending] = useActionState(saveContract, {});
@@ -42,7 +45,8 @@ export function SetContract({ clientId, clientName, contract }: { clientId: stri
           <form action={action} style={{ display: "grid", gap: 12 }}>
             <input type="hidden" name="client" value={clientId} />
             {contract && <input type="hidden" name="id" value={contract.id} />}
-            <div className="field"><label htmlFor="ct-start">Started</label><input className="input" id="ct-start" name="start" type="date" defaultValue={contract?.start_date ?? new Intl.DateTimeFormat("en-CA").format(new Date())} required /></div>
+            <div className="field"><label htmlFor="ct-start">Started</label><input className="input" id="ct-start" name="start" type="date" defaultValue={contract?.start_date ?? clientStart ?? new Intl.DateTimeFormat("en-CA").format(new Date())} required />
+              {!contract && clientStart && <span className="note">From the start date on their client page.</span>}</div>
             <TermFields kind={kind} setKind={setKind} months={contract?.months} end={contract?.end_date} />
             <div className="field"><label htmlFor="ct-note">Notes (optional)</label><input className="input" id="ct-note" name="note" defaultValue={contract?.note ?? ""} placeholder="Includes 2 shoots a month" /></div>
             {state.error && <p className="error">{state.error}</p>}

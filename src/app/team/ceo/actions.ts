@@ -61,8 +61,10 @@ export async function saveCeoSharing(_: Result, form: FormData): Promise<Result>
 }
 
 /** Read a contract's kind and dates from a form: a retainer (months) or a one-time project (end date). */
-function readTerm(form: FormData, start: string): { kind: "retainer" | "project"; months: number | null; end_date: string | null } | { error: string } {
-  const kind = form.get("kind") === "project" ? "project" : "retainer";
+function readTerm(form: FormData, start: string): { kind: "retainer" | "project" | "ongoing"; months: number | null; end_date: string | null } | { error: string } {
+  const raw = form.get("kind");
+  const kind = raw === "project" ? "project" : raw === "ongoing" ? "ongoing" : "retainer";
+  if (kind === "ongoing") return { kind, months: null, end_date: null };
   if (kind === "project") {
     const end = String(form.get("end") ?? "");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return { error: "Pick when the project wraps up." };
@@ -89,6 +91,12 @@ export async function saveContract(_: Result, form: FormData): Promise<Result> {
     ? await supabase.from("client_contracts").update({ start_date: start, ...term, note, renewal_flagged_at: null }).eq("id", id)
     : await supabase.from("client_contracts").insert({ agency_id: v.agency.id, client_id: clientId, start_date: start, ...term, note });
   if (error) return { error: "That contract couldn't be saved." };
+  // A client's first term starts on the start date from their client page; keep the two the same.
+  const { data: first } = await supabase.from("client_contracts").select("id, start_date").eq("client_id", clientId).order("start_date").limit(1).maybeSingle();
+  if (first && (!id || first.id === id)) {
+    await supabase.from("clients").update({ start_date: start }).eq("id", clientId);
+    revalidatePath(`/team/clients/${clientId}`);
+  }
   revalidatePath("/team/ceo");
   return { ok: "Saved." };
 }
@@ -101,7 +109,9 @@ export async function renewContract(_: Result, form: FormData): Promise<Result> 
   const { data: c } = await supabase.from("client_contracts").select("client_id, kind, start_date, months, end_date, term_number, status").eq("id", id).maybeSingle();
   if (!c) return { error: "That contract wasn't found." };
   const { endOf } = await import("@/lib/contracts");
-  const start = new Date(Date.parse(`${endOf(c)}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const end = endOf(c);
+  if (!end) return { error: "Ongoing contracts don't need renewing. Edit it to set a term instead." };
+  const start = new Date(Date.parse(`${end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
   const term = readTerm(form, start);
   if ("error" in term) return { error: term.error };
   await supabase.from("client_contracts").update({ status: "renewed" }).eq("id", id);

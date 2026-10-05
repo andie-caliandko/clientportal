@@ -75,8 +75,9 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
       : st.state === "ended" ? { t: c.status === "ended" ? "Not renewing" : "Ended", cls: "info" }
       : st.state === "upcoming" ? { t: `Starts ${nice(c.start_date)}`, cls: "info" }
       : { t: "On track", cls: "ok" };
-    const nextStart = new Date(Date.parse(`${st.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-    return { c, st, project, terms, label, nextStart };
+    const ongoing = c.kind === "ongoing";
+    const nextStart = st.end ? new Date(Date.parse(`${st.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : null;
+    return { c, st, project, ongoing, terms, label: ongoing && st.state === "active" ? { t: "Ongoing", cls: "ok" } : label, nextStart };
   };
 
   return (
@@ -141,15 +142,18 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                   <td className="ceo-contract">
                     {(() => {
                       const k = contractInfo(r.id);
-                      if (!k) return <SetContract clientId={r.id} clientName={r.name} contract={null} />;
+                      if (!k) return <SetContract clientId={r.id} clientName={r.name} contract={null} clientStart={r.start_date} />;
                       return (
                         <>
-                          <span>{k.project ? "One-time project" : `${k.c.months}-month retainer`}{k.terms > 1 ? ` · ${ordinal(k.c.term_number ?? k.terms)} term` : ""}</span>
-                          <span className="note">{k.st.state === "upcoming" ? `Starts ${nice(k.c.start_date)}` : k.project ? `${Math.max(0, k.st.daysLeft)} days left · ends ${nice(k.st.end)}` : `Month ${k.st.month} of ${k.c.months} · ends ${nice(k.st.end)}`}</span>
+                          <span>{k.ongoing ? "Ongoing, no set end" : k.project ? "One-time project" : `${k.c.months}-month retainer`}{k.terms > 1 ? ` · ${ordinal(k.c.term_number ?? k.terms)} term` : ""}</span>
+                          <span className="note">{k.st.state === "upcoming" ? `Starts ${nice(k.c.start_date)}`
+                            : k.ongoing ? `Month ${k.st.month} · since ${nice(k.c.start_date)}`
+                            : k.project ? `${Math.max(0, k.st.daysLeft)} days left · ends ${nice(k.st.end!)}`
+                            : `Month ${k.st.month} of ${k.c.months} · ends ${nice(k.st.end!)}`}</span>
                           <span className="ceo-contract-row">
                             <span className={`pill ${k.label.cls}`}>{k.label.t}</span>
-                            {k.c.status === "active" && <RenewContract clientName={r.name} contract={k.c} nextStartLabel={nice(k.nextStart)} />}
-                            <SetContract clientId={r.id} clientName={r.name} contract={k.c.status === "active" ? k.c : null} />
+                            {k.c.status === "active" && k.nextStart && <RenewContract clientName={r.name} contract={k.c} nextStartLabel={nice(k.nextStart)} />}
+                            <SetContract clientId={r.id} clientName={r.name} contract={k.c.status === "active" ? k.c : null} clientStart={r.start_date} />
                           </span>
                         </>
                       );
@@ -200,11 +204,12 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                     <span className="ct-name">{cl.name}</span>
                     <div className="ct-track">
                       <span className="ct-today" style={{ left: `${pos(today)}%` }} aria-hidden="true" />
-                      <span className={`ct-bar ${k!.label.cls}`} style={{ left: `${pos(k!.c.start_date)}%`, width: `${Math.max(1, pos(k!.st.end) - pos(k!.c.start_date))}%` }}
-                        title={`${cl.name}: ${nice(k!.c.start_date)} – ${nice(k!.st.end)} · ${k!.label.t}`}>
-                        <span className="ct-bar-label">{k!.project ? "Project" : `${k!.c.months} mo`}</span>
+                      {/* Ongoing contracts run off the right edge: no end. */}
+                      <span className={`ct-bar ${k!.label.cls} ${k!.ongoing ? "ongoing" : ""}`} style={{ left: `${pos(k!.c.start_date)}%`, width: `${Math.max(1, (k!.st.end ? pos(k!.st.end) : 100) - pos(k!.c.start_date))}%` }}
+                        title={`${cl.name}: ${nice(k!.c.start_date)} – ${k!.st.end ? nice(k!.st.end) : "ongoing"} · ${k!.label.t}`}>
+                        <span className="ct-bar-label">{k!.ongoing ? "Ongoing" : k!.project ? "Project" : `${k!.c.months} mo`}</span>
                       </span>
-                      {k!.c.status === "active" && <span className="ct-flag" style={{ left: `${pos(k!.st.flag)}%` }} title={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} aria-label={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} />}
+                      {k!.c.status === "active" && k!.st.flag && <span className="ct-flag" style={{ left: `${pos(k!.st.flag)}%` }} title={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} aria-label={`${k!.project ? "Follow up" : "Renewal talk"} from ${nice(k!.st.flag)}`} />}
                     </div>
                   </div>
                 ))}

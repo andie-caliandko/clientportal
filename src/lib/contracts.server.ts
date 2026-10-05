@@ -21,8 +21,9 @@ export async function flagRenewals(now = new Date()) {
   for (const c of rows ?? []) {
     const agency = c.agency as unknown as { owner_id: string | null; timezone: string };
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(now);
+    if (c.kind === "ongoing") continue; // No end, so no renewal talk to flag.
     const isProject = c.kind === "project";
-    const end = endOf(c);
+    const end = endOf(c)!;
     if (today < (isProject ? projectFollowUp(end) : renewalFlagDate(c.start_date, c.months ?? 1))) continue;
     const name = (c.client as unknown as { name: string }).name;
     const endText = new Date(`${end}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });

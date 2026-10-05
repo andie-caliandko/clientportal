@@ -27,3 +27,11 @@ describe("one-time projects", () => {
     expect(contractStatus(p, "2026-11-17")).toMatchObject({ state: "ending", flag: "2026-11-16" });
   });
 });
+
+describe("ongoing contracts", () => {
+  it("count months with no end or renewal flag", () => {
+    const o = { kind: "ongoing", start_date: "2026-03-10", months: null, end_date: null, status: "active" };
+    expect(contractStatus(o, "2026-10-05")).toMatchObject({ month: 7, state: "active", end: null, flag: null });
+    expect(contractStatus({ ...o, status: "ended" }, "2026-10-05").state).toBe("ended");
+  });
+});

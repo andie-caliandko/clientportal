@@ -495,6 +495,14 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
     })
     .eq("id", clientId);
   if (error) return { error: "Those changes couldn't be saved." };
+  // Keep their first contract term starting on the same date (CEO dashboard).
+  const startDate = get("start_date");
+  if (startDate) {
+    const admin = createAdminClient();
+    const { data: first } = await admin.from("client_contracts").select("id").eq("client_id", clientId).order("start_date").limit(1).maybeSingle();
+    if (first) await admin.from("client_contracts").update({ start_date: startDate, renewal_flagged_at: null }).eq("id", first.id);
+    revalidatePath("/team/ceo");
+  }
   // Branding and Content folders in their Drive folder, and any files that were waiting for it.
   if (drive) after(() => catchUpDrive({ clientId }));
   revalidatePath(`/team/clients/${clientId}`);
