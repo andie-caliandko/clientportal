@@ -1,6 +1,7 @@
 "use client";
 
 import { Modal } from "@/app/Modal";
+import { ServicesPicker } from "./ServicesPicker";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -273,6 +274,9 @@ export function NewClientForm({ members, agencyId, meId, defaults }: { members: 
           <span className="note">The client sees this person in their portal.</span></div>
         {f("start_date", "Start date", { type: "date" })}
       </div>
+      <div className="field"><label htmlFor="services">Services</label>
+        <ServicesPicker id="services" />
+        <span className="note">Social clients get health scorecards and Daily engagement.</span></div>
 
       <fieldset className="checks">
         <legend>Anyone else from the team on this account?</legend>
@@ -397,6 +401,7 @@ export function ClientInfoForm({ client }: {
   client: {
     id: string; name: string; slack_channel_id: string | null; drive_folder_id: string | null; rella_space_url: string | null;
     dubsado_email: string | null; dubsado_project_url: string | null; website: string | null; start_date: string | null;
+    services?: string[] | null;
   };
 }) {
   const [state, action, pending] = useActionState(updateClientInfo, {});
@@ -408,6 +413,9 @@ export function ClientInfoForm({ client }: {
       <input type="hidden" name="client" value={client.id} />
       {f("name", "Business name", client.name, { required: true })}
       <div className="row">{f("website", "Website", client.website)}{f("start_date", "Start date", client.start_date, { type: "date" })}</div>
+      <div className="field"><label htmlFor="ci-services">Services</label>
+        <ServicesPicker id="ci-services" initial={client.services ?? []} />
+        <span className="note">Social clients get health scorecards and Daily engagement. Saving sets health tracking to match.</span></div>
       {f("drive_folder", "Google Drive folder link", client.drive_folder_id ? `https://drive.google.com/drive/folders/${client.drive_folder_id}` : "")}
       {f("slack_channel", "Slack channel link or ID", client.slack_channel_id)}
       {f("rella", "Rella space link", client.rella_space_url)}

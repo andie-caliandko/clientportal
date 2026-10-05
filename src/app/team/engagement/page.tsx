@@ -1,3 +1,4 @@
+import { isSocial } from "@/lib/services";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { monthDays } from "@/lib/engagement";
@@ -27,10 +28,12 @@ export default async function EngagementPage({ searchParams }: { searchParams: P
 
   const supabase = await createClient();
   const [{ data: allClients }, { data: members }] = await Promise.all([
-    supabase.from("clients").select("id, name, account_manager_id").is("archived_at", null).order("name"),
+    // Everything, so this still works before services exists.
+    supabase.from("clients").select("*").is("archived_at", null).order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).order("display_name"),
   ]);
-  const clients = allClients ?? [];
+  // Only social clients get daily engagement.
+  const clients = (allClients ?? []).filter((c) => isSocial(c.services));
   // People who manage at least one account, for the admin's picker.
   const managers = (members ?? []).filter((m) => clients.some((c) => c.account_manager_id === m.user_id));
   const who = isAdmin ? (sp.am && (sp.am === "all" || managers.some((m) => m.user_id === sp.am)) ? sp.am : managers[0]?.user_id ?? "all") : userId;

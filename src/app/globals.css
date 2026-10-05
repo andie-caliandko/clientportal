@@ -921,3 +921,12 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; }
 .not-tracked { color: var(--ink-2); font-weight: 400; text-decoration: none; white-space: nowrap; }
 .not-tracked.big { font-family: var(--serif); font-size: 1.6rem; margin: 4px 0 0; }
+.multi { position: relative; }
+.multi-btn { width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.multi-btn::after { content: "▾"; color: var(--ink-2); }
+.multi-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-list { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+.multi-list label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.multi-list label:hover { background: var(--surface-2); }
+.services { display: flex; flex-wrap: wrap; gap: 6px; }
+.multi-btn { border: 1.5px solid var(--line); background: var(--bg); border-radius: 12px; padding: .8em 1em; font-size: 1.05rem; }

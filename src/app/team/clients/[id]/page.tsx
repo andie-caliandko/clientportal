@@ -1,3 +1,4 @@
+import { serviceLabel } from "@/lib/services";
 import { LoginEditor, RemoveLogin, RequestLogins, RevealPassword } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 import { BriefForm } from "../BriefForm";
@@ -162,6 +163,9 @@ export default async function ClientDetail({
           <div>
             <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
             <h1 style={{ marginTop: 6 }}>{client.name}</h1>
+          {(client.services ?? []).length > 0 && (
+            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <span key={s} className="pill info">{serviceLabel(s)}</span>)}</div>
+          )}
           </div>
           {headActions}
         </div>
@@ -185,6 +189,9 @@ export default async function ClientDetail({
         <div>
           <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
           <h1 style={{ marginTop: 6 }}>{client.name}</h1>
+          {(client.services ?? []).length > 0 && (
+            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <span key={s} className="pill info">{serviceLabel(s)}</span>)}</div>
+          )}
         </div>
         {headActions}
       </div>

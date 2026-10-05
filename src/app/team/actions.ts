@@ -17,6 +17,7 @@ import { REPEATS } from "@/lib/recurring";
 import { scheduleNextRepeat } from "@/lib/repeatTasks";
 import { linkSignup } from "@/lib/signups";
 import { postToSlack } from "@/lib/slack";
+import { isSocial, readServices } from "@/lib/services";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string; ok?: string };
@@ -289,6 +290,9 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     .select("id")
     .single();
   if (error || !client) return { error: "That client couldn't be created. Is there already a client with that name?" };
+  // What they get from us; only social clients get health scorecards.
+  const services = readServices(form);
+  if (services.length) await supabase.from("clients").update({ services, health_tracked: isSocial(services) }).eq("id", client.id);
   if (extraTeam.length) {
     await supabase.from("client_team").insert(extraTeam.map((user_id) => ({ client_id: client.id, user_id })));
   }
@@ -495,6 +499,11 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
     })
     .eq("id", clientId);
   if (error) return { error: "Those changes couldn't be saved." };
+  // Services, and health tracking to match (social clients get scorecards).
+  const services = readServices(form);
+  await supabase.from("clients").update({ services, ...(services.length ? { health_tracked: isSocial(services) } : {}) }).eq("id", clientId);
+  revalidatePath("/team/engagement");
+  revalidatePath("/team/clients");
   // Keep their first contract term starting on the same date (CEO dashboard).
   const startDate = get("start_date");
   if (startDate) {

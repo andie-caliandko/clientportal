@@ -1,3 +1,4 @@
+import { serviceLabel } from "@/lib/services";
 import Link from "next/link";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -71,6 +72,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {c.logo_path && <img className="client-logo-sm" src={clientLogoUrl(c.logo_path)!} alt="" />}
                     <Link href={`/team/clients/${c.id}`}>{c.name}</Link>
+                    {(c.services ?? []).length > 0 && <><br /><span className="note">{(c.services as string[]).map(serviceLabel).join(" · ")}</span></>}
                   </td>
                   <td>{c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
                     : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
