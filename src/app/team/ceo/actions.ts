@@ -25,6 +25,31 @@ export async function saveBilling(_: Result, form: FormData): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from("client_billing").upsert({ client_id: clientId, agency_id: v.agency.id, monthly_fee: fee, billing_day: day, updated_at: new Date().toISOString() });
   if (error) return { error: "That couldn't be saved." };
+
+  // Payment history: each month listed comes back as paid (ticked) or not, with its amount.
+  const months = form.getAll("month").map(String).filter((m) => /^\d{4}-\d{2}$/.test(m));
+  if (months.length) {
+    const now = new Date().toISOString();
+    const rows = months.map((m) => {
+      const paid = form.get(`paid:${m}`) === "on";
+      const amt = Number(String(form.get(`amount:${m}`) ?? "").replace(/[$,\s]/g, ""));
+      return {
+        agency_id: v.agency.id, client_id: clientId, month: monthKeyDate(m), status: paid ? "paid" : "unpaid",
+        amount: Number.isFinite(amt) && amt > 0 ? amt : null, updated_at: now,
+      };
+    });
+    // Keep what Dubsado already reported for paid months; only fill in or change what was set here.
+    const { data: existing } = await supabase.from("client_invoices").select("month, status, paid_at, source").eq("client_id", clientId).in("month", rows.map((r) => r.month));
+    const was = new Map((existing ?? []).map((e) => [e.month, e]));
+    const upserts = rows.filter((r) => r.status === "paid" || was.has(r.month)).map((r) => {
+      const prev = was.get(r.month);
+      return { ...r, paid_at: r.status === "paid" ? prev?.paid_at ?? `${r.month}T12:00:00Z` : null, source: prev?.status === "paid" && r.status === "paid" ? prev.source : "manual" };
+    });
+    if (upserts.length) {
+      const { error: invErr } = await supabase.from("client_invoices").upsert(upserts, { onConflict: "client_id,month" });
+      if (invErr) return { error: "The fee saved, but the payment history couldn't be." };
+    }
+  }
   revalidatePath("/team/ceo");
   return { ok: "Saved." };
 }

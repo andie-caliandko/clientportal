@@ -5,21 +5,45 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/app/Modal";
 import { saveBilling, saveCeoSharing, setInvoicePaid } from "./actions";
 
-export function EditBilling({ clientId, clientName, fee, day }: { clientId: string; clientName: string; fee: number; day: number | null }) {
+export type PastMonth = { month: string; label: string; paid: boolean; amount: number | null; source: string | null };
+
+/** A client's fee, invoice day and payment history (for months before the portal, too). */
+export function EditBilling({ clientId, clientName, fee, day, history, label }: {
+  clientId: string; clientName: string; fee: number; day: number | null; history: PastMonth[]; label: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(saveBilling, {});
   useEffect(() => { if (state.ok) setOpen(false); }, [state]);
   return (
     <>
-      <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit</button>
+      <button type="button" className="fee-btn" onClick={() => setOpen(true)}>{label}</button>
       {open && (
-        <Modal title={`${clientName} · billing`} onClose={() => setOpen(false)}>
-          <form action={action} style={{ display: "grid", gap: 12 }}>
+        <Modal title={`${clientName} · billing`} onClose={() => setOpen(false)} wide>
+          <form action={action} style={{ display: "grid", gap: 14 }}>
             <input type="hidden" name="client" value={clientId} />
             <div className="row top">
-              <div className="field"><label htmlFor="bf-fee">Monthly fee</label><input className="input" id="bf-fee" name="fee" inputMode="decimal" defaultValue={fee || ""} placeholder="2500" /></div>
+              <div className="field"><label htmlFor="bf-fee">Monthly fee</label><input className="input" id="bf-fee" name="fee" inputMode="decimal" defaultValue={fee || ""} placeholder="2500" />
+                <span className="note">For a one-time project, put the project fee here.</span></div>
               <div className="field"><label htmlFor="bf-day">Invoice due on day</label><input className="input" id="bf-day" name="day" inputMode="numeric" defaultValue={day ?? ""} placeholder="1" />
                 <span className="note">Day of the month, 1 to 31. After it passes, an unpaid invoice shows as late.</span></div>
+            </div>
+            <div className="pay-history">
+              <h3>Payment history</h3>
+              <p className="note">Tick the months they&apos;ve paid, including before this platform. Change the amount if it was different from their fee. Payments from Dubsado tick themselves.</p>
+              <div className="tablewrap">
+                <table>
+                  <thead><tr><th scope="col">Month</th><th scope="col">Paid</th><th scope="col">Amount</th></tr></thead>
+                  <tbody>
+                    {history.map((h) => (
+                      <tr key={h.month}>
+                        <td>{h.label}<input type="hidden" name="month" value={h.month} /></td>
+                        <td><label className="row" style={{ alignItems: "center", gap: 6 }}><input type="checkbox" name={`paid:${h.month}`} defaultChecked={h.paid} />{h.source === "dubsado" && h.paid && <span className="note">from Dubsado</span>}</label></td>
+                        <td><input className="input pay-amt" name={`amount:${h.month}`} inputMode="decimal" defaultValue={h.amount ?? (fee || "")} aria-label={`${h.label} amount`} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             {state.error && <p className="error">{state.error}</p>}
             <div className="row">

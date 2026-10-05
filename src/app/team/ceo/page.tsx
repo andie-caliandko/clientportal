@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { canSeeCeo, invoiceState, isOwner, monthKeyDate } from "@/lib/ceo";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { EditBilling, PaidToggle, ShareCeo } from "./CeoForms";
+import { EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
 import { AddClientButton } from "../TeamForms";
 import { RenewContract, SetContract } from "./ContractForms";
 import { contractStatus } from "@/lib/contracts";
@@ -29,7 +29,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
-    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source").gte("month", monthKeyDate(shiftMonth(month, -5))).lte("month", monthKeyDate(month)),
+    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source").lte("month", monthKeyDate(month)),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
     supabase.from("client_contracts").select("id, client_id, kind, start_date, months, end_date, status, term_number, note").order("start_date", { ascending: false }),
@@ -60,6 +60,18 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
     m, total: (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid").reduce((n, i) => n + Number(i.amount ?? fees.get(i.client_id)?.fee ?? 0), 0),
   }));
   const peak = Math.max(1, ...trend.map((t) => t.total), mrr);
+
+  // Payment history: every month from their start (or a year back) through this month, newest first.
+  const historyFor = (cid: string, start: string | null): PastMonth[] => {
+    const yearBack = shiftMonth(month, -11);
+    const first = start && start.slice(0, 7) < month ? (start.slice(0, 7) < shiftMonth(month, -35) ? shiftMonth(month, -35) : start.slice(0, 7)) : yearBack;
+    const list: PastMonth[] = [];
+    for (let m = month; m >= first; m = shiftMonth(m, -1)) {
+      const i = inv(cid, m);
+      list.push({ month: m, label: monthLabel(m), paid: i?.status === "paid", amount: i?.amount != null ? Number(i.amount) : null, source: i?.source ?? null });
+    }
+    return list;
+  };
 
   // Contracts: what each client is on and where they are in it.
   const nice = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
@@ -159,7 +171,10 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                       );
                     })()}
                   </td>
-                  <td className="kn">{r.fee ? money(r.fee) : r.projectFee ? <>{money(r.projectFee)}<br /><span className="note">project fee</span></> : <span className="note">Not set</span>}</td>
+                  <td className="kn">
+                    <EditBilling clientId={r.id} clientName={r.name} fee={r.fee || r.projectFee} day={r.day} history={historyFor(r.id, r.start_date)}
+                      label={r.fee ? <><b>{money(r.fee)}</b><span className="note">Edit</span></> : r.projectFee ? <><b>{money(r.projectFee)}</b><span className="note">project fee · Edit</span></> : <span className="fee-set">Set fee</span>} />
+                  </td>
                   <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
                     <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
@@ -170,7 +185,6 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                   <td className="team-edit">
                     <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
                       <PaidToggle clientId={r.id} month={month} paid={r.paid} amount={r.fee || null} />
-                      <EditBilling clientId={r.id} clientName={r.name} fee={r.fee} day={r.day} />
                     </span>
                   </td>
                 </tr>
