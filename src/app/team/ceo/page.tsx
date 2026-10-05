@@ -294,7 +294,8 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
           </p>
           <h3 style={{ marginTop: 8 }}>Past revenue</h3>
           <p className="note">Money from earlier this year, before the portal, imported from a spreadsheet. It counts toward the year-to-date total and the 6-month chart.</p>
-          <ImportRevenue clients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))} loggedKeys={portalPaid.map((i) => `${i.client_id}|${String(i.month).slice(0, 7)}`)} />
+          <ImportRevenue clients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))} loggedKeys={portalPaid.map((i) => `${i.client_id}|${String(i.month).slice(0, 7)}`)}
+            loggedAmounts={portalPaid.map((i) => `${String(i.month).slice(0, 7)}|${Number(i.amount ?? (projectClients.has(i.client_id) ? 0 : fees.get(i.client_id)?.fee ?? 0)).toFixed(2)}`)} />
           {batches.length > 0 && (
             <ul className="list">
               {batches.map((b) => (

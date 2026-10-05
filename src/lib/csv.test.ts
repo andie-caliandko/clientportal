@@ -41,3 +41,23 @@ describe("HoneyBook payments report", () => {
     expect(Math.round(rows.reduce((n, r) => n + r.amount, 0) * 100) / 100).toBe(6783.33);
   });
 });
+
+// Dubsado's invoice list, with sample names.
+describe("Dubsado invoice export", () => {
+  const csv = [
+    '"Invoice Number","Date","Title","Invoice Project","Client","Payment Method(s)","Payment Date(s)","Subtotal","Tax","Total","Amount Paid","Outstanding Balance","Status"',
+    '98,"Oct 1, 2026","","Sample Clubhouse","Contact A","e-transfer","Oct 2, 2026","$1,500.00","$0.00","$1,500.00","$1,500.00","$0.00","paid"',
+    '97,"Oct 1, 2026","Sample Realty","Sample Realty","Contact B","","","$3,445.00","$0.00","$3,445.00","$0.00","$3,445.00","unpaid"',
+    '60,"Jun 1, 2026","","Sample School","Contact C","card","Oct 1, 2026","$8,500.00","$0.00","$8,500.00","$8,500.00","$0.00","closed"',
+    '41,"Jul 1, 2026","","Sample Bakery","Contact D","card","Aug 4, 2026, Sep 15, 2026","$900.00","$0.00","$900.00","$900.00","$0.00","paid"',
+  ].join("\n");
+  it("uses the payment date and amount paid, and leaves out unpaid invoices", () => {
+    const { rows, skipped } = readRevenueCsv(csv);
+    expect(skipped).toBe(1);
+    expect(rows.map((r) => [r.paid_on, r.amount, r.client_name])).toEqual([
+      ["2026-10-02", 1500, "Sample Clubhouse"],
+      ["2026-10-01", 8500, "Sample School"],
+      ["2026-09-15", 900, "Sample Bakery"],
+    ]);
+  });
+});

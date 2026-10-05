@@ -49,6 +49,16 @@ export function parseMoney(text: string): number | null {
   return Number.isFinite(n) && t.replace(/[()$,\s.-]/g, "").length ? (negative ? -n : n) : null;
 }
 
+/** A cell with one or more dates ("Aug 4, 2026, Sep 15, 2026"): the last one, when it was fully paid. */
+function lastDate(text: string): string | null {
+  const one = parseDate(text);
+  if (one) return one;
+  const named = text.match(/[A-Za-z]{3,9}\.? \d{1,2}, \d{4}/g);
+  if (named?.length) return parseDate(named[named.length - 1]);
+  const numeric = text.match(/\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/g);
+  return numeric?.length ? parseDate(numeric[numeric.length - 1]) : null;
+}
+
 export type RevenueRow = { paid_on: string; amount: number; client_name: string | null; note: string | null };
 
 /**
@@ -60,7 +70,7 @@ export type RevenueRow = { paid_on: string; amount: number; client_name: string 
 export function readRevenueCsv(text: string): { rows: RevenueRow[]; skipped: number } {
   const all = parseCsv(text);
   if (!all.length) return { rows: [], skipped: 0 };
-  const head = all[0].map((h) => h.toLowerCase().replace(/[_-]+/g, " ").trim());
+  const head = all[0].map((h) => h.toLowerCase().replace(/\(s\)/g, "").replace(/[_-]+/g, " ").trim());
   // Exact header names first, then any header containing one of the words.
   const find = (exact: string[], loose: string[]) => {
     for (const e of exact) { const i = head.indexOf(e); if (i >= 0) return i; }
@@ -70,8 +80,9 @@ export function readRevenueCsv(text: string): { rows: RevenueRow[]; skipped: num
   const col = hasHeader
     ? {
         date: find(["transaction date", "date paid", "paid on", "payment date", "paid date", "date"], ["date", "day"]),
-        amount: find(["total amount", "amount paid", "amount", "total", "paid amount"], ["amount", "total", "revenue", "price"]),
-        client: find(["project name", "client", "client name", "customer", "company"], ["client", "customer", "company", "name"]),
+        // What was actually paid wins over an invoice total (an unpaid invoice has a total but $0 paid).
+        amount: find(["amount paid", "paid amount", "total amount", "amount", "total"], ["amount paid", "amount", "total", "revenue", "price"]),
+        client: find(["project name", "invoice project", "client", "client name", "customer", "company"], ["client", "customer", "company", "name"]),
         note: find(["payment name", "invoice", "memo", "note", "notes", "description"], ["memo", "note", "description", "invoice"]),
         status: find(["payment status", "status"], []),
         refunded: find(["refunded amount", "refund"], []),
@@ -80,9 +91,10 @@ export function readRevenueCsv(text: string): { rows: RevenueRow[]; skipped: num
   let skipped = 0;
   const rows: RevenueRow[] = [];
   for (const r of hasHeader ? all.slice(1) : all) {
-    const status = col.status >= 0 ? (r[col.status] ?? "").toLowerCase() : "";
-    if (status && !/paid|complete|succeeded/.test(status)) { skipped++; continue; }
-    const paid_on = col.date >= 0 ? parseDate(r[col.date] ?? "") : null;
+    // Only money that came in: skip unpaid, void or cancelled lines ("unpaid" isn't "paid").
+    const status = col.status >= 0 ? (r[col.status] ?? "").toLowerCase().trim() : "";
+    if (status && (/unpaid|void|cancel|draft|overdue|refunded/.test(status) || !/paid|complete|succeeded|closed/.test(status))) { skipped++; continue; }
+    const paid_on = col.date >= 0 ? lastDate(r[col.date] ?? "") : null;
     const gross = col.amount >= 0 ? parseMoney(r[col.amount] ?? "") : null;
     const refund = col.refunded >= 0 ? parseMoney(r[col.refunded] ?? "") ?? 0 : 0;
     const amount = gross === null ? null : Math.round((gross - Math.abs(refund)) * 100) / 100;

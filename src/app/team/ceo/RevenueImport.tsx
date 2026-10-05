@@ -9,7 +9,13 @@ import { importRevenue, removeRevenueBatch } from "./actions";
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 /** Upload a CSV of past revenue, check the preview, then save it. */
-export function ImportRevenue({ clients, loggedKeys }: { clients: { id: string; name: string }[]; loggedKeys: string[] }) {
+export function ImportRevenue({ clients, loggedKeys, loggedAmounts }: {
+  clients: { id: string; name: string }[];
+  /** "clientId|2026-10" for every month already paid in the portal. */
+  loggedKeys: string[];
+  /** "2026-10|1500.00" for every payment already in the portal, to catch the same payment under a different name. */
+  loggedAmounts: string[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<{ name: string; rows: RevenueRow[]; skipped: number } | null>(null);
@@ -17,9 +23,10 @@ export function ImportRevenue({ clients, loggedKeys }: { clients: { id: string; 
   const [pending, startTransition] = useTransition();
   const byName = new Map(clients.map((c) => [c.name.trim().toLowerCase(), c.id]));
   const logged = new Set(loggedKeys);
+  const amounts = new Set(loggedAmounts);
   const dup = (r: RevenueRow) => {
     const id = r.client_name ? byName.get(r.client_name.trim().toLowerCase()) : undefined;
-    return !!id && logged.has(`${id}|${r.paid_on.slice(0, 7)}`);
+    return (!!id && logged.has(`${id}|${r.paid_on.slice(0, 7)}`)) || amounts.has(`${r.paid_on.slice(0, 7)}|${r.amount.toFixed(2)}`);
   };
   const keep = file ? file.rows.filter((r) => !dup(r)) : [];
   const total = keep.reduce((n, r) => n + r.amount, 0);
@@ -34,7 +41,7 @@ export function ImportRevenue({ clients, loggedKeys }: { clients: { id: string; 
           <div style={{ display: "grid", gap: 12 }}>
             <p className="note" style={{ margin: 0 }}>
               A CSV with a <b>date</b> and an <b>amount</b> on each line, plus the <b>client</b> and a <b>note</b> if you have them. From Excel or Google Sheets, use File → Download (or Save as) → CSV.
-              Lines for a client and month already marked paid in the portal are left out, so nothing is counted twice.
+              Only money that came in counts: unpaid invoices are left out, and each line uses the date it was paid. A line matching a payment already in the portal (same client and month, or the same amount in the same month) is left out, so nothing is counted twice.
             </p>
             <div className="field"><label htmlFor="rv-file">CSV file</label>
               <input className="input" id="rv-file" type="file" accept=".csv,text/csv" onChange={async (e) => {

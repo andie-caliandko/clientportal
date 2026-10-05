@@ -202,17 +202,21 @@ export async function importRevenue(batchName: string, rows: { paid_on: string; 
   const clean = rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.paid_on) && Number.isFinite(r.amount) && r.amount !== 0).slice(0, 5000);
   if (!clean.length) return { error: "There were no lines with a date and an amount." };
   const supabase = await createClient();
-  const [{ data: clients }, { data: paid }] = await Promise.all([
+  const [{ data: clients }, { data: paid }, { data: billing }] = await Promise.all([
     supabase.from("clients").select("id, name"),
-    supabase.from("client_invoices").select("client_id, month").eq("status", "paid"),
+    supabase.from("client_invoices").select("client_id, month, amount").eq("status", "paid"),
+    supabase.from("client_billing").select("client_id, monthly_fee"),
   ]);
   const byName = new Map((clients ?? []).map((c) => [c.name.trim().toLowerCase(), c.id]));
   const logged = new Set((paid ?? []).map((p) => `${p.client_id}|${String(p.month).slice(0, 7)}`));
+  // The same payment can be under a different name in another system: same amount, same month.
+  const fee = new Map((billing ?? []).map((b) => [b.client_id, Number(b.monthly_fee)]));
+  const amounts = new Set((paid ?? []).map((p) => `${String(p.month).slice(0, 7)}|${Number(p.amount ?? fee.get(p.client_id) ?? 0).toFixed(2)}`));
   const batch = crypto.randomUUID();
   let skipped = 0;
   const insert = clean.flatMap((r) => {
     const clientId = r.client_name ? byName.get(r.client_name.trim().toLowerCase()) ?? null : null;
-    if (clientId && logged.has(`${clientId}|${r.paid_on.slice(0, 7)}`)) { skipped++; return []; }
+    if ((clientId && logged.has(`${clientId}|${r.paid_on.slice(0, 7)}`)) || amounts.has(`${r.paid_on.slice(0, 7)}|${r.amount.toFixed(2)}`)) { skipped++; return []; }
     return [{ agency_id: v.agency.id, paid_on: r.paid_on, amount: r.amount, client_name: r.client_name?.slice(0, 200) ?? null, client_id: clientId, note: r.note?.slice(0, 300) ?? null, batch_id: batch, batch_name: batchName.slice(0, 120) || "Imported revenue", created_by: v.userId }];
   });
   for (let i = 0; i < insert.length; i += 500) {
