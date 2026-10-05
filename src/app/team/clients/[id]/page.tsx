@@ -104,6 +104,9 @@ export default async function ClientDetail({
   const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
 
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at]));
+  // Onboarding steps the client still has to do, shown with their tasks until they're all done.
+  const allSteps = (steps.data ?? []) as Step[];
+  const stepsLeft = allSteps.filter((s) => !done.has(s.id));
   // Who can host a client call: the account manager, teammates on the account, and admins.
   const hosts = members
     .filter((m) => m.role !== "creator" && (m.role === "admin" || onTeam.has(m.user_id) || m.user_id === client.account_manager_id))
@@ -205,11 +208,25 @@ export default async function ClientDetail({
         <h2>Tasks</h2>
         {canEdit && <NewTask clients={[{ id: client.id, name: client.name }]} people={taskPeople} clientId={client.id} />}
         {[
-          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter(isClientFacing), approvals: pendingCals },
-          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !isClientFacing(t)), approvals: [] as Calendar[] },
+          { key: "client", title: client.name, hint: "Assigned to the client, or waiting on them.", list: openTasks.filter(isClientFacing), approvals: pendingCals, onboarding: stepsLeft.length },
+          { key: "team", title: agency.brand.shortName ?? agency.name, hint: "Only your team sees these.", list: openTasks.filter((t) => !isClientFacing(t)), approvals: [] as Calendar[], onboarding: 0 },
         ].map((g) => (
           <div className="task-group" key={g.key}>
-            <h3>{g.title} <span>{g.list.length + g.approvals.length} open · {g.hint}</span></h3>
+            <h3>{g.title} <span>{g.list.length + g.approvals.length + g.onboarding} open · {g.hint}</span></h3>
+            {g.key === "client" && allSteps.length > 0 && stepsLeft.length > 0 && (
+              <div className="onb-progress">
+                <div className="onb-head">
+                  <b>Onboarding</b>
+                  <span className="note">{allSteps.length - stepsLeft.length} of {allSteps.length} done</span>
+                </div>
+                <div className="goal-bar" role="progressbar" aria-valuemin={0} aria-valuemax={allSteps.length} aria-valuenow={allSteps.length - stepsLeft.length} aria-label="Onboarding progress">
+                  <i style={{ width: `${((allSteps.length - stepsLeft.length) / allSteps.length) * 100}%` }} />
+                </div>
+                <ul className="onb-left">
+                  {stepsLeft.map((st) => <li key={st.id}>{st.title}</li>)}
+                </ul>
+              </div>
+            )}
             {g.list.length || g.approvals.length ? (
               <div className="board" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
                 {g.approvals.map((c) => <ApprovalCard key={c.id} cal={c} clientName={client.name} timeZone={tz} showClient={false} canEdit={canEdit} />)}
@@ -219,7 +236,7 @@ export default async function ClientDetail({
                 ))}
               </div>
             ) : (
-              <p className="note">{g.key === "client" ? `Nothing assigned to ${client.name} right now.` : "No open team tasks."}</p>
+              <p className="note">{g.key === "client" ? (stepsLeft.length ? "No other tasks for them right now." : `Nothing assigned to ${client.name} right now.`) : "No open team tasks."}</p>
             )}
           </div>
         ))}
