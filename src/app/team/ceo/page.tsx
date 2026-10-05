@@ -46,10 +46,14 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
     const f = { ...f0, fee: isProject ? 0 : f0.fee, projectFee: isProject ? f0.fee : 0 };
     const i = inv(c.id, month);
     const paid = i?.status === "paid";
-    return { ...c, ...f, invoice: i, paid, state: invoiceState(paid, f.day, month, today), collected: paid ? Number(i?.amount ?? f.fee) : 0 };
+    return { ...c, ...f, invoice: i, paid, state: invoiceState(paid, f.day, month, today) };
   });
   const mrr = rows.reduce((n, r) => n + r.fee, 0);
-  const collected = rows.reduce((n, r) => n + r.collected, 0);
+  // Collected in a month: every invoice marked paid for it, at the amount paid (or the client's fee
+  // if no amount was entered). One calculation for the number up top and the chart, so they always match.
+  const collectedIn = (m: string) =>
+    (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid").reduce((n, i) => n + Number(i.amount ?? fees.get(i.client_id)?.fee ?? 0), 0);
+  const collected = collectedIn(month);
   const owed = rows.filter((r) => !r.paid && r.fee > 0).reduce((n, r) => n + r.fee, 0);
   const paidCount = rows.filter((r) => r.paid).length;
   const late = rows.filter((r) => r.state === "late" && r.fee > 0);
@@ -57,7 +61,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const monthLabel = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", year: "numeric" });
   // Collected in each of the last six months, for the trend.
   const trend = Array.from({ length: 6 }, (_, k) => shiftMonth(month, k - 5)).map((m) => ({
-    m, total: (invoices ?? []).filter((i) => i.month === monthKeyDate(m) && i.status === "paid").reduce((n, i) => n + Number(i.amount ?? fees.get(i.client_id)?.fee ?? 0), 0),
+    m, total: collectedIn(m),
   }));
   const peak = Math.max(1, ...trend.map((t) => t.total), mrr);
 
