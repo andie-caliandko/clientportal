@@ -52,25 +52,46 @@ export function parseMoney(text: string): number | null {
 export type RevenueRow = { paid_on: string; amount: number; client_name: string | null; note: string | null };
 
 /**
- * Reads a revenue spreadsheet. Columns are found by their header (date, amount,
- * client, note), in any order; without headers it assumes date, amount, client, note.
+ * Reads a revenue spreadsheet. Columns are found by their header, in any order
+ * (exact names like HoneyBook's TRANSACTION_DATE and TOTAL_AMOUNT win over loose
+ * matches like "date"); without headers it assumes date, amount, client, note.
+ * Rows marked unpaid are skipped, and refunds are taken off.
  */
 export function readRevenueCsv(text: string): { rows: RevenueRow[]; skipped: number } {
   const all = parseCsv(text);
   if (!all.length) return { rows: [], skipped: 0 };
-  const head = all[0].map((h) => h.toLowerCase());
-  const find = (...names: string[]) => head.findIndex((h) => names.some((n) => h.includes(n)));
+  const head = all[0].map((h) => h.toLowerCase().replace(/[_-]+/g, " ").trim());
+  // Exact header names first, then any header containing one of the words.
+  const find = (exact: string[], loose: string[]) => {
+    for (const e of exact) { const i = head.indexOf(e); if (i >= 0) return i; }
+    return head.findIndex((h) => loose.some((n) => h.includes(n)));
+  };
   const hasHeader = !parseDate(all[0][0] ?? "") && head.some((h) => /date|amount|total|paid|client/.test(h));
   const col = hasHeader
-    ? { date: find("date", "paid on", "day"), amount: find("amount", "total", "paid", "revenue", "price"), client: find("client", "customer", "name", "company"), note: find("note", "description", "memo", "invoice", "project") }
-    : { date: 0, amount: 1, client: 2, note: 3 };
+    ? {
+        date: find(["transaction date", "date paid", "paid on", "payment date", "paid date", "date"], ["date", "day"]),
+        amount: find(["total amount", "amount paid", "amount", "total", "paid amount"], ["amount", "total", "revenue", "price"]),
+        client: find(["project name", "client", "client name", "customer", "company"], ["client", "customer", "company", "name"]),
+        note: find(["payment name", "invoice", "memo", "note", "notes", "description"], ["memo", "note", "description", "invoice"]),
+        status: find(["payment status", "status"], []),
+        refunded: find(["refunded amount", "refund"], []),
+      }
+    : { date: 0, amount: 1, client: 2, note: 3, status: -1, refunded: -1 };
   let skipped = 0;
   const rows: RevenueRow[] = [];
   for (const r of hasHeader ? all.slice(1) : all) {
+    const status = col.status >= 0 ? (r[col.status] ?? "").toLowerCase() : "";
+    if (status && !/paid|complete|succeeded/.test(status)) { skipped++; continue; }
     const paid_on = col.date >= 0 ? parseDate(r[col.date] ?? "") : null;
-    const amount = col.amount >= 0 ? parseMoney(r[col.amount] ?? "") : null;
+    const gross = col.amount >= 0 ? parseMoney(r[col.amount] ?? "") : null;
+    const refund = col.refunded >= 0 ? parseMoney(r[col.refunded] ?? "") ?? 0 : 0;
+    const amount = gross === null ? null : Math.round((gross - Math.abs(refund)) * 100) / 100;
     if (!paid_on || amount === null || amount === 0) { skipped++; continue; }
-    rows.push({ paid_on, amount, client_name: col.client >= 0 ? r[col.client] || null : null, note: col.note >= 0 && col.note !== col.amount ? r[col.note] || null : null });
+    // The payment name, plus the invoice number when it's its own column.
+    const invoice = head.indexOf("invoice");
+    const parts = [col.note >= 0 && col.note !== col.amount ? r[col.note] : "", invoice >= 0 && invoice !== col.note ? r[invoice] : ""];
+    const note = parts.filter(Boolean).join(" · ") || null;
+    rows.push({ paid_on, amount, client_name: col.client >= 0 ? r[col.client] || null : null, note });
   }
   return { rows, skipped };
 }

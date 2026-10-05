@@ -27,3 +27,17 @@ describe("revenue spreadsheet", () => {
     expect(readRevenueCsv("2026-03-01,1200,Epting Events").rows[0]).toMatchObject({ paid_on: "2026-03-01", amount: 1200, client_name: "Epting Events" });
   });
 });
+
+import { readFileSync } from "node:fs";
+// A HoneyBook export with the names swapped for samples.
+describe("HoneyBook payments report", () => {
+  it("reads the payment date, total, project and invoice, and skips the totals line", () => {
+    const { rows, skipped } = readRevenueCsv(readFileSync(new URL("./__honeybook.fixture.csv", import.meta.url), "utf8"));
+    expect(rows).toHaveLength(7);
+    expect(skipped).toBe(1);
+    expect(rows[0]).toEqual({ paid_on: "2026-01-01", amount: 500, client_name: "Sample Client A", note: "2 of 3 payments · #000140-001" });
+    // Paid Jan 12 though due Feb 1: the payment date is what counts.
+    expect(rows.find((r) => r.client_name === "Sample Client F")?.paid_on).toBe("2026-01-12");
+    expect(Math.round(rows.reduce((n, r) => n + r.amount, 0) * 100) / 100).toBe(6783.33);
+  });
+});
