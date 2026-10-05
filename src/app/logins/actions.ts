@@ -114,7 +114,7 @@ export async function requestLogins(_: Result, form: FormData): Promise<Result> 
     people.map((p) => p.email),
     `Please share your logins with ${v.agency.brand.shortName ?? v.agency.name}`,
     [
-      `Hi ${people.length === 1 ? people[0].display_name.split(" ")[0] : "there"},`,
+      `Hi ${people.map((p) => p.display_name.trim()).join(" and ")},`,
       `${who} asked you to share the logins for ${what}.`,
       note,
       `Please add them in your portal, where passwords are encrypted and only your account team can see them:\n${link}`,

@@ -28,7 +28,7 @@ export async function sendInviteReminder(clientUserId: { client_id: string; user
   if (!link) return false;
   const client = cu.client as unknown as { name: string; agency: { name: string; brand: { shortName?: string } } };
   const short = client.agency.brand?.shortName ?? client.agency.name;
-  const first = cu.display_name.split(" ")[0];
+  const first = cu.display_name.trim();
   await sendEmail(
     [cu.email],
     opts.final ? `Last reminder: your ${short} portal is ready` : `Your ${short} portal is waiting for you`,

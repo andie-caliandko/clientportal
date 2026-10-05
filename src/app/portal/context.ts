@@ -11,7 +11,7 @@ export type PortalBase = Omit<PortalCtx, "params">;
 /** The signed-in client's portal. Cached so the layout and page share it. */
 export const clientPortal = cache(async (): Promise<PortalBase> => {
   const { agency, client, clientUser, userId } = await requireClient();
-  return { agency, client, userId, firstName: clientUser.display_name.split(" ")[0], preview: false, base: "/portal" };
+  return { agency, client, userId, firstName: clientUser.display_name.trim(), preview: false, base: "/portal" };
 });
 
 /** "View their portal": the team sees a client's portal exactly as the client does. */
@@ -31,7 +31,7 @@ export const previewPortal = cache(async (id: string): Promise<PortalBase> => {
   if (!client) notFound();
   return {
     agency, client: client as Client, userId: owner?.user_id ?? null,
-    firstName: owner?.display_name.split(" ")[0] ?? "there",
+    firstName: owner?.display_name.trim() ?? "there",
     preview: true, base: `/preview/${id}`,
   };
 });
