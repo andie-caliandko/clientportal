@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { notifyUser } from "@/lib/notifications";
+import { notifyClient, notifyUser } from "@/lib/notifications";
+import { sendEmail } from "@/lib/notify";
 import { getViewer } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { decryptSecret, encryptSecret, vaultReady } from "@/lib/vault";
@@ -88,4 +89,37 @@ export async function revealLogin(id: string): Promise<{ error?: string; passwor
   } catch {
     return { error: "That password couldn't be read." };
   }
+}
+
+/** Team: ask a client to share logins. Sends an email and a portal notification pointing to Logins. */
+export async function requestLogins(_: Result, form: FormData): Promise<Result> {
+  const clientId = String(form.get("client") ?? "");
+  const v = await editorFor(clientId);
+  if (!v || v.kind !== "team") return { error: "You can't send requests for this account." };
+  const other = String(form.get("other") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const services = [...form.getAll("services").map(String), ...other].map((s) => s.slice(0, 80)).slice(0, 20);
+  const note = String(form.get("note") ?? "").trim().slice(0, 500);
+  const admin = createAdminClient();
+  const [{ data: client }, { data: people }] = await Promise.all([
+    admin.from("clients").select("name").eq("id", clientId).maybeSingle(),
+    admin.from("client_users").select("email, display_name").eq("client_id", clientId),
+  ]);
+  if (!client) return { error: "That client wasn't found." };
+  if (!people?.length) return { error: "No one has joined their portal yet. Invite them first." };
+  const who = v.member.display_name.split(" ")[0];
+  const what = services.length ? services.join(", ") : "the accounts we'll be managing";
+  const link = `${process.env.NEXT_PUBLIC_SITE_URL}/portal/logins`;
+  await notifyClient(clientId, { kind: "task", title: `${who} asked for your logins`, body: `Please add: ${what}`, link: "/portal/logins" });
+  await sendEmail(
+    people.map((p) => p.email),
+    `Please share your logins with ${v.agency.brand.shortName ?? v.agency.name}`,
+    [
+      `Hi ${people.length === 1 ? people[0].display_name.split(" ")[0] : "there"},`,
+      `${who} asked you to share the logins for ${what}.`,
+      note,
+      `Please add them in your portal, where passwords are encrypted and only your account team can see them:\n${link}`,
+      "For your security, please don't reply to this email with a password.",
+    ].filter(Boolean).join("\n\n"),
+  );
+  return { ok: `Login request sent to ${people.map((p) => p.display_name.split(" ")[0]).join(" and ")}.` };
 }

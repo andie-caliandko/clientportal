@@ -3,11 +3,12 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/app/Modal";
-import { deleteLogin, revealLogin, saveLogin } from "./actions";
+import { LOGIN_SERVICES } from "@/lib/loginServices";
+import { deleteLogin, requestLogins, revealLogin, saveLogin } from "./actions";
 
 export type LoginRow = { id: string; service: string; username: string | null; url: string | null; note: string | null; has_secret: boolean };
 
-const SERVICES = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Pinterest", "YouTube", "Google Business Profile", "Website", "Email", "Canva"];
+const SERVICES = LOGIN_SERVICES;
 
 const OTHER = "__other";
 
@@ -106,5 +107,46 @@ export function RevealPassword({ id }: { id: string }) {
       if (r.error) setError(r.error);
       else { setCopied(false); setPassword(r.password ?? ""); router.refresh(); }
     })}>{pending ? "Revealing…" : "Reveal"}</button>
+  );
+}
+
+/** Team: ask the client to add their logins (an email and a portal notification, never a password). */
+export function RequestLogins({ clientId, have }: { clientId: string; have: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(requestLogins, {});
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  return (
+    <>
+      <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Send login request</button>
+      {state.ok && !open && <span className="flash" role="status">{state.ok}</span>}
+      {open && (
+        <Modal title="Send a login request" onClose={() => setOpen(false)}>
+          <form action={action} style={{ display: "grid", gap: 14 }}>
+            <input type="hidden" name="client" value={clientId} />
+            <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
+              <legend style={{ marginBottom: 8 }}>Which accounts do you need?</legend>
+              <div className="check-grid">
+                {SERVICES.map((s) => (
+                  <label key={s} className="row note" style={{ alignItems: "center", gap: 8 }}>
+                    <input type="checkbox" name="services" value={s} disabled={have.includes(s)} />
+                    {s}{have.includes(s) ? " (already shared)" : ""}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="field"><label htmlFor={`rl-other-${clientId}`}>Anything else (optional)</label>
+              <input className="input" id={`rl-other-${clientId}`} name="other" placeholder="Shopify, Mailchimp" /></div>
+            <div className="field"><label htmlFor={`rl-note-${clientId}`}>Note (optional)</label>
+              <textarea className="input" id={`rl-note-${clientId}`} name="note" rows={2} placeholder="We need these before your kickoff call." /></div>
+            <p className="note">They get an email and a portal notification with a link to Logins. Passwords are only ever entered there, never in email.</p>
+            {state.error && <p className="error">{state.error}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send request"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }

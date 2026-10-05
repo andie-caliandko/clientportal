@@ -944,6 +944,23 @@ export async function removeClientContact(form: FormData) {
   revalidatePath(`/team/clients/${clientId}`);
 }
 
+/** Change the name a client contact goes by in their portal (greeting, menu and Members). */
+export async function renameClientContact(_: Result, form: FormData): Promise<Result> {
+  await requireEditor();
+  const clientId = String(form.get("client"));
+  const userId = String(form.get("user"));
+  const name = String(form.get("name") ?? "").trim().slice(0, 80);
+  if (!name) return { error: "Add their name." };
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You can't change this client's portal." };
+  const { error } = await createAdminClient().from("client_users").update({ display_name: name }).eq("client_id", clientId).eq("user_id", userId);
+  if (error) return { error: "That name couldn't be saved." };
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/portal", "layout");
+  return { ok: "Name saved." };
+}
+
 /** A teammate adds, replaces or removes their own photo. */
 export async function setMyPhoto(path: string | null): Promise<Result> {
   const v = await requireTeam();

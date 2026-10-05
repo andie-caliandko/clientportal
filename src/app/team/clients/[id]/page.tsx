@@ -1,4 +1,4 @@
-import { LoginEditor, RemoveLogin, RevealPassword } from "@/app/logins/LoginForms";
+import { LoginEditor, RemoveLogin, RequestLogins, RevealPassword } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 import { BriefForm } from "../BriefForm";
 import { connectedMembers } from "@/lib/google";
@@ -14,7 +14,7 @@ import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, AddTeammate, DriveShareToggle, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, EditContactName, AddTeammate, DriveShareToggle, ResendInviteButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -87,6 +87,8 @@ export default async function ClientDetail({
   ]);
   const briefLinks = new Map((signedBriefs.data ?? []).map((u) => [u.path, u.signedUrl]));
   const uploadLinks = new Map<string | null, string>((signedUploads.data ?? []).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl as string]));
+  // Everything they've uploaded, in list order, to step through in the preview.
+  const uploadGallery = uploadRows.flatMap((u) => uploadLinks.get(u.storage_path) ? [{ url: uploadLinks.get(u.storage_path)!, name: u.file_name }] : []);
   const replies = new Map(replyList);
   const names = new Map<string, string>(members0(allMembers.data));
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
@@ -444,7 +446,7 @@ export default async function ClientDetail({
           <ul className="list">
             {((people.data ?? []) as ClientUser[]).map((p) => (
               <li key={p.user_id}>
-                <span><b>{p.display_name}</b><br /><span className="note">{p.email} · {p.role === "owner" ? "Owner" : "Team member"}</span></span>
+                <span><b>{p.display_name}</b>{canEdit && <> <EditContactName clientId={client.id} userId={p.user_id} name={p.display_name} /></>}<br /><span className="note">{p.email} · {p.role === "owner" ? "Owner" : "Team member"}</span></span>
                 <span className="r">
                   {(() => {
                     // Joined, or still invited (and how long ago, with the reminders sent).
@@ -491,7 +493,12 @@ export default async function ClientDetail({
           <div className="panel" id="logins" style={{ gridColumn: "1 / -1" }}>
             <div className="sec-head">
               <h2>Logins</h2>
-              {!client.archived_at && <LoginEditor clientId={client.id} label="Add a login" />}
+              {!client.archived_at && (
+                <span className="row" style={{ gap: 10, alignItems: "center" }}>
+                  <RequestLogins clientId={client.id} have={logins.map((l) => l.service)} />
+                  <LoginEditor clientId={client.id} label="Add a login" />
+                </span>
+              )}
             </div>
             <p className="note">
               Accounts the client shared with us. Passwords are encrypted and stay hidden.{" "}
@@ -534,7 +541,8 @@ export default async function ClientDetail({
               {uploadRows.map((u) => (
                 <li key={u.id}>
                   <span className="pill info">{u.kind === "task" ? "Task" : u.kind === "branding" ? "Branding" : "Content"}</span>
-                  {uploadLinks.get(u.storage_path) ? <FilePreview url={uploadLinks.get(u.storage_path)!} name={u.file_name} /> : u.file_name}
+                  {uploadLinks.get(u.storage_path) ? <FilePreview url={uploadLinks.get(u.storage_path)!} name={u.file_name}
+                    gallery={uploadGallery} index={uploadGallery.findIndex((g) => g.url === uploadLinks.get(u.storage_path))} /> : u.file_name}
                   <span className="r">
                     {u.drive_file_id ? (
                       <a className="pill ok" href={driveFileUrl(u.drive_file_id)} target="_blank" rel="noreferrer">In Drive</a>

@@ -30,8 +30,7 @@ import {
   sendCalendar,
   registerDocument,
   updateClientInfo,
-  updateTask,
-} from "./actions";
+  updateTask, renameClientContact } from "./actions";
 
 type Opt = { id?: string; user_id?: string; name?: string; display_name?: string; role?: string };
 const ROLE_NAMES: Record<string, string> = { admin: "Admin", account_manager: "Account manager", creator: "Creator" };
@@ -746,6 +745,34 @@ export function AddTeammate({ clientId, clientName, existing }: {
             )}
             <div><button type="button" className="linkbtn note" onClick={() => setOpen(false)}>Close</button></div>
           </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Change the name a client contact goes by in their portal. */
+export function EditContactName({ clientId, userId, name }: { clientId: string; userId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(renameClientContact, {});
+  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  return (
+    <>
+      <button type="button" className="linkbtn note" onClick={() => setOpen(true)}>Edit name</button>
+      {open && (
+        <Modal title="Edit their name" onClose={() => setOpen(false)}>
+          <form action={action} style={{ display: "grid", gap: 12 }}>
+            <input type="hidden" name="client" value={clientId} />
+            <input type="hidden" name="user" value={userId} />
+            <div className="field"><label htmlFor={`cn-${userId}`}>Name</label>
+              <input className="input" id={`cn-${userId}`} name="name" defaultValue={name} required /></div>
+            <p className="note">This is the name they&apos;re greeted by and shown as in their portal. Their sign-in email stays the same.</p>
+            {state.error && <p className="error">{state.error}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
         </Modal>
       )}
     </>
