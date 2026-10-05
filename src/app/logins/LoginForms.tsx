@@ -9,6 +9,26 @@ export type LoginRow = { id: string; service: string; username: string | null; u
 
 const SERVICES = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Pinterest", "YouTube", "Google Business Profile", "Website", "Email", "Canva"];
 
+const OTHER = "__other";
+
+/** Pick the account from a list, or choose Other and type it. Sends the result as "service". */
+function ServicePicker({ id, initial }: { id: string; initial?: string }) {
+  const known = !initial || SERVICES.includes(initial);
+  const [pick, setPick] = useState(known ? initial ?? "" : OTHER);
+  return (
+    <>
+      <select className="sel" id={id} name={pick === OTHER ? undefined : "service"} value={pick} onChange={(e) => setPick(e.target.value)} required>
+        <option value="" disabled>Choose an account…</option>
+        {SERVICES.map((s) => <option key={s} value={s}>{s}</option>)}
+        <option value={OTHER}>Other…</option>
+      </select>
+      {pick === OTHER && (
+        <input className="input" name="service" aria-label="Account name" defaultValue={known ? "" : initial} placeholder="Type the account, like Shopify" required autoFocus />
+      )}
+    </>
+  );
+}
+
 /** Add or edit a login. The password is never shown here; leave it blank to keep the saved one. */
 export function LoginEditor({ clientId, login, label }: { clientId: string; login?: LoginRow; label: string }) {
   const [open, setOpen] = useState(false);
@@ -25,8 +45,7 @@ export function LoginEditor({ clientId, login, label }: { clientId: string; logi
             <input type="hidden" name="client" value={clientId} />
             {login && <input type="hidden" name="id" value={login.id} />}
             <div className="field"><label htmlFor={`lg-svc-${p}`}>What it&apos;s for</label>
-              <input className="input" id={`lg-svc-${p}`} name="service" list="lg-services" defaultValue={login?.service} placeholder="Instagram" required />
-              <datalist id="lg-services">{SERVICES.map((s) => <option key={s} value={s} />)}</datalist></div>
+              <ServicePicker id={`lg-svc-${p}`} initial={login?.service} /></div>
             <div className="row top">
               <div className="field"><label htmlFor={`lg-user-${p}`}>Username or email</label><input className="input" id={`lg-user-${p}`} name="username" defaultValue={login?.username ?? ""} autoComplete="off" /></div>
               <div className="field"><label htmlFor={`lg-pass-${p}`}>Password</label>
