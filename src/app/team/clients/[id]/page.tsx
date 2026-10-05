@@ -1,3 +1,4 @@
+import { UploadGroups } from "@/app/portal/UploadGroups";
 import { isSocial } from "@/lib/services";
 import { ServiceTag } from "../../ServicesPicker";
 import { LoginEditor, RemoveLogin, RequestLogins, RevealPassword } from "@/app/logins/LoginForms";
@@ -21,7 +22,6 @@ import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
 import { clientLogoUrl, driveFolderUrl, embedUrl } from "@/lib/links";
-import { driveFileUrl } from "@/lib/drive";
 import { MessageComposer } from "@/app/portal/MessageComposer";
 import { MessageFiles, signAttachments } from "@/app/portal/MessageFiles";
 import { ScrollToLatest } from "@/app/portal/ScrollToLatest";
@@ -68,7 +68,7 @@ export default async function ClientDetail({
     supabase.from("agency_members").select("user_id, display_name, role, avatar_path").eq("agency_id", agency.id).order("display_name"),
     supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50),
     loadTaskPeople(supabase, agency.id, userId),
-    supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(60),
+    supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(300),
     supabase.from("call_requests").select("*").eq("client_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(10),
     connectedMembers(agency.id),
     supabase.from("client_briefs").select("*").eq("client_id", id).order("created_at", { ascending: false }),
@@ -89,8 +89,6 @@ export default async function ClientDetail({
   ]);
   const briefLinks = new Map((signedBriefs.data ?? []).map((u) => [u.path, u.signedUrl]));
   const uploadLinks = new Map<string | null, string>((signedUploads.data ?? []).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl as string]));
-  // Everything they've uploaded, in list order, to step through in the preview.
-  const uploadGallery = uploadRows.flatMap((u) => uploadLinks.get(u.storage_path) ? [{ url: uploadLinks.get(u.storage_path)!, name: u.file_name }] : []);
   const replies = new Map(replyList);
   const names = new Map<string, string>(members0(allMembers.data));
   ((people.data ?? []) as ClientUser[]).forEach((p) => names.set(p.user_id, p.display_name));
@@ -545,23 +543,15 @@ export default async function ClientDetail({
               : "Add their Google Drive folder under Client info, and uploads will be copied there."}
           </p>
           {uploadRows.length ? (
-            <ul className="list">
-              {uploadRows.map((u) => (
-                <li key={u.id}>
-                  <span className="pill info">{u.kind === "task" ? "Task" : u.kind === "branding" ? "Branding" : "Content"}</span>
-                  {uploadLinks.get(u.storage_path) ? <FilePreview url={uploadLinks.get(u.storage_path)!} name={u.file_name}
-                    gallery={uploadGallery} index={uploadGallery.findIndex((g) => g.url === uploadLinks.get(u.storage_path))} /> : u.file_name}
-                  <span className="r">
-                    {u.drive_file_id ? (
-                      <a className="pill ok" href={driveFileUrl(u.drive_file_id)} target="_blank" rel="noreferrer">In Drive</a>
-                    ) : client.drive_folder_id ? (
-                      <span className="pill warn">Copying to Drive</span>
-                    ) : null}
-                    <span className="note">{short(u.created_at)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <>
+              {client.drive_folder_id && (
+                <a className="btn sm line" style={{ justifySelf: "start" }} href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open their Drive folder</a>
+              )}
+              <UploadGroups timeZone={tz} items={uploadRows.map((u) => ({
+                id: u.id, url: uploadLinks.get(u.storage_path) ?? null, name: u.file_name, kind: u.kind, at: u.created_at,
+                drive: u.drive_file_id ? "in" : client.drive_folder_id ? "copying" : null,
+              }))} />
+            </>
           ) : (
             <p className="note">Nothing uploaded yet.</p>
           )}

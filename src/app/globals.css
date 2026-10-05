@@ -940,3 +940,13 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .svc-seo { --svc-bg: var(--who-2); --svc-ink: var(--who-2-ink); }
 .svc-ads { --svc-bg: var(--who-1); --svc-ink: var(--who-1-ink); }
 .multi-btn .services { gap: 4px; }
+/* Client uploads: grouped by day and type, as a grid of small previews. */
+.up-groups { display: grid; gap: 10px; }
+.up-group { border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; display: grid; gap: 10px; }
+.up-group > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
+.up-group > summary .r { margin-left: auto; display: flex; gap: 6px; }
+.up-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.up-grid li { aspect-ratio: 1; min-width: 0; }
+.file-link.up-tile, span.up-tile { width: 100%; height: 100%; border-radius: 10px; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; text-decoration: none; font-size: .72rem; font-weight: 600; padding: 4px; text-align: center; word-break: break-all; }
+.file-link.up-tile img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: 0; }
+.file-link.up-tile span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

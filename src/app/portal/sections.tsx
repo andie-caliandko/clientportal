@@ -13,6 +13,7 @@ import { MessageComposer } from "./MessageComposer";
 import { ScrollToLatest } from "./ScrollToLatest";
 import { MessageFiles, signAttachments } from "./MessageFiles";
 import { FilePreview } from "./FilePreview";
+import { UploadGroups } from "./UploadGroups";
 import { LoginEditor, RemoveLogin } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 
@@ -469,8 +470,6 @@ export async function FilesSection(ctx: PortalCtx) {
     ? (await supabase.storage.from("uploads").createSignedUrls(rows.map((r) => r.storage_path), 60 * 60)).data ?? []
     : [];
   const urlFor = new Map(urls.map((u) => [u.path, u.signedUrl]));
-  // Each section's files, to step through in the preview.
-  const galleryOf = (list: typeof rows) => list.flatMap((r) => urlFor.get(r.storage_path) ? [{ url: urlFor.get(r.storage_path)!, name: r.file_name }] : []);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
   return (
     <>
@@ -498,15 +497,8 @@ export async function FilesSection(ctx: PortalCtx) {
               </span>
             </div>
             {list.length ? (
-              <ul className="files">
-                {list.map((f) => (
-                  <li key={f.id}>
-                    {urlFor.get(f.storage_path) ? <FilePreview url={urlFor.get(f.storage_path)!} name={f.file_name}
-                      gallery={galleryOf(list)} index={galleryOf(list).findIndex((g) => g.url === urlFor.get(f.storage_path))} /> : f.file_name}
-                    <span className="note">{new Date(f.created_at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric" })}</span>
-                  </li>
-                ))}
-              </ul>
+              <UploadGroups timeZone={ctx.agency.timezone} showKind={false}
+                items={list.map((f) => ({ id: f.id, url: urlFor.get(f.storage_path) ?? null, name: f.file_name, kind: f.kind, at: f.created_at }))} />
             ) : (
               <p className="note">Nothing yet. Use the button above to send us your {kind} files.</p>
             )}

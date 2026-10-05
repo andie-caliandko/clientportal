@@ -62,7 +62,7 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
     <>
       <button type="button" className={`file-link ${className ?? ""}`} onClick={() => { setAt(index); setOpen(true); }} aria-label={`Open ${name}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {thumbnail && kind === "image" ? <img src={url} alt={name} /> : <span>{label ?? name}</span>}
+        {thumbnail && kindOf(name, type) === "image" ? <img src={url} alt={name} loading="lazy" /> : <span>{label ?? name}</span>}
       </button>
       {/* Rendered at the top of the page so nothing around the link can get in the way. */}
       {open && createPortal(

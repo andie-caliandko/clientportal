@@ -7,6 +7,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 // Runs every hour (see vercel.json; needs Vercel Pro):
 // - reminds clients 12 hours before an approval is due
 // - approves calendars nobody responded to, and flags that the client didn't approve in time
+// Long enough to copy a big batch of uploads to Drive.
+export const maxDuration = 300;
+
 export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -59,7 +62,14 @@ export async function GET(request: NextRequest) {
   }
 
   // Catch up on any uploads that didn't make it into Google Drive yet.
-  const synced = await syncUploadsToDrive({ limit: 25 });
+  // Copy anything still waiting to Drive, in batches, until caught up or near the time limit.
+  let synced = 0;
+  const started = Date.now();
+  while (Date.now() - started < 200_000) {
+    const n = await syncUploadsToDrive({ limit: 25 });
+    synced += n;
+    if (n < 25) break;
+  }
 
   return NextResponse.json({ reminded: reminders?.length ?? 0, autoApproved: expired?.length ?? 0, driveSynced: synced });
 }
