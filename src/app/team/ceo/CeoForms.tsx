@@ -57,16 +57,53 @@ export function EditBilling({ clientId, clientName, fee, day, history, label }: 
   );
 }
 
-/** Mark this month's invoice paid or unpaid; the row updates right away. */
-export function PaidToggle({ clientId, month, paid, amount }: { clientId: string; month: string; paid: boolean; amount: number | null }) {
+/** Mark paid (with the date and amount) or mark unpaid. */
+export function PaidToggle({ clientId, clientName, month, paid, amount }: { clientId: string; clientName: string; month: string; paid: boolean; amount: number | null }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [shown, setShown] = useState(paid);
+  const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+  // Viewing a past month: start on that month's first day; this month: today.
+  const defaultDate = today.slice(0, 7) === month ? today : `${month}-01`;
+  if (paid) {
+    return (
+      <button type="button" className="btn sm line" disabled={pending}
+        onClick={() => startTransition(async () => { await setInvoicePaid(clientId, month, false, amount); router.refresh(); })}>
+        {pending ? "Saving…" : "Mark unpaid"}
+      </button>
+    );
+  }
   return (
-    <button type="button" className="btn sm line" disabled={pending} onClick={() => {
-      setShown(!shown);
-      startTransition(async () => { await setInvoicePaid(clientId, month, !paid, amount); router.refresh(); });
-    }}>{shown === paid ? (paid ? "Mark unpaid" : "Mark paid") : "Saving…"}</button>
+    <>
+      <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Mark paid</button>
+      {open && (
+        <Modal title={`${clientName} · payment`} onClose={() => setOpen(false)}>
+          <form style={{ display: "grid", gap: 12 }} onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const amt = Number(String(f.get("amount") ?? "").replace(/[$,\s]/g, ""));
+            startTransition(async () => {
+              const r = await setInvoicePaid(clientId, month, true, Number.isFinite(amt) && amt > 0 ? amt : null, String(f.get("date") ?? ""));
+              if (r.error) return setError(r.error);
+              setOpen(false);
+              router.refresh();
+            });
+          }}>
+            <div className="row top">
+              <div className="field"><label htmlFor="pd-date">Date paid</label><input className="input" id="pd-date" name="date" type="date" defaultValue={defaultDate} required />
+                <span className="note">It counts toward the month of this date.</span></div>
+              <div className="field"><label htmlFor="pd-amt">Amount</label><input className="input" id="pd-amt" name="amount" inputMode="decimal" defaultValue={amount ?? ""} placeholder="2500" /></div>
+            </div>
+            {error && <p className="error">{error}</p>}
+            <div className="row">
+              <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Mark paid"}</button>
+              <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }
 

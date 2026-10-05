@@ -184,7 +184,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                   </td>
                   <td className="team-edit">
                     <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
-                      <PaidToggle clientId={r.id} month={month} paid={r.paid} amount={r.fee || null} />
+                      <PaidToggle clientId={r.id} clientName={r.name} month={month} paid={r.paid} amount={r.fee || r.projectFee || null} />
                     </span>
                   </td>
                 </tr>

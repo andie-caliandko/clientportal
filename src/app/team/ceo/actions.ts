@@ -54,21 +54,28 @@ export async function saveBilling(_: Result, form: FormData): Promise<Result> {
   return { ok: "Saved." };
 }
 
-/** Mark this month's invoice paid or unpaid by hand. */
-export async function setInvoicePaid(clientId: string, month: string, paid: boolean, amount: number | null): Promise<Result> {
+/**
+ * Mark an invoice paid by hand, on the date it was paid. The payment counts for
+ * the month of that date (paid Sep 28 → September), so it never lands in the
+ * wrong month. Or mark a month unpaid again.
+ */
+export async function setInvoicePaid(clientId: string, month: string, paid: boolean, amount: number | null, paidOn?: string): Promise<Result> {
   const v = await requireCeo();
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Pick a month." };
+  if (paid && paidOn && !/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) return { error: "Pick the date it was paid." };
+  const forMonth = paid && paidOn ? paidOn.slice(0, 7) : month;
   const supabase = await createClient();
   const { error } = await supabase.from("client_invoices").upsert(
     {
-      agency_id: v.agency.id, client_id: clientId, month: monthKeyDate(month), amount,
-      status: paid ? "paid" : "unpaid", paid_at: paid ? new Date().toISOString() : null, source: "manual", updated_at: new Date().toISOString(),
+      agency_id: v.agency.id, client_id: clientId, month: monthKeyDate(forMonth), amount,
+      status: paid ? "paid" : "unpaid", paid_at: paid ? (paidOn ? `${paidOn}T12:00:00Z` : new Date().toISOString()) : null,
+      source: "manual", updated_at: new Date().toISOString(),
     },
     { onConflict: "client_id,month" },
   );
   if (error) return { error: "That couldn't be saved." };
   revalidatePath("/team/ceo");
-  return { ok: paid ? "Marked paid." : "Marked unpaid." };
+  return { ok: paid ? `Marked paid for ${new Date(`${forMonth}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long" })}.` : "Marked unpaid." };
 }
 
 /** The owner chooses which admins can open the CEO dashboard. */
