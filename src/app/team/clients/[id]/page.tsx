@@ -1,3 +1,4 @@
+import { AnswersButton } from "./AnswersButton";
 import { UploadGroups } from "@/app/portal/UploadGroups";
 import { isSocial } from "@/lib/services";
 import { ServiceTag } from "../../ServicesPicker";
@@ -416,9 +417,8 @@ export default async function ClientDetail({
           </ul>
           {canEdit ? <ContractLinkForm clientId={client.id} url={client.dubsado_project_url} /> : null}
           <div className="row" style={{ alignItems: "center" }}>
-            <Link className="btn sm line" href={sp.answers ? `/team/clients/${client.id}`  : `/team/clients/${client.id}?answers=1#answers`}>
-              {sp.answers ? "Hide questionnaire answers" : "View questionnaire answers"}
-            </Link>
+            <AnswersButton clientId={client.id} clientName={client.name}
+              items={((questions.data ?? []) as Question[]).map((q) => ({ id: q.id, position: q.position, prompt: q.prompt, answer: answerBy[q.id] ?? "" }))} />
             {canEdit && (
               <ResendQuestionnaire clientId={client.id}
                 contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
@@ -641,22 +641,6 @@ export default async function ClientDetail({
         </div>
         )}
       </div>
-
-      {sp.answers && (
-        <div className="panel" id="answers">
-          <h2>Questionnaire answers</h2>
-          <dl style={{ display: "grid", gap: 16, margin: 0 }}>
-            {((questions.data ?? []) as Question[]).map((q) => (
-              <div key={q.id}>
-                <dt style={{ fontWeight: 600 }}>{q.position}. {q.prompt}</dt>
-                <dd style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: answerBy[q.id] ? "var(--ink)" : "var(--ink-2)" }}>
-                  {answerBy[q.id] || "Not answered yet"}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
 
       <div className="panel">
         <h2>Messages</h2>
