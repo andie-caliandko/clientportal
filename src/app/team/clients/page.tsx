@@ -1,4 +1,5 @@
-import { serviceLabel } from "@/lib/services";
+import { isSocial } from "@/lib/services";
+import { ServicesPicker, ServiceTag } from "../ServicesPicker";
 import Link from "next/link";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -62,7 +63,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       {showArchived && <p className="note">Archived clients keep all their files, messages and history. Their portal is closed. Open one to restore it.</p>}
       <div className="tablewrap">
         <table>
-          <thead><tr><th>Client</th><th>Health · internal</th><th>Account manager</th><th>Portal</th><th>Onboarding</th><th>Latest content calendar</th></tr></thead>
+          <thead><tr><th>Client</th><th>Services</th><th>Health · internal</th><th>Account manager</th><th>Portal</th><th>Onboarding</th><th>Latest content calendar</th></tr></thead>
           <tbody>
             {list.map((c) => {
               const done = doneBy.get(c.id) ?? 0;
@@ -72,9 +73,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {c.logo_path && <img className="client-logo-sm" src={clientLogoUrl(c.logo_path)!} alt="" />}
                     <Link href={`/team/clients/${c.id}`}>{c.name}</Link>
-                    {(c.services ?? []).length > 0 && <><br /><span className="note">{(c.services as string[]).map(serviceLabel).join(" · ")}</span></>}
                   </td>
-                  <td>{c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
+                  <td>{member.role !== "creator" && !c.archived_at
+                    ? <ServicesPicker id={`svc-${c.id}`} clientId={c.id} initial={c.services ?? []} compact />
+                    : (c.services ?? []).length ? <span className="services">{(c.services as string[]).map((s) => <ServiceTag key={s} id={s} />)}</span> : <span className="note">—</span>}</td>
+                  <td>{c.health_tracked === false || !isSocial(c.services) ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
                     : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
                   <td>{portalStatus(c.id)}</td>

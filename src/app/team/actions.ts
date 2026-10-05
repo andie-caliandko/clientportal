@@ -970,6 +970,24 @@ export async function renameClientContact(_: Result, form: FormData): Promise<Re
   return { ok: "Name saved." };
 }
 
+/** Set what a client gets from us. Social clients have their health tracked; everyone else is "Not tracked". */
+export async function setClientServices(clientId: string, picked: string[]): Promise<Result> {
+  await requireEditor();
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You can't change this client." };
+  const form = new FormData();
+  picked.forEach((p) => form.append("services", p));
+  const services = readServices(form);
+  const { error } = await createAdminClient().from("clients")
+    .update({ services, ...(services.length ? { health_tracked: isSocial(services) } : {}) }).eq("id", clientId);
+  if (error) return { error: "Services couldn't be saved." };
+  revalidatePath("/team/clients");
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/team/engagement");
+  return { ok: "Saved." };
+}
+
 /** Turn a client's health rating on or off (off shows "Not tracked"). */
 export async function setHealthTracked(clientId: string, tracked: boolean): Promise<Result> {
   await requireEditor();

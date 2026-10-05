@@ -1,4 +1,5 @@
-import { serviceLabel } from "@/lib/services";
+import { isSocial } from "@/lib/services";
+import { ServiceTag } from "../../ServicesPicker";
 import { LoginEditor, RemoveLogin, RequestLogins, RevealPassword } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 import { BriefForm } from "../BriefForm";
@@ -164,7 +165,7 @@ export default async function ClientDetail({
             <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
             <h1 style={{ marginTop: 6 }}>{client.name}</h1>
           {(client.services ?? []).length > 0 && (
-            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <span key={s} className="pill info">{serviceLabel(s)}</span>)}</div>
+            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <ServiceTag key={s} id={s} />)}</div>
           )}
           </div>
           {headActions}
@@ -177,7 +178,7 @@ export default async function ClientDetail({
         <HealthTab clientId={client.id} clientName={client.name} kpis={byClient.get(client.id) ?? []}
           health={health.get(client.id) ?? null}
           notes={Object.fromEntries((noteRows ?? []).map((n) => [n.week, n.note]))}
-          thisWeek={weekStart(todayLocal)} canEdit={canEdit} tracked={(client as { health_tracked?: boolean }).health_tracked !== false} />
+          thisWeek={weekStart(todayLocal)} canEdit={canEdit} tracked={client.health_tracked !== false && isSocial(client.services)} />
       </section>
     );
   }
@@ -190,7 +191,7 @@ export default async function ClientDetail({
           <p className="eyebrow">Account manager: {manager.data?.display_name ?? "Unassigned"}</p>
           <h1 style={{ marginTop: 6 }}>{client.name}</h1>
           {(client.services ?? []).length > 0 && (
-            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <span key={s} className="pill info">{serviceLabel(s)}</span>)}</div>
+            <div className="services" style={{ marginTop: 8 }}>{(client.services as string[]).map((s) => <ServiceTag key={s} id={s} />)}</div>
           )}
         </div>
         {headActions}
