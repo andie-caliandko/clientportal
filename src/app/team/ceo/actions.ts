@@ -32,10 +32,12 @@ export async function saveBilling(_: Result, form: FormData): Promise<Result> {
     const now = new Date().toISOString();
     const rows = months.map((m) => {
       const paid = form.get(`paid:${m}`) === "on";
-      const amt = Number(String(form.get(`amount:${m}`) ?? "").replace(/[$,\s]/g, ""));
+      const raw = String(form.get(`amount:${m}`) ?? "").replace(/[$,\s]/g, "");
+      const amt = Number(raw);
       return {
         agency_id: v.agency.id, client_id: clientId, month: monthKeyDate(m), status: paid ? "paid" : "unpaid",
-        amount: Number.isFinite(amt) && amt > 0 ? amt : null, updated_at: now,
+        // A blank amount means "their usual fee"; $0 stays $0 (a month covered by paying in full).
+        amount: raw !== "" && Number.isFinite(amt) && amt >= 0 ? amt : null, updated_at: now,
       };
     });
     // Keep what Dubsado already reported for paid months; only fill in or change what was set here.
@@ -61,8 +63,28 @@ export async function saveBilling(_: Result, form: FormData): Promise<Result> {
  * the month of that date (paid Sep 28 → September), so it never lands in the
  * wrong month. Or mark a month unpaid again.
  */
-export async function setInvoicePaid(clientId: string, month: string, paid: boolean, amount: number | null, paidOn?: string): Promise<Result> {
+export async function setInvoicePaid(clientId: string, month: string, paid: boolean, amount: number | null, paidOn?: string, coverMonths = 1): Promise<Result> {
   const v = await requireCeo();
+  // Paid in full upfront: the payment counts in its own month; the rest of the stretch is covered at $0.
+  if (paid && coverMonths > 1 && paidOn && /^\d{4}-\d{2}-\d{2}$/.test(paidOn)) {
+    const months = Math.min(36, Math.floor(coverMonths));
+    const first = paidOn.slice(0, 7);
+    const label = new Date(`${paidOn}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+    const now = new Date().toISOString();
+    const rows = Array.from({ length: months }, (_, k) => {
+      const [y, m] = first.split("-").map(Number);
+      const key = new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 10);
+      return {
+        agency_id: v.agency.id, client_id: clientId, month: key, status: "paid", source: "manual", updated_at: now,
+        amount: k === 0 ? amount : 0, paid_at: `${paidOn}T12:00:00Z`,
+        note: k === 0 ? `Paid in full for ${months} months` : `Covered: paid in full ${label}`,
+      };
+    });
+    const { error } = await (await createClient()).from("client_invoices").upsert(rows, { onConflict: "client_id,month" });
+    if (error) return { error: "That couldn't be saved." };
+    revalidatePath("/team/ceo");
+    return { ok: `Paid in full: ${months} months covered.` };
+  }
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Pick a month." };
   if (paid && paidOn && !/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) return { error: "Pick the date it was paid." };
   const forMonth = paid && paidOn ? paidOn.slice(0, 7) : month;

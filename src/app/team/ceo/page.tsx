@@ -30,7 +30,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }, { data: imported }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
-    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source"),
+    supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source, note"),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
     supabase.from("client_contracts").select("id, client_id, kind, start_date, months, end_date, status, term_number, note").order("start_date", { ascending: false }),
@@ -209,14 +209,17 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                   </td>
                   <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
-                    {r.isProject && !r.paid ? <span className="pill warn">Not paid yet</span> : <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>}
+                    {r.isProject && !r.paid ? <span className="pill warn">Not paid yet</span>
+                      : r.paid && r.invoice?.note?.startsWith("Covered") ? <span className="pill ok">Covered</span>
+                      : <span className={`pill ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>}
                     {r.paid && r.invoice?.paid_at && (
-                      <span className="note"> {new Date(r.invoice.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", ...(r.isProject ? { year: "numeric" } : {}) })} · {r.isProject ? "project payment" : r.invoice.source === "dubsado" ? "Dubsado" : "marked by hand"}</span>
+                      <span className="note"> {new Date(r.invoice.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric", ...(r.isProject || r.invoice.note?.startsWith("Covered") ? { year: "numeric" } : {}) })} · {r.isProject ? "project payment" : r.invoice.note?.startsWith("Covered") ? "paid in full, covered" : r.invoice.note?.startsWith("Paid in full") ? r.invoice.note.toLowerCase() : r.invoice.source === "dubsado" ? "Dubsado" : "marked by hand"}</span>
                     )}
                   </td>
                   <td className="team-edit">
                     <span className="row" style={{ flexWrap: "nowrap", justifyContent: "flex-end", alignItems: "center" }}>
-                      <PaidToggle clientId={r.id} clientName={r.name} month={r.paidMonth} paid={r.paid} amount={(r.paid ? Number(r.invoice?.amount ?? 0) || null : null) ?? (r.fee || r.projectFee || null)} project={r.isProject} />
+                      <PaidToggle clientId={r.id} clientName={r.name} month={r.paidMonth} paid={r.paid} amount={(r.paid ? Number(r.invoice?.amount ?? 0) || null : null) ?? (r.fee || r.projectFee || null)} project={r.isProject}
+                        monthsLeft={(() => { const k = contractInfo(r.id); return k && !k.ongoing && !k.project && k.c.months ? k.c.months - k.st.month + 1 : null; })()} />
                     </span>
                   </td>
                 </tr>

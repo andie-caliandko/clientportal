@@ -59,7 +59,12 @@ export function EditBilling({ clientId, clientName, fee, day, history, label }: 
 }
 
 /** Mark paid (with the date and amount) or mark unpaid. */
-export function PaidToggle({ clientId, clientName, month, paid, amount, project = false }: { clientId: string; clientName: string; month: string; paid: boolean; amount: number | null; project?: boolean }) {
+export function PaidToggle({ clientId, clientName, month, paid, amount, project = false, monthsLeft }: {
+  clientId: string; clientName: string; month: string; paid: boolean; amount: number | null; project?: boolean;
+  /** Months left on their contract, to suggest for "paid in full". */
+  monthsLeft?: number | null;
+}) {
+  const [upfront, setUpfront] = useState(false);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +89,9 @@ export function PaidToggle({ clientId, clientName, month, paid, amount, project 
             e.preventDefault();
             const f = new FormData(e.currentTarget);
             const amt = Number(String(f.get("amount") ?? "").replace(/[$,\s]/g, ""));
+            const cover = upfront ? Number(f.get("cover")) || 1 : 1;
             startTransition(async () => {
-              const r = await setInvoicePaid(clientId, month, true, Number.isFinite(amt) && amt > 0 ? amt : null, String(f.get("date") ?? ""));
+              const r = await setInvoicePaid(clientId, month, true, Number.isFinite(amt) && amt > 0 ? amt : null, String(f.get("date") ?? ""), cover);
               if (r.error) return setError(r.error);
               setOpen(false);
               router.refresh();
@@ -96,6 +102,18 @@ export function PaidToggle({ clientId, clientName, month, paid, amount, project 
                 <span className="note">It counts toward the month of this date{project ? " only, and shows as paid from then on" : ""}.</span></div>
               <div className="field"><label htmlFor="pd-amt">Amount</label><input className="input" id="pd-amt" name="amount" inputMode="decimal" defaultValue={amount ?? ""} placeholder="2500" /></div>
             </div>
+            {!project && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <label className="row" style={{ alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={upfront} onChange={(e) => setUpfront(e.target.checked)} /> Paid in full upfront
+                </label>
+                {upfront && (
+                  <div className="field" style={{ maxWidth: 260 }}><label htmlFor="pd-cover">How many months it covers</label>
+                    <input className="input" id="pd-cover" name="cover" type="number" min={2} max={36} defaultValue={Math.max(2, monthsLeft ?? 6)} />
+                    <span className="note">Put the full amount above. It counts in the month of the payment date; the months after show as Covered and add $0.</span></div>
+                )}
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
             <div className="row">
               <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Mark paid"}</button>
