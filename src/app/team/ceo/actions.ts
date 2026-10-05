@@ -193,6 +193,16 @@ export async function endContract(id: string): Promise<Result> {
   return { ok: "Marked as not renewing." };
 }
 
+/** Take someone off "New clients to set up" (and check off their setup task). */
+export async function dismissSignup(id: string): Promise<Result> {
+  await requireCeo();
+  const supabase = await createClient();
+  const { data } = await supabase.from("client_signups").update({ dismissed_at: new Date().toISOString() }).eq("id", id).select("setup_task_id").maybeSingle();
+  if (data?.setup_task_id) await supabase.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", data.setup_task_id).neq("status", "done");
+  revalidatePath("/team/ceo");
+  return data ? { ok: "Dismissed." } : { error: "That couldn't be dismissed." };
+}
+
 /**
  * Save past revenue from a spreadsheet. Lines for a portal client and month that's
  * already logged as paid are left out, so nothing is counted twice.

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { canSeeCeo, invoiceState, isOwner, monthKeyDate } from "@/lib/ceo";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
+import { DismissSignup, EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
 import { AddClientButton } from "../TeamForms";
 import { RenewContract, SetContract } from "./ContractForms";
 import { contractStatus } from "@/lib/contracts";
@@ -27,15 +27,17 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : today.slice(0, 7);
 
   const supabase = await createClient();
-  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signups }, { data: contractRows }, { data: imported }] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: invoices }, { data: members }, { data: signupRows }, { data: contractRows }, { data: imported }] = await Promise.all([
     supabase.from("clients").select("id, name, account_manager_id, start_date, archived_at").is("archived_at", null).order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee, billing_day"),
     supabase.from("client_invoices").select("client_id, month, amount, status, paid_at, source, note"),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
-    supabase.from("client_signups").select("id, email, name, project, contract_signed_at, paid_at, amount").is("client_id", null).order("created_at", { ascending: false }),
+    supabase.from("client_signups").select("*").is("client_id", null).order("created_at", { ascending: false }),
     supabase.from("client_contracts").select("id, client_id, kind, start_date, months, end_date, status, term_number, note").order("start_date", { ascending: false }),
     supabase.from("revenue_entries").select("paid_on, amount, batch_id, batch_name, created_at"),
   ]);
+  // Dismissed ones (say, an existing client paying from another email) stay hidden.
+  const signups = (signupRows ?? []).filter((n) => !n.dismissed_at);
   // Each client's current contract (the newest term), and how many terms they've had.
   const contractFor = (cid: string) => (contractRows ?? []).find((c) => c.client_id === cid) ?? null;
   const termsFor = (cid: string) => (contractRows ?? []).filter((c) => c.client_id === cid).length;
@@ -162,8 +164,11 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                     <td>{n.contract_signed_at ? <span className="pill ok">Signed {new Date(n.contract_signed_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}</span> : <span className="pill warn">Not yet</span>}</td>
                     <td>{n.paid_at ? <span className="pill ok">Paid{n.amount ? ` ${money(Number(n.amount))}` : ""} · {new Date(n.paid_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}</span> : <span className="pill warn">Not paid yet</span>}</td>
                     <td className="team-edit">
-                      <AddClientButton label="Set up portal" members={members ?? []} agencyId={agency.id} meId={userId}
-                        defaults={{ name: n.project ?? n.name ?? "", contactName: n.name ?? "", contactEmail: n.email }} />
+                      <span className="row" style={{ gap: 14, alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap" }}>
+                        <DismissSignup id={n.id} name={(n.name || n.project || n.email).split(" ")[0]} />
+                        <AddClientButton label="Set up portal" members={members ?? []} agencyId={agency.id} meId={userId}
+                          defaults={{ name: n.project ?? n.name ?? "", contactName: n.name ?? "", contactEmail: n.email }} />
+                      </span>
                     </td>
                   </tr>
                 ))}

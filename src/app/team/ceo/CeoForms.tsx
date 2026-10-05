@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/app/Modal";
-import { saveBilling, saveCeoSharing, setInvoicePaid } from "./actions";
+import { dismissSignup, saveBilling, saveCeoSharing, setInvoicePaid } from "./actions";
 
 export type PastMonth = { month: string; label: string; paid: boolean; amount: number | null; source: string | null; paidOn: string | null };
 
@@ -139,5 +139,22 @@ export function ShareCeo({ admins, shared }: { admins: { user_id: string; displa
       {state.ok && <p className="flash">{state.ok}</p>}
       <div><button className="btn sm line" disabled={pending}>{pending ? "Saving…" : "Save sharing"}</button></div>
     </form>
+  );
+}
+
+/** Take a Dubsado sign-up off the list, after a quick confirm. */
+export function DismissSignup({ id, name }: { id: string; name: string }) {
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [pending, startTransition] = useTransition();
+  if (!armed) return <button type="button" className="linkbtn note" onClick={() => setArmed(true)}>Dismiss</button>;
+  return (
+    <span className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
+      <button type="button" className="btn sm warm" disabled={pending}
+        onClick={() => startTransition(async () => { await dismissSignup(id); router.refresh(); })}>
+        {pending ? "Dismissing…" : `Dismiss ${name}?`}
+      </button>
+      <button type="button" className="linkbtn note" onClick={() => setArmed(false)}>Keep</button>
+    </span>
   );
 }
