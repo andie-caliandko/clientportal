@@ -64,19 +64,40 @@ describe("remindersDue", () => {
 import { monthKey, weekOfMonth, weekRange } from "./rhythm";
 
 describe("monthly rhythm", () => {
-  it("maps days to weeks, folding the end of the month into week 4", () => {
-    expect(weekOfMonth(NY, ny("2026-09-01T09:00"))).toBe(1);
-    expect(weekOfMonth(NY, ny("2026-09-08T09:00"))).toBe(2);
-    expect(weekOfMonth(NY, ny("2026-09-21T09:00"))).toBe(3);
-    expect(weekOfMonth(NY, ny("2026-09-22T09:00"))).toBe(4);
-    expect(weekOfMonth(NY, ny("2026-09-30T23:00"))).toBe(4);
+  // October 2026: the 1st is a Thursday, so week 1 starts Monday Oct 5. November's first Monday is Nov 2.
+  it("starts week 1 on the first Monday, with Monday-to-Sunday weeks", () => {
+    expect(weekOfMonth(NY, ny("2026-10-05T09:00"))).toBe(1);
+    expect(weekOfMonth(NY, ny("2026-10-11T22:00"))).toBe(1);
+    expect(weekOfMonth(NY, ny("2026-10-12T09:00"))).toBe(2);
+    expect(weekOfMonth(NY, ny("2026-10-19T09:00"))).toBe(3);
+    expect(weekOfMonth(NY, ny("2026-10-26T09:00"))).toBe(4);
+  });
+  it("counts days before the first Monday as last month's week 4", () => {
+    expect(weekOfMonth(NY, ny("2026-10-01T09:00"))).toBe(4);
+    expect(monthKey(NY, ny("2026-10-04T09:00"))).toBe("2026-09-01");
+    expect(monthKey(NY, ny("2026-10-05T09:00"))).toBe("2026-10-01");
+    expect(weekOfMonth(NY, ny("2026-11-01T09:00"))).toBe(4);
+    expect(monthKey(NY, ny("2026-11-01T09:00"))).toBe("2026-10-01");
+  });
+  it("starts on the 1st when the month begins on a Monday", () => {
+    // June 1, 2026 is a Monday.
+    expect(weekOfMonth(NY, ny("2026-06-01T09:00"))).toBe(1);
+    expect(monthKey(NY, ny("2026-06-01T09:00"))).toBe("2026-06-01");
   });
   it("uses the agency's time zone, not the server's", () => {
-    // 11 PM Sep 30 in New York is already Oct 1 in UTC.
-    expect(monthKey(NY, ny("2026-09-30T23:00"))).toBe("2026-09-01");
+    // 11 PM Sunday Oct 4 in New York is already Monday Oct 5 in UTC.
+    expect(monthKey(NY, ny("2026-10-04T23:00"))).toBe("2026-09-01");
   });
-  it("labels week ranges", () => {
-    expect(weekRange(4, NY, ny("2026-09-25T09:00"))).toBe("Sep 22–30");
+  it("labels week ranges, across the month end when needed", () => {
+    const now = ny("2026-10-08T09:00");
+    expect(weekRange(1, NY, now)).toBe("Oct 5–11");
+    expect(weekRange(3, NY, now)).toBe("Oct 19–25");
+    expect(weekRange(4, NY, now)).toBe("Oct 26–Nov 1");
+  });
+  it("handles the year end", () => {
+    // Dec 2026: first Monday Dec 7; Jan 2027's first Monday is Jan 4.
+    expect(weekRange(4, NY, ny("2026-12-30T09:00"))).toBe("Dec 28–Jan 3");
+    expect(monthKey(NY, ny("2027-01-02T09:00"))).toBe("2026-12-01");
   });
 });
 
