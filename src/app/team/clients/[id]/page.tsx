@@ -1,3 +1,4 @@
+import { slackChannelInfo } from "@/lib/slack";
 import { AnswersButton } from "./AnswersButton";
 import { UploadGroups } from "@/app/portal/UploadGroups";
 import { isSocial } from "@/lib/services";
@@ -105,6 +106,8 @@ export default async function ClientDetail({
   // Account managers and creators added here show to the client; admins never do
   // (unless an admin is the account manager). Admins can open every account anyway.
   const accountTeam = members.filter((m) => onTeam.has(m.user_id) && (m.role !== "admin" || m.user_id === client.account_manager_id));
+  // The linked Slack channel's name, so a wrong link is easy to spot.
+  const slackInfo = client.slack_channel_id ? await slackChannelInfo(client.slack_channel_id) : null;
   // Shared account logins (no passwords) and who last revealed each one.
   const canReveal = isAdmin || client.account_manager_id === userId;
   const logins = canEdit ? await loadLogins(client.id) : [];
@@ -433,7 +436,9 @@ export default async function ClientDetail({
               {client.drive_folder_id ? <a href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open folder</a> : <span className="note">Not set</span>}
               {canEdit && !client.archived_at && <DriveShareToggle clientId={client.id} shared={!!client.drive_shared} hasFolder={!!client.drive_folder_id} />}
             </dd>
-            <dt>Slack channel</dt><dd>{client.slack_channel_id ?? <span className="note">Not set</span>}</dd>
+            <dt>Slack channel</dt><dd>{client.slack_channel_id
+              ? slackInfo ? <>#{slackInfo.name}{!slackInfo.isMember && <><br /><span className="note">The portal app isn&apos;t in this channel yet. Type /invite @Cali Ko Portal there.</span></>}</> : client.slack_channel_id
+              : <span className="note">Not set</span>}</dd>
             <dt>Rella space</dt><dd>{client.rella_space_url ? <a href={client.rella_space_url} target="_blank" rel="noreferrer">Open</a> : <span className="note">Not set</span>}</dd>
             <dt>Contract</dt><dd>{client.dubsado_project_url ? <a href={client.dubsado_project_url} target="_blank" rel="noreferrer">Open contract</a> : <span className="note">No link yet</span>}</dd>
             <dt>Dubsado email</dt><dd>{client.dubsado_email ?? <span className="note">Not set</span>}</dd>

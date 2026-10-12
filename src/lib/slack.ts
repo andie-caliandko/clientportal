@@ -38,6 +38,25 @@ export async function slackUserName(userId: string) {
   return (p?.display_name || p?.real_name || "Your team") as string;
 }
 
+/**
+ * A channel's name and whether the portal app is in it. Null if Slack can't say
+ * (the app needs the channels:read and groups:read permissions for this).
+ */
+export async function slackChannelInfo(channelId: string): Promise<{ name: string; isMember: boolean } | null> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://slack.com/api/conversations.info?channel=${encodeURIComponent(channelId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 600 },
+    });
+    const data = await res.json();
+    return data.ok ? { name: data.channel.name as string, isMember: !!data.channel.is_member } : null;
+  } catch {
+    return null;
+  }
+}
+
 let botUser: string | null | undefined;
 /** The portal app's own Slack user, so we can ignore messages and files we posted ourselves. */
 export async function slackBotUserId() {

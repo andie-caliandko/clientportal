@@ -16,7 +16,8 @@ import { isPersonalCalendar } from "@/lib/google";
 import { REPEATS } from "@/lib/recurring";
 import { scheduleNextRepeat } from "@/lib/repeatTasks";
 import { linkSignup } from "@/lib/signups";
-import { postToSlack } from "@/lib/slack";
+import { postToSlack, slackChannelInfo } from "@/lib/slack";
+import { channelBelongsToOther } from "@/lib/slackMatch";
 import { isSocial, readServices } from "@/lib/services";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -261,8 +262,8 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (!later("dubsado") && get("dubsado_project") && !isUrl(get("dubsado_project"))) missing.push("paste the full contract link, starting with https://");
   if (missing.length) return { error: `Almost there: ${missing.join(", ")}, or tick "Set up later" for it.` };
   if (slackId && !later("slack")) {
-    const { data: taken } = await createAdminClient().from("clients").select("name").eq("slack_channel_id", slackId).is("archived_at", null).limit(1).maybeSingle();
-    if (taken) return { error: `That Slack channel already belongs to ${taken.name}. Each client needs their own channel.` };
+    const check = await checkSlackChannel(slackId, name, null);
+    if (check.error) return { error: check.error };
   }
 
   const website = get("website");
@@ -478,9 +479,15 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
   const drive = get("drive_folder"), slack = get("slack_channel"), rella = get("rella");
   if (drive && !driveFolderId(drive)) return { error: "That doesn't look like a Google Drive folder link." };
   if (slack && !slackChannelId(slack)) return { error: "That doesn't look like a Slack channel link. In Slack, right-click the channel and choose Copy link." };
+  // Only check when the channel changes, so other edits aren't held up.
+  let slackNote = "";
   if (slack) {
-    const { data: taken } = await createAdminClient().from("clients").select("name").eq("slack_channel_id", slackChannelId(slack)!).neq("id", clientId).is("archived_at", null).limit(1).maybeSingle();
-    if (taken) return { error: `That Slack channel already belongs to ${taken.name}. Each client needs their own channel.` };
+    const { data: before } = await createAdminClient().from("clients").select("slack_channel_id").eq("id", clientId).maybeSingle();
+    if (before?.slack_channel_id !== slackChannelId(slack)) {
+      const check = await checkSlackChannel(slackChannelId(slack)!, get("name"), clientId);
+      if (check.error) return { error: check.error };
+      slackNote = check.note ?? "";
+    }
   }
   if (rella && !isUrl(rella)) return { error: "Paste the full Rella link, starting with https://" };
   const website = get("website");
@@ -515,7 +522,7 @@ export async function updateClientInfo(_: Result, form: FormData): Promise<Resul
   // Branding and Content folders in their Drive folder, and any files that were waiting for it.
   if (drive) after(() => catchUpDrive({ clientId }));
   revalidatePath(`/team/clients/${clientId}`);
-  return { ok: "Saved." };
+  return { ok: slackNote ? `Saved. ${slackNote}` : "Saved." };
 }
 
 export async function deleteClient(_: Result, form: FormData): Promise<Result> {
@@ -986,6 +993,26 @@ export async function setClientServices(clientId: string, picked: string[]): Pro
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/engagement");
   return { ok: "Saved." };
+}
+
+/**
+ * Make sure a Slack channel is this client's own: not linked to another client,
+ * and not named for one (like #epting-events on 100 Prince Condos).
+ */
+async function checkSlackChannel(channelId: string, clientName: string, clientId: string | null): Promise<{ error?: string; note?: string }> {
+  const admin = createAdminClient();
+  let taken = admin.from("clients").select("name").eq("slack_channel_id", channelId).is("archived_at", null).limit(1);
+  if (clientId) taken = taken.neq("id", clientId);
+  const { data: owner } = await taken.maybeSingle();
+  if (owner) return { error: `That Slack channel already belongs to ${owner.name}. Each client needs their own channel.` };
+  const info = await slackChannelInfo(channelId);
+  if (!info) return {};
+  let q = admin.from("clients").select("name").is("archived_at", null);
+  if (clientId) q = q.neq("id", clientId);
+  const { data: others } = await q;
+  const other = channelBelongsToOther(info.name, clientName, (others ?? []).map((o) => o.name));
+  if (other) return { error: `That link is for #${info.name}, which looks like ${other}'s channel. Copy the link from ${clientName}'s own channel.` };
+  return { note: info.isMember ? `Linked to #${info.name}.` : `Linked to #${info.name}. Type /invite @Cali Ko Portal in that channel so messages come through.` };
 }
 
 /** Turn a client's health rating on or off (off shows "Not tracked"). */
