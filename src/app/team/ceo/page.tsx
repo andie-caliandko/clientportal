@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { canSeeCeo, dueDate, invoiceState, isOwner, monthKeyDate, startedBy } from "@/lib/ceo";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { CeoTabs } from "./CeoTabs";
 import { DismissSignup, EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
 import { AddClientButton } from "../TeamForms";
 import { RenewContract, SetContract } from "./ContractForms";
@@ -186,8 +187,9 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
         </div>
       )}
 
-      <div className="panel">
-        <h2>Clients this month</h2>
+      <CeoTabs tabs={[
+        { id: "month", label: `Clients this ${month === today.slice(0, 7) ? "month" : monthLabel(month).split(" ")[0]}`, count: rows.length, content: (
+          <>
         <div className="tablewrap">
           <table className="ceo-table">
             <thead><tr><th scope="col">Client</th><th scope="col">Account manager</th><th scope="col">Contract</th><th scope="col" className="kn">Monthly fee</th><th scope="col">Invoice due</th><th scope="col">{monthLabel(month).split(" ")[0]} invoice</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
@@ -243,14 +245,11 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
           </table>
         </div>
         {!rows.length && <p className="note">No active clients.</p>}
-      </div>
-
-      {startingLater.length > 0 && (
-        <div className="panel">
-          <div>
-            <h2>Starting later</h2>
-            <p className="note">Their retainer starts after {monthLabel(month).split(" ")[0]}, so they aren&apos;t billed or counted in this month&apos;s numbers yet.</p>
-          </div>
+          </>
+        ) },
+        { id: "later", label: "Starting later", count: startingLater.length, content: startingLater.length ? (
+          <>
+          <p className="note">Their retainer starts after {monthLabel(month).split(" ")[0]}, so they aren&apos;t billed or counted in this month&apos;s numbers yet.</p>
           <div className="tablewrap">
             <table className="ceo-table">
               <thead><tr><th scope="col">Client</th><th scope="col">Account manager</th><th scope="col">Starts</th><th scope="col" className="kn">Monthly fee</th><th scope="col">First invoice due</th><th scope="col"><span className="sr-only">Contract</span></th></tr></thead>
@@ -275,8 +274,11 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+          </>
+        ) : <p className="note">No clients starting after {monthLabel(month).split(" ")[0]}.</p> },
+      ]} />
+
+
 
       {(contractRows ?? []).length > 0 && (() => {
         // A window from 3 months back to 12 months ahead, one column per month.
