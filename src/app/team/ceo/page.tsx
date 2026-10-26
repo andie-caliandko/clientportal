@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { canSeeCeo, invoiceState, isOwner, monthKeyDate } from "@/lib/ceo";
+import { canSeeCeo, dueDate, invoiceState, isOwner, monthKeyDate, startedBy } from "@/lib/ceo";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { DismissSignup, EditBilling, PaidToggle, ShareCeo, type PastMonth } from "./CeoForms";
@@ -43,7 +43,14 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
   const termsFor = (cid: string) => (contractRows ?? []).filter((c) => c.client_id === cid).length;
   const fees = new Map((billing ?? []).map((b) => [b.client_id, { fee: Number(b.monthly_fee), day: b.billing_day as number | null }]));
   const inv = (cid: string, m: string) => (invoices ?? []).find((i) => i.client_id === cid && i.month === monthKeyDate(m));
-  const rows = (clients ?? []).map((c) => {
+  // When billing starts: their first contract term's start (renewals add later terms), or the client's start date.
+  const billingStart = (c: { id: string; start_date: string | null }) =>
+    (contractRows ?? []).filter((k) => k.client_id === c.id).map((k) => k.start_date as string).sort()[0] ?? c.start_date ?? null;
+  // Clients whose retainer starts after this month aren't billed yet; they're listed under Starting later.
+  const startingLater = (clients ?? []).filter((c) => !startedBy(billingStart(c), month))
+    .map((c) => ({ ...c, start: billingStart(c)!, fee: fees.get(c.id)?.fee ?? 0, day: fees.get(c.id)?.day ?? null }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const rows = (clients ?? []).filter((c) => startedBy(billingStart(c), month)).map((c) => {
     const f0 = fees.get(c.id) ?? { fee: 0, day: null };
     // One-time projects aren't monthly revenue.
     const isProject = contractFor(c.id)?.kind === "project";
@@ -51,11 +58,12 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
     if (isProject) {
       // A one-time project is paid once: show that payment (whenever it was), not a bill every month.
       const payment = (invoices ?? []).filter((x) => x.client_id === c.id && x.status === "paid").sort((a, b) => String(b.paid_at).localeCompare(String(a.paid_at)))[0];
-      return { ...c, ...f, isProject, invoice: payment, paid: !!payment, paidMonth: payment ? payment.month.slice(0, 7) : month, state: (payment ? "paid" : "due") as ReturnType<typeof invoiceState> };
+      return { ...c, ...f, isProject, invoice: payment, paid: !!payment, paidMonth: payment ? payment.month.slice(0, 7) : month, due: null as string | null, state: (payment ? "paid" : "due") as ReturnType<typeof invoiceState> };
     }
     const i = inv(c.id, month);
     const paid = i?.status === "paid";
-    return { ...c, ...f, isProject, invoice: i, paid, paidMonth: month, state: invoiceState(paid, f.day, month, today) };
+    const start = billingStart(c);
+    return { ...c, ...f, isProject, invoice: i, paid, paidMonth: month, due: dueDate(f.day, month, start), state: invoiceState(paid, f.day, month, today, start) };
   });
   const projectClients = new Set(rows.filter((r) => r.isProject).map((r) => r.id));
   const mrr = rows.reduce((n, r) => n + r.fee, 0);
@@ -212,7 +220,9 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                     <EditBilling clientId={r.id} clientName={r.name} fee={r.fee || r.projectFee} day={r.day} history={historyFor(r.id, r.start_date)}
                       label={r.fee ? <><b>{money(r.fee)}</b><span className="note">Edit</span></> : r.projectFee ? <><b>{money(r.projectFee)}</b><span className="note">project fee · Edit</span></> : <span className="fee-set">Set fee</span>} />
                   </td>
-                  <td>{r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
+                  <td>{r.due && !r.isProject
+                    ? <>{nice(r.due).replace(/, \d{4}$/, "")}{r.day && Number(r.due.slice(8)) !== r.day && <><br /><span className="note">first bill, on their start date</span></>}</>
+                    : r.day ? `Day ${r.day}` : <span className="note">—</span>}</td>
                   <td>
                     {r.isProject && !r.paid ? <span className="pill warn">Not paid yet</span>
                       : r.paid && r.invoice?.note?.startsWith("Covered") ? <span className="pill ok">Covered</span>
@@ -234,6 +244,39 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
         </div>
         {!rows.length && <p className="note">No active clients.</p>}
       </div>
+
+      {startingLater.length > 0 && (
+        <div className="panel">
+          <div>
+            <h2>Starting later</h2>
+            <p className="note">Their retainer starts after {monthLabel(month).split(" ")[0]}, so they aren&apos;t billed or counted in this month&apos;s numbers yet.</p>
+          </div>
+          <div className="tablewrap">
+            <table className="ceo-table">
+              <thead><tr><th scope="col">Client</th><th scope="col">Account manager</th><th scope="col">Starts</th><th scope="col" className="kn">Monthly fee</th><th scope="col">First invoice due</th><th scope="col"><span className="sr-only">Contract</span></th></tr></thead>
+              <tbody>
+                {startingLater.map((c) => {
+                  const k = contractInfo(c.id);
+                  const first = dueDate(c.day, c.start.slice(0, 7), c.start);
+                  return (
+                    <tr key={c.id}>
+                      <td><Link href={`/team/clients/${c.id}`}><b>{c.name}</b></Link></td>
+                      <td>{name(c.account_manager_id)}</td>
+                      <td>{nice(c.start)}{k && <><br /><span className="note">{k.ongoing ? "Ongoing" : k.project ? "One-time project" : `${k.c.months}-month retainer`}</span></>}</td>
+                      <td className="kn">
+                        <EditBilling clientId={c.id} clientName={c.name} fee={c.fee} day={c.day} history={[]}
+                          label={c.fee ? <><b>{money(c.fee)}</b><span className="note">Edit</span></> : <span className="fee-set">Set fee</span>} />
+                      </td>
+                      <td>{first ? nice(first) : <span className="note">Set a billing day</span>}</td>
+                      <td className="team-edit"><SetContract clientId={c.id} clientName={c.name} contract={k?.c.status === "active" ? k.c : null} clientStart={c.start_date} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {(contractRows ?? []).length > 0 && (() => {
         // A window from 3 months back to 12 months ahead, one column per month.
