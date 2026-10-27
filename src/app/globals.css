@@ -976,6 +976,11 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .plan-shots-head, .plan-shot { display: grid; grid-template-columns: minmax(130px, 200px) 1fr 22px; gap: 8px; align-items: start; }
 .plan-shots-head { font-family: var(--label); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 @media (max-width: 560px) { .plan-shots-head { display: none; } .plan-shot { grid-template-columns: 1fr 22px; } .plan-shot textarea { grid-column: 1; } }
+.plan-script { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--soft) 25%, transparent); }
+.plan-script .sec-head { display: flex; gap: 10px; align-items: center; }
+.plan-script .sec-head .input { flex: 1; max-width: 260px; }
+.plan-script .sec-head button { margin-left: auto; }
+.plan-script textarea { line-height: 1.55; }
 .plan-table-wrap { overflow-x: auto; }
 .plan-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .plan-table th { text-align: left; font-family: var(--label); font-weight: 500; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 6px 6px; border-bottom: 1px solid var(--line); }
@@ -1007,6 +1012,8 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .plan-view .plan-timeline li { display: grid; grid-template-columns: 130px 1fr; gap: 10px; }
 .plan-view .plan-timeline b { font-variant-numeric: tabular-nums; }
 .plan-overview { white-space: pre-wrap; }
+.plan-view .plan-script-read { white-space: pre-wrap; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 10px; line-height: 1.55; }
+.plan-view .plan-script-read b { display: block; margin-bottom: 6px; }
 
 /* Content shoots on the calendar: one solid color for everyone, unlike the pastel teammate colors. */
 .shoot-ev, .tw-ev.shoot-ev, .ev.shoot-ev { background: var(--shoot); color: var(--shoot-ink); border-color: var(--shoot-ink); text-decoration: none; }

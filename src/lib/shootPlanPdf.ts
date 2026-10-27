@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { pdfSafe, wrap } from "./answersPdf";
-import { lines, usedFor, type ShootPlan } from "./shootPlan";
+import { isScript, lines, usedFor, type ShootPlan } from "./shootPlan";
 
 /** What goes in a table cell: plain text, a checklist, a bulleted list or one checkbox. */
 type Cell = string | { checks: string[] } | { bullets: string[] } | { box: boolean };
@@ -100,10 +100,34 @@ export async function shootPlanPdf(opts: {
     y -= 10;
   };
 
+  /** A video script: a labeled, bordered block of full-width text that can run across pages. */
+  const script = (label: string, body: string) => {
+    sub(label);
+    const ls = wrap(pdfSafe(body, regular), regular, 10, width - 20);
+    let i = 0;
+    while (i < ls.length) {
+      room(LEAD * 2 + 16);
+      const fit = Math.max(1, Math.min(ls.length - i, Math.floor((y - M - 16) / 13.5)));
+      const h = fit * 13.5 + 16;
+      page.drawRectangle({ x: M, y: y - h, width, height: h, borderColor: line, borderWidth: 0.6, color: rgb(0.97, 0.97, 0.96) });
+      ls.slice(i, i + fit).forEach((l, k) => page.drawText(l, { x: M + 10, y: y - 8 - 10 - k * 13.5 + 1, size: 10, font: regular, color: ink }));
+      y -= h;
+      i += fit;
+      if (i < ls.length) newPage();
+    }
+    y -= 12;
+  };
+
   // Title block
   text(opts.client.toUpperCase(), bold, 9, accent, M, width, 4, true);
   text(opts.title, bold, 20, accent, M, width, 5, true);
   text(`Shoot: ${opts.when} | Prepared by ${opts.agency}`, regular, 9.5, muted, M, width, 3, true);
+
+  if (plan.timeline.length) {
+    heading("Shoot schedule");
+    sub(opts.when);
+    table([{ label: "Time", w: 0.22 }, { label: "Activity", w: 0.78 }], plan.timeline.map((t) => [t.time, t.text]));
+  }
 
   if (plan.purpose || plan.goal || plan.tone || plan.setups.length) {
     heading("Shoot overview");
@@ -144,7 +168,8 @@ export async function shootPlanPdf(opts: {
       sub(`Setup ${i + 1}: ${[s.name, s.featuring && `(${s.featuring})`, s.time].filter(Boolean).join(" ")}`);
       if (s.location) text(s.location, regular, 9, muted);
       y -= 2;
-      const rows = s.shots.filter((r) => r.shots || r.type);
+      const rows = s.shots.filter((r) => (r.shots || r.type) && !isScript(r.type));
+      const scripts = s.shots.filter((r) => isScript(r.type) && r.shots);
       const products = lines(s.products), props = lines(s.props);
       table(
         [{ label: "Shot type", w: 0.17 }, { label: "Shots to get", w: 0.39 }, { label: "Products / wardrobe", w: 0.24 }, { label: "Props", w: 0.2 }],
@@ -154,18 +179,13 @@ export async function shootPlanPdf(opts: {
           k === 0 && props.length ? { bullets: props } : "",
         ]),
       );
+      for (const r of scripts) script(r.type, r.shots);
     });
     const extra = lines(plan.bonus);
     if (extra.length) {
       sub("Bonus b-roll (any setup, any location)");
       for (const b of extra) { room(LEAD); page.drawText("•", { x: M + 2, y: y - SIZE, size: SIZE + 0.5, font: regular, color: ink }); text(b, regular, 10, ink, M + 14, width - 14, 4); }
     }
-  }
-
-  if (plan.timeline.length) {
-    heading("Shoot schedule");
-    sub(opts.when);
-    table([{ label: "Time", w: 0.22 }, { label: "Activity", w: 0.78 }], plan.timeline.map((t) => [t.time, t.text]));
   }
 
   return doc.save();

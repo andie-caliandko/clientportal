@@ -2,7 +2,10 @@
  * A content shoot plan, laid out like our shoot strategy docs: an overview, setups in priority
  * order (each with its own shot table), locations, optional models, bonus b-roll and the schedule.
  */
-export const SHOT_TYPES = ["Stills", "Video / Reel b-roll", "Group / candid", "Detail / product"] as const;
+export const SHOT_TYPES = ["Stills", "Video / Reel b-roll", "Group / candid", "Detail / product", "Video script"] as const;
+
+/** Script rows hold a full video script rather than a list of shots; they get their own area. */
+export const isScript = (type: string) => /script/i.test(type);
 
 export type ShotRow = { type: string; shots: string };
 export type Setup = {
@@ -57,7 +60,7 @@ export function cleanPlan(raw: unknown): ShootPlan {
     featuring: str(s.featuring, 200).trim(),
     time: str(s.time, 60).trim(),
     location: str(s.location, 160).trim(),
-    shots: list(s.shots, 12).map((r) => ({ type: str(r.type, 60).trim(), shots: str(r.shots, 3000).trim() })).filter((r) => r.type || r.shots),
+    shots: list(s.shots, 12).map((r) => ({ type: str(r.type, 60).trim(), shots: str(r.shots, 12000).trim() })).filter((r) => r.type || r.shots),
     products: str(s.products, 3000).trim(),
     props: str(s.props, 3000).trim(),
   })).filter((s) => s.name || s.featuring || s.shots.some((r) => r.shots) || s.products || s.props);

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { newId, newSetup, samePlan, SHOT_TYPES, usedFor, type Model, type Setup, type ShootLocation, type ShootPlan, type TimelineItem } from "@/lib/shootPlan";
+import { isScript, newId, newSetup, samePlan, SHOT_TYPES, usedFor, type Model, type Setup, type ShotRow, type ShootLocation, type ShootPlan, type TimelineItem } from "@/lib/shootPlan";
 import { saveShootPlan, sendShootPlan } from "../actions";
 import { Waivers, type Waiver } from "./Waivers";
 
@@ -36,6 +36,8 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
 
   const set = (p: Partial<ShootPlan>) => { setPlan((cur) => ({ ...cur, ...p })); setMsg({}); };
   const setSetup = (i: number, p: Partial<Setup>) => set({ setups: plan.setups.map((s, k) => (k === i ? { ...s, ...p } : s)) });
+  const setShot = (i: number, k: number, p: Partial<ShotRow>) =>
+    set({ setups: plan.setups.map((x, j) => (j === i ? { ...x, shots: x.shots.map((r, n) => (n === k ? { ...r, ...p } : r)) } : x)) });
   const setLoc = (i: number, p: Partial<ShootLocation>) => set({ locations: plan.locations.map((l, k) => (k === i ? { ...l, ...p } : l)) });
   const setModel = (i: number, p: Partial<Model>) => set({ models: plan.models.map((m, k) => (k === i ? { ...m, ...p } : m)) });
   const setTime = (i: number, p: Partial<TimelineItem>) => set({ timeline: plan.timeline.map((t, k) => (k === i ? { ...t, ...p } : t)) });
@@ -84,6 +86,23 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
       </div>
 
       <div className="panel">
+        <div className="sec-head"><h2>Schedule</h2><span className="note">How the day runs</span></div>
+        <ol className="plan-rows">
+          {plan.timeline.map((t, i) => (
+            <li key={i}>
+              <input className="input plan-time" id={`tl-time-${i}`} aria-label="Time" value={t.time} placeholder="9:00 AM" onChange={(e) => setTime(i, { time: e.target.value })} />
+              <input className="input" aria-label="Activity" value={t.text} placeholder="Arrive, gear and lighting check" onChange={(e) => setTime(i, { text: e.target.value })} />
+              <span className="plan-tools">
+                <button type="button" className="linkbtn note" aria-label="Move up" onClick={() => set({ timeline: move(plan.timeline, i, -1) })}>↑</button>
+                <button type="button" className="linkbtn note" aria-label="Move down" onClick={() => set({ timeline: move(plan.timeline, i, 1) })}>↓</button>
+                <button type="button" className="linkbtn note" aria-label="Remove" onClick={() => set({ timeline: plan.timeline.filter((_, k) => k !== i) })}>✕</button>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div><button type="button" className="btn sm line" onClick={() => { set({ timeline: [...plan.timeline, { time: "", text: "" }] }); focusSoon(`tl-time-${plan.timeline.length}`); }}>Add a time</button></div>
+      </div>
+      <div className="panel">
         <h2>Overview</h2>
         <div className="field"><label htmlFor="pl-title">Title</label>
           <input className="input" id="pl-title" value={plan.title} placeholder="Content Shoot" onChange={(e) => set({ title: e.target.value })} style={{ maxWidth: 420 }} /></div>
@@ -123,7 +142,7 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
 
       <div className="plan-setups">
         <div className="sec-head">
-          <div><h2>Setups</h2><p className="note">Each look, scene or area you&apos;re shooting, in priority order. Each gets its own shot list.</p></div>
+          <div><h2>Setups</h2><p className="note">Each look, scene or area you&apos;re shooting, in priority order. Each gets its own shot list and video scripts.</p></div>
         </div>
         <datalist id="pl-venues">{venues.map((v) => <option key={v} value={v} />)}</datalist>
         <datalist id="pl-shot-types">{SHOT_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
@@ -145,22 +164,39 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
             </div>
             <div className="plan-shots">
               <div className="plan-shots-head"><span>Shot type</span><span>Shots to get</span></div>
-              {s.shots.map((r, k) => (
+              {s.shots.map((r, k) => !isScript(r.type) && (
                 <div className="plan-shot" key={k}>
                   <input className="input" list="pl-shot-types" aria-label="Shot type" value={r.type} placeholder="Stills"
-                    onChange={(e) => setSetup(i, { shots: s.shots.map((x, j) => (j === k ? { ...x, type: e.target.value } : x)) })} />
+                    onChange={(e) => setShot(i, k, { type: e.target.value })} />
                   <textarea className="input" id={`su-${i}-shots-${k}`} aria-label={`${r.type || "Shots"} to get`} rows={3} value={r.shots}
                     placeholder="Hero shot, close-up details, candid laughing…"
-                    onChange={(e) => setSetup(i, { shots: s.shots.map((x, j) => (j === k ? { ...x, shots: e.target.value } : x)) })} />
+                    onChange={(e) => setShot(i, k, { shots: e.target.value })} />
                   <button type="button" className="linkbtn note" aria-label="Remove shot type" onClick={() => setSetup(i, { shots: s.shots.filter((_, j) => j !== k) })}>✕</button>
+                </div>
+              ))}
+              {s.shots.map((r, k) => isScript(r.type) && (
+                <div className="plan-script" key={k}>
+                  <div className="sec-head">
+                    <label htmlFor={`su-${i}-shots-${k}`}><b>Script</b></label>
+                    <input className="input" list="pl-shot-types" aria-label="Script name" value={r.type} onChange={(e) => setShot(i, k, { type: e.target.value })} />
+                    <button type="button" className="linkbtn note" onClick={() => setSetup(i, { shots: s.shots.filter((_, j) => j !== k) })}>Remove</button>
+                  </div>
+                  <textarea className="input" id={`su-${i}-shots-${k}`} rows={10} value={r.shots}
+                    placeholder={"Hook (0–3s): …\nScene 1: what we see / what's said\nScene 2: …\nCall to action: …\nOn-screen text: …"}
+                    onChange={(e) => setShot(i, k, { shots: e.target.value })} />
                 </div>
               ))}
               <div>
                 <button type="button" className="linkbtn" onClick={() => {
                   const used = new Set(s.shots.map((r) => r.type));
-                  setSetup(i, { shots: [...s.shots, { type: SHOT_TYPES.find((t) => !used.has(t)) ?? "", shots: "" }] });
+                  setSetup(i, { shots: [...s.shots, { type: SHOT_TYPES.find((t) => !used.has(t) && !isScript(t)) ?? "", shots: "" }] });
                   focusSoon(`su-${i}-shots-${s.shots.length}`);
                 }}>+ Add a shot type</button>
+                <button type="button" className="linkbtn" style={{ marginLeft: 16 }} onClick={() => {
+                  const n = s.shots.filter((r) => isScript(r.type)).length;
+                  setSetup(i, { shots: [...s.shots, { type: n ? `Video script ${n + 1}` : "Video script", shots: "" }] });
+                  focusSoon(`su-${i}-shots-${s.shots.length}`);
+                }}>+ Add a script</button>
               </div>
             </div>
             <div className="row top">
@@ -230,23 +266,6 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
         )}
       </div>
 
-      <div className="panel">
-        <div className="sec-head"><h2>Schedule</h2><span className="note">How the day runs</span></div>
-        <ol className="plan-rows">
-          {plan.timeline.map((t, i) => (
-            <li key={i}>
-              <input className="input plan-time" id={`tl-time-${i}`} aria-label="Time" value={t.time} placeholder="9:00 AM" onChange={(e) => setTime(i, { time: e.target.value })} />
-              <input className="input" aria-label="Activity" value={t.text} placeholder="Arrive, gear and lighting check" onChange={(e) => setTime(i, { text: e.target.value })} />
-              <span className="plan-tools">
-                <button type="button" className="linkbtn note" aria-label="Move up" onClick={() => set({ timeline: move(plan.timeline, i, -1) })}>↑</button>
-                <button type="button" className="linkbtn note" aria-label="Move down" onClick={() => set({ timeline: move(plan.timeline, i, 1) })}>↓</button>
-                <button type="button" className="linkbtn note" aria-label="Remove" onClick={() => set({ timeline: plan.timeline.filter((_, k) => k !== i) })}>✕</button>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <div><button type="button" className="btn sm line" onClick={() => { set({ timeline: [...plan.timeline, { time: "", text: "" }] }); focusSoon(`tl-time-${plan.timeline.length}`); }}>Add a time</button></div>
-      </div>
     </>
   );
 }

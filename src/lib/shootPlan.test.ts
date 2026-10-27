@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanPlan, lines, newSetup, planIsEmpty, samePlan, usedFor } from "./shootPlan";
+import { cleanPlan, isScript, lines, newSetup, planIsEmpty, samePlan, usedFor } from "./shootPlan";
 
 describe("cleanPlan", () => {
   it("keeps setups with content and drops blank rows", () => {
@@ -26,6 +26,11 @@ describe("cleanPlan", () => {
 describe("helpers", () => {
   it("splits lines and strips typed bullets", () => {
     expect(lines("• Santa hats\n- Ornaments\n\n2) Candy canes")).toEqual(["Santa hats", "Ornaments", "Candy canes"]);
+  });
+  it("spots script rows", () => {
+    expect(isScript("Video script")).toBe(true);
+    expect(isScript("Reel Script")).toBe(true);
+    expect(isScript("Video / Reel b-roll")).toBe(false);
   });
   it("finds the setups at a venue", () => {
     const p = cleanPlan({ setups: [{ id: "a", name: "Softball", location: "The Yard – infield" }, { id: "b", name: "Winter", location: "Wire Park" }] });
