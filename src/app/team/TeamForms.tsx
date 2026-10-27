@@ -31,7 +31,7 @@ import {
   sendCalendar,
   registerDocument,
   updateClientInfo,
-  updateTask, renameClientContact } from "./actions";
+  updateTask, renameClientContact, setClientsFolder } from "./actions";
 
 type Opt = { id?: string; user_id?: string; name?: string; display_name?: string; role?: string };
 const ROLE_NAMES: Record<string, string> = { admin: "Admin", account_manager: "Account manager", creator: "Creator" };
@@ -216,7 +216,7 @@ function Connect({ id, label, hint, later, setLater, children }: {
 
 type ClientDefaults = { name?: string; contactName?: string; contactEmail?: string };
 
-export function NewClientForm({ members, agencyId, meId, defaults }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults }) {
+export function NewClientForm({ members, agencyId, meId, defaults, autoDrive = false }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults; autoDrive?: boolean }) {
   const [state, setState] = useState<{ error?: string }>({});
   const [review, setReview] = useState<{ clientId: string; next: string; tasks: (ProposedTask & { key: number })[] } | null>(null);
   const [sendNow, setSendNow] = useState(true);
@@ -297,7 +297,9 @@ export function NewClientForm({ members, agencyId, meId, defaults }: { members: 
 
       <h2>Connections</h2>
       <p className="note">These power the automations. If one isn&apos;t ready yet, tick Set up later and the account manager gets a task for it.</p>
-      <Connect id="drive" label="Google Drive folder" hint="Open their folder in Drive and copy the link from the address bar." later={!!later.drive} setLater={set("drive")}>
+      <Connect id="drive" label="Google Drive folder" hint={autoDrive
+        ? "Leave this empty and their folder is made for you in your Clients folder, with everything inside. Or paste a folder you already made."
+        : "Open their folder in Drive and copy the link from the address bar."} later={!!later.drive} setLater={set("drive")}>
         <input className="input" name="drive_folder" aria-label="Google Drive folder link" placeholder="https://drive.google.com/drive/folders/…" />
       </Connect>
       <Connect id="slack" label="Slack channel" hint="In Slack, right-click the client's channel, choose Copy link, and paste it here. Invite the portal app to the channel too." later={!!later.slack} setLater={set("slack")}>
@@ -866,28 +868,39 @@ export function MyPhoto({ userId, name, path }: { userId: string; name: string; 
 }
 
 /** Settings: how Drive copying is going. Files copy on their own. */
-export function DriveSettings({ waiting, withoutFolder }: { waiting: number; withoutFolder: number }) {
+export function DriveSettings({ waiting, withoutFolder, clientsFolder }: { waiting: number; withoutFolder: number; clientsFolder: string | null }) {
+  const [state, action, pending] = useActionState(setClientsFolder, {});
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <p className="note">
-        Client files copy to the Google Drive folder saved on each client&apos;s page as soon as they arrive: branding and content uploads into
-        their Branding and Content folders, and everything else straight into the client&apos;s folder.
+        Each client&apos;s Google Drive folder holds their onboarding questionnaire, Branding and Content (their uploads), Content Shoots (a folder
+        per shoot with the plan you sent and model waivers) and Reports (Strategy and Analytics PDFs you add to their portal).
         {waiting ? ` ${waiting} older file${waiting === 1 ? " is" : "s are"} still being copied.` : ""}
       </p>
+      <form action={action} className="row" style={{ alignItems: "flex-end" }}>
+        <div className="field" style={{ flex: 1, minWidth: "min(100%, 320px)" }}>
+          <label htmlFor="clients-folder">Clients folder</label>
+          <input className="input" id="clients-folder" name="folder" defaultValue={clientsFolder ? `https://drive.google.com/drive/folders/${clientsFolder}` : ""} placeholder="https://drive.google.com/drive/folders/…" />
+        </div>
+        <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+        {state.error && <p className="error" style={{ flexBasis: "100%" }}>{state.error}</p>}
+        {state.ok && <p className="flash" style={{ flexBasis: "100%" }}>{state.ok}</p>}
+      </form>
+      <p className="note">New clients get their own folder made in here when you add them without pasting a link. Existing clients aren&apos;t changed.</p>
       {withoutFolder > 0 && <p className="readonly">{withoutFolder} active client{withoutFolder === 1 ? " doesn't" : "s don't"} have a Drive folder link yet. Add it under Client info on their page and their files copy over automatically.</p>}
     </div>
   );
 }
 
 /** Clients page: "Add client" opens the new-client form in a pop-up. */
-export function AddClientButton({ members, agencyId, meId, defaults, label = "Add client" }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults; label?: string }) {
+export function AddClientButton({ members, agencyId, meId, defaults, label = "Add client", autoDrive = false }: { members: Opt[]; agencyId: string; meId: string; defaults?: ClientDefaults; label?: string; autoDrive?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className="btn sm" onClick={() => setOpen(true)}>{label}</button>
       {open && (
         <Modal title="Add a client" onClose={() => setOpen(false)} wide>
-          <NewClientForm members={members} agencyId={agencyId} meId={meId} defaults={defaults} />
+          <NewClientForm members={members} agencyId={agencyId} meId={meId} defaults={defaults} autoDrive={autoDrive} />
         </Modal>
       )}
     </>

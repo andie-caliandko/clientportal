@@ -11,7 +11,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { clientActivity } from "@/lib/notify";
 import { postToSlack } from "@/lib/slack";
 import { after } from "next/server";
-import { syncUploadsToDrive } from "@/lib/drive";
+import { saveQuestionnaireToDrive, syncUploadsToDrive } from "@/lib/drive";
 import { afterMessageFiles, readAttachments } from "@/lib/messageFiles";
 
 async function markStep(v: { agency: { id: string }; client: { id: string }; userId: string }, kind: string) {
@@ -58,6 +58,8 @@ export async function submitQuestionnaire(): Promise<{ error?: string }> {
     subject: "onboarding questionnaire submitted",
     body: `${v.clientUser.display_name} finished the onboarding questionnaire.`,
   });
+  // A copy in their Drive folder, right in the main folder.
+  after(async () => { try { await saveQuestionnaireToDrive(v.client.id); } catch (err) { console.error("Questionnaire to Drive failed", err); } });
   revalidatePath("/portal");
   redirect("/portal?done=questionnaire");
 }

@@ -3,9 +3,9 @@ import { accessToken, integration } from "./google";
 import { createAdminClient } from "./supabase/server";
 
 // Files clients upload are stored in the portal first, then copied into the
-// client's Google Drive folder. Branding and content uploads go in their own
-// folders (every client folder gets both); anything else, like task files and
-// message attachments, goes straight into the client's folder.
+// client's Google Drive folder: branding and content uploads into their own
+// folders (every client folder gets both). Anything else, like task files and
+// message attachments, stays in the portal; the team files those themselves.
 
 const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Content" };
 const STANDARD = Object.values(SUBFOLDER);
@@ -108,6 +108,7 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
     .from("uploads")
     .select("id, kind, file_name, storage_path, client_id, client:clients!inner(agency_id, drive_folder_id, archived_at)")
     .is("drive_file_id", null)
+    .in("kind", Object.keys(SUBFOLDER))
     .not("client.drive_folder_id", "is", null)
     .is("client.archived_at", null)
     .order("created_at")
@@ -130,10 +131,9 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
       if (!clientFolders.has(row.client_id)) clientFolders.set(row.client_id, await clientFolder(agency, { id: row.client_id, ...client }));
       const base = clientFolders.get(row.client_id);
       if (!base) continue;
-      // Branding and content in their folders; everything else loose in the client's folder.
       const sub = SUBFOLDER[row.kind];
-      const key = `${base}/${sub ?? ""}`;
-      if (!folders.has(key)) folders.set(key, sub ? await findOrCreateFolder(agency.token, base, sub) : base);
+      const key = `${base}/${sub}`;
+      if (!folders.has(key)) folders.set(key, await findOrCreateFolder(agency.token, base, sub));
       const { data: signed } = await admin.storage.from("uploads").createSignedUrl(row.storage_path, 60 * 30);
       if (!signed?.signedUrl) continue;
       const fileId = await uploadOne(agency.token, folders.get(key)!, row.file_name, signed.signedUrl);
@@ -196,4 +196,195 @@ export async function setClientDriveAccess(clientId: string, on: boolean) {
   }
   await admin.from("clients").update({ drive_shared: on }).eq("id", clientId);
   return { ok: on ? "Shared. They can open their folder from their portal." : "No longer shared." };
+}
+
+// ---------------------------------------------------------------------------
+// Folders the platform makes and files it keeps there:
+//   Clients/<Client>/<Client> onboarding questionnaire.pdf   (saved when they submit it)
+//   Clients/<Client>/Branding, Content                (client uploads)
+//   Clients/<Client>/Content Shoots/<date> Content Shoot/   (sent shoot plan PDF, plus the shoot's files)
+//   Clients/<Client>/Content Shoots/<date> Content Shoot/Model Waivers/
+//   Clients/<Client>/Reports/Strategy, Analytics       (PDFs added to the portal)
+// ---------------------------------------------------------------------------
+
+export const SHOOTS_FOLDER = "Content Shoots";
+export const REPORTS_FOLDER = "Reports";
+const REPORT_FOLDER: Record<string, string> = { strategy: "Strategy", report: "Analytics" };
+
+/** A folder link for the portal and the team pages. */
+export const driveFolderLink = (id: string) => `https://drive.google.com/drive/folders/${id}`;
+
+async function driveFetch<T>(token: string, url: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers ?? {}) } });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(`Drive ${res.status}: ${JSON.stringify(body?.error ?? body)}`);
+  return body as T;
+}
+
+/** Saves a PDF (or other bytes) into a folder, or replaces the contents of `existingId` so links keep working. */
+async function saveBytes(token: string, folderId: string, name: string, bytes: Uint8Array, type: string, existingId?: string | null) {
+  if (existingId) {
+    try {
+      await driveFetch(token, `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media&supportsAllDrives=true`, {
+        method: "PATCH", headers: { "Content-Type": type }, body: Buffer.from(bytes),
+      });
+      await driveFetch(token, `${API}/files/${existingId}?supportsAllDrives=true`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+      });
+      return existingId;
+    } catch {
+      // Deleted in Drive: make a new one below.
+    }
+  }
+  const boundary = `b${Date.now()}`;
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: ${type}\r\n\r\n`),
+    Buffer.from(bytes),
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+  const file = await driveFetch<{ id: string }>(token, "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id", {
+    method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body,
+  });
+  return file.id;
+}
+
+/**
+ * New clients only: make "<Client name>" inside the agency's Clients folder, with every folder the
+ * platform uses, and save it as their Drive folder. A folder that's already there with that name is
+ * used rather than making a second one. Returns the folder id, or null if Drive isn't set up.
+ */
+export async function createClientDriveFolder(clientId: string) {
+  const admin = createAdminClient();
+  const { data: client } = await admin.from("clients").select("id, name, agency_id, drive_folder_id, agencies(drive_clients_folder_id)").eq("id", clientId).maybeSingle();
+  const parent = (client?.agencies as unknown as { drive_clients_folder_id: string | null } | null)?.drive_clients_folder_id;
+  if (!client || client.drive_folder_id || !parent) return client?.drive_folder_id ?? null;
+  const agency = await agencyDrive(client.agency_id);
+  if (!agency) return null;
+  const folder = await findOrCreateFolder(agency.token, parent, client.name);
+  const [branding, content] = [await findOrCreateFolder(agency.token, folder, "Branding"), await findOrCreateFolder(agency.token, folder, "Content")];
+  await findOrCreateFolder(agency.token, folder, SHOOTS_FOLDER);
+  const reports = await findOrCreateFolder(agency.token, folder, REPORTS_FOLDER);
+  for (const name of Object.values(REPORT_FOLDER)) await findOrCreateFolder(agency.token, reports, name);
+  await admin.from("clients").update({ drive_folder_id: folder, drive_branding_id: branding, drive_content_id: content }).eq("id", clientId);
+  return folder;
+}
+
+const shootFolderName = (date: string, end?: string | null) => `${date}${end && end > date ? ` to ${end}` : ""} Content Shoot`;
+
+/**
+ * The shoot's own folder in Content Shoots (made the first time, renamed if the date moves).
+ * Null when the client has no Drive folder or Google isn't connected.
+ */
+export async function ensureShootFolder(shootId: string) {
+  const admin = createAdminClient();
+  const { data: shoot } = await admin.from("content_shoots")
+    .select("id, shoot_date, end_date, status, drive_folder_id, clients(agency_id, drive_folder_id)").eq("id", shootId).maybeSingle();
+  const client = shoot?.clients as unknown as { agency_id: string; drive_folder_id: string | null } | null;
+  if (!shoot || !client?.drive_folder_id) return null;
+  const agency = await agencyDrive(client.agency_id);
+  if (!agency) return null;
+  const name = shootFolderName(shoot.shoot_date, shoot.end_date);
+  if (shoot.drive_folder_id) {
+    try {
+      const f = await driveFetch<{ name: string; trashed: boolean }>(agency.token, `${API}/files/${shoot.drive_folder_id}?fields=name,trashed&supportsAllDrives=true`);
+      if (!f.trashed) {
+        if (f.name !== name && shoot.status === "scheduled") {
+          await driveFetch(agency.token, `${API}/files/${shoot.drive_folder_id}?supportsAllDrives=true`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+          });
+        }
+        return { token: agency.token, folderId: shoot.drive_folder_id as string };
+      }
+    } catch {
+      // Gone from Drive: make it again.
+    }
+  }
+  if (shoot.status !== "scheduled") return null;
+  const parent = await findOrCreateFolder(agency.token, client.drive_folder_id, SHOOTS_FOLDER);
+  const folderId = await findOrCreateFolder(agency.token, parent, name);
+  await admin.from("content_shoots").update({ drive_folder_id: folderId }).eq("id", shootId);
+  return { token: agency.token, folderId };
+}
+
+/** Save the shoot plan PDF the client was just sent into the shoot's folder (replacing the last one sent). */
+export async function savePlanPdfToDrive(shootId: string, pdf: Uint8Array, fileName: string) {
+  const folder = await ensureShootFolder(shootId);
+  if (!folder) return null;
+  const admin = createAdminClient();
+  const { data: share } = await admin.from("shoot_plan_shares").select("drive_file_id").eq("shoot_id", shootId).maybeSingle();
+  const id = await saveBytes(folder.token, folder.folderId, fileName, pdf, "application/pdf", share?.drive_file_id);
+  await admin.from("shoot_plan_shares").update({ drive_file_id: id }).eq("shoot_id", shootId);
+  return id;
+}
+
+/** Copy a signed model waiver into the shoot's Model Waivers folder. */
+export async function saveWaiverToDrive(waiverId: string) {
+  const admin = createAdminClient();
+  const { data: w } = await admin.from("shoot_waivers").select("id, shoot_id, file_name, file_path, drive_file_id").eq("id", waiverId).maybeSingle();
+  if (!w || w.drive_file_id) return null;
+  const folder = await ensureShootFolder(w.shoot_id);
+  if (!folder) return null;
+  const waivers = await findOrCreateFolder(folder.token, folder.folderId, "Model Waivers");
+  const { data: signed } = await admin.storage.from("waivers").createSignedUrl(w.file_path, 60 * 30);
+  if (!signed?.signedUrl) return null;
+  const id = await uploadOne(folder.token, waivers, w.file_name, signed.signedUrl);
+  await admin.from("shoot_waivers").update({ drive_file_id: id }).eq("id", waiverId);
+  return id;
+}
+
+/** Move a removed waiver's Drive copy to the trash (it can still be restored from Drive). */
+export async function trashDriveFile(agencyId: string, fileId: string) {
+  const agency = await agencyDrive(agencyId);
+  if (!agency) return;
+  await driveFetch(agency.token, `${API}/files/${fileId}?supportsAllDrives=true`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }),
+  });
+}
+
+/** Save the client's onboarding questionnaire answers as a PDF in their main Drive folder (replaced if they send it again). */
+export async function saveQuestionnaireToDrive(clientId: string) {
+  const admin = createAdminClient();
+  const { data: client } = await admin.from("clients").select("id, name, agency_id, drive_folder_id, drive_questionnaire_id").eq("id", clientId).maybeSingle();
+  if (!client?.drive_folder_id) return null;
+  const agency = await agencyDrive(client.agency_id);
+  if (!agency) return null;
+  const { questionnairePdf } = await import("./questionnairePdf");
+  const pdf = await questionnairePdf(clientId);
+  if (!pdf) return null;
+  const id = await saveBytes(agency.token, client.drive_folder_id, `${client.name.replace(/[\\/:*?"<>|]+/g, "-")} onboarding questionnaire.pdf`, pdf, "application/pdf", client.drive_questionnaire_id);
+  await admin.from("clients").update({ drive_questionnaire_id: id }).eq("id", clientId);
+  return id;
+}
+
+/** Copy strategy and analytics PDFs added to the portal into the client's Reports folder. */
+export async function syncDocumentsToDrive(filter: { documentIds?: string[]; limit?: number } = {}) {
+  const admin = createAdminClient();
+  let q = admin.from("documents")
+    .select("id, kind, title, storage_path, client_id, clients!inner(agency_id, drive_folder_id, archived_at)")
+    .eq("drive_status", "pending").not("clients.drive_folder_id", "is", null).is("clients.archived_at", null)
+    .order("created_at").limit(filter.limit ?? 25);
+  if (filter.documentIds?.length) q = q.in("id", filter.documentIds);
+  const { data: rows } = await q;
+  const agencies = new Map<string, Agency | null>();
+  let synced = 0;
+  for (const row of rows ?? []) {
+    const client = row.clients as unknown as { agency_id: string; drive_folder_id: string };
+    try {
+      if (!agencies.has(client.agency_id)) agencies.set(client.agency_id, await agencyDrive(client.agency_id));
+      const agency = agencies.get(client.agency_id);
+      if (!agency) continue;
+      const reports = await findOrCreateFolder(agency.token, client.drive_folder_id, REPORTS_FOLDER);
+      const folder = await findOrCreateFolder(agency.token, reports, REPORT_FOLDER[row.kind] ?? "Strategy");
+      const { data: signed } = await admin.storage.from("documents").createSignedUrl(row.storage_path, 60 * 30);
+      if (!signed?.signedUrl) continue;
+      const name = `${row.title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Report"}.pdf`;
+      const fileId = await uploadOne(agency.token, folder, name, signed.signedUrl);
+      await admin.from("documents").update({ drive_status: "done", drive_file_id: fileId }).eq("id", row.id);
+      synced++;
+    } catch (err) {
+      console.error(`Drive copy failed for document ${row.id}:`, err);
+    }
+  }
+  return synced;
 }

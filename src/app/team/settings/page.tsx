@@ -36,7 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const [{ count: driveWaiting }, { count: noFolder }] = google.connected
     ? await Promise.all([
         createAdminClient().from("uploads").select("id, clients!inner(agency_id, archived_at, drive_folder_id)", { count: "exact", head: true })
-          .is("drive_file_id", null).eq("clients.agency_id", agency.id).is("clients.archived_at", null).not("clients.drive_folder_id", "is", null),
+          .is("drive_file_id", null).in("kind", ["branding", "content"]).eq("clients.agency_id", agency.id).is("clients.archived_at", null).not("clients.drive_folder_id", "is", null),
         createAdminClient().from("clients").select("id", { count: "exact", head: true }).eq("agency_id", agency.id).is("archived_at", null).is("drive_folder_id", null),
       ])
     : [{ count: 0 }, { count: 0 }];
@@ -82,7 +82,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <p className="readonly">A person&apos;s own calendar ({google.calendarName}) was chosen for due dates, so nothing is showing. Choose C&amp;K Due Dates above and click Save.</p>
               ) : google.calendarName && <p className="note">Showing due dates from <b>{google.calendarName}</b>. Changes in Google show up here within 15 minutes.</p>}
               <h3 style={{ marginTop: 8 }}>Google Drive</h3>
-              <DriveSettings waiting={driveWaiting ?? 0} withoutFolder={noFolder ?? 0} />
+              <DriveSettings waiting={driveWaiting ?? 0} withoutFolder={noFolder ?? 0} clientsFolder={agency.drive_clients_folder_id ?? null} />
               <form action={disconnectGoogle}><ConfirmButton label="Disconnect Google" confirmLabel="Disconnect?" /></form>
             </>
           ) : (

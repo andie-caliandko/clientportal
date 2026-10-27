@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { catchUpDrive, ensureClientFolders } from "@/lib/drive";
+import { catchUpDrive, createClientDriveFolder, ensureClientFolders, syncDocumentsToDrive } from "@/lib/drive";
 import { approvalDueAt, dateAtHour, formatDue } from "@/lib/approval";
 import { emailClient, sendEmail, tellAddedToClient } from "@/lib/notify";
 import { notifyClient, notifyUser } from "@/lib/notifications";
@@ -163,15 +163,17 @@ export async function registerDocument(input: { clientId: string; kind: string; 
   if (!input.path.startsWith(`${v.agency.id}/${input.clientId}/`)) return { error: "That file is in the wrong place. Try uploading again." };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("documents").insert({
+  const { data: doc, error } = await supabase.from("documents").insert({
     agency_id: v.agency.id,
     client_id: input.clientId,
     kind,
     title,
     storage_path: input.path,
     created_by: v.userId,
-  });
-  if (error) return { error: "The PDF uploaded but couldn't be added to the portal. Try again." };
+  }).select("id").single();
+  if (error || !doc) return { error: "The PDF uploaded but couldn't be added to the portal. Try again." };
+  // A copy in their Drive folder: Reports/Strategy or Reports/Analytics.
+  after(async () => { try { await syncDocumentsToDrive({ documentIds: [doc.id] }); } catch (err) { console.error("Report to Drive failed", err); } });
   await emailClient(
     input.clientId,
     kind === "report" ? `Your ${title} is ready` : `Your new strategy is ready: ${title}`,
@@ -251,11 +253,13 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (!am) return { error: "Choose an account manager." };
 
   const driveId = driveFolderId(get("drive_folder"));
+  // With a Clients folder set in Settings, leaving the link empty makes their folder automatically.
+  const autoDrive = !driveId && !later("drive") && !!v.agency.drive_clients_folder_id;
   const slackId = slackChannelId(get("slack_channel"));
   const rella = get("rella");
   const dubsadoEmail = (get("dubsado_email") || contactEmail).toLowerCase();
   const missing: string[] = [];
-  if (!later("drive") && !driveId) missing.push("paste the Google Drive folder link");
+  if (!later("drive") && !driveId && !autoDrive) missing.push("paste the Google Drive folder link");
   if (!later("slack") && !slackId) missing.push("paste the Slack channel link");
   if (!later("rella") && !isUrl(rella)) missing.push("paste the Rella space link");
   if (!later("dubsado") && !dubsadoEmail) missing.push("add the client's Dubsado email");
@@ -321,8 +325,15 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     ...CONNECTIONS.filter((c) => later(c.key)).map((c) => ({ title: c.laterTask, note: null, date: dayAfter(1), assignee_id: am })),
   ];
 
-  // Their Drive folder, with Branding and Content inside.
-  after(() => ensureClientFolders({ clientId: client.id }));
+  // Their Drive folder, with Branding and Content inside (made for them in the Clients folder if no link was pasted).
+  after(async () => {
+    try {
+      if (autoDrive) await createClientDriveFolder(client.id);
+      else await ensureClientFolders({ clientId: client.id });
+    } catch (err) {
+      console.error("Client Drive folder failed", err);
+    }
+  });
   if (!sendInvite) {
     return { ok: `${name} is set up. Send their portal invite from their page when you're ready.`, clientId: client.id, proposed };
   }
@@ -1205,6 +1216,19 @@ export async function addReviewedTasks(clientId: string, tasks: ProposedTask[]):
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team");
   return { ok: rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"} added.` : "No tasks added." };
+}
+
+/** Admins: the Google Drive folder new clients' folders are made in. */
+export async function setClientsFolder(_: Result, form: FormData): Promise<Result> {
+  const v = await requireAdmin().catch(() => null);
+  if (!v) return { error: "Only admins can change this." };
+  const link = String(form.get("folder") ?? "").trim();
+  const id = link ? driveFolderId(link) : null;
+  if (link && !id) return { error: "That doesn't look like a Google Drive folder link. It should have /folders/ in it." };
+  const { error } = await createAdminClient().from("agencies").update({ drive_clients_folder_id: id }).eq("id", v.agency.id);
+  if (error) return { error: "That couldn't be saved." };
+  revalidatePath("/team/settings");
+  return { ok: id ? "Saved. New clients get their folder in here." : "Removed." };
 }
 
 /** Admins: the one Google Drive folder the SOPs tab shows. */

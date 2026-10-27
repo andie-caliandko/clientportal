@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // The brand fonts that downloaded PDFs embed (read from disk at run time).
+  // The brand fonts that PDFs embed (read from disk at run time): downloads, and copies saved to Drive from
+  // server actions and background work on many pages, so every route gets them.
   outputFileTracingIncludes: {
-    "/api/shoots/[id]/plan.pdf": ["./assets/fonts/*.ttf"],
-    "/team/clients/[id]/answers.pdf": ["./assets/fonts/*.ttf"],
+    "/**": ["./assets/fonts/*.ttf"],
   },
   async redirects() {
     return [

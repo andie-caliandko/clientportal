@@ -12,7 +12,7 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, clients(name)").eq("id", id).maybeSingle();
+    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
   const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
     supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
@@ -47,6 +47,9 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
             <p className="note">{[crewNames && `Team: ${crewNames}`, shoot.photographer && `Photographer: ${shoot.photographer}`].filter(Boolean).join(" · ")}</p>
           )}
         </div>
+        {shoot.drive_folder_id && (
+          <a className="btn sm line" href={`https://drive.google.com/drive/folders/${shoot.drive_folder_id}`} target="_blank" rel="noreferrer">Open Drive folder</a>
+        )}
       </div>
       <PlanEditor
         shootId={shoot.id}

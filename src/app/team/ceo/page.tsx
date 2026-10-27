@@ -175,7 +175,7 @@ export default async function CeoDashboard({ searchParams }: { searchParams: Pro
                     <td className="team-edit">
                       <span className="row" style={{ gap: 14, alignItems: "center", justifyContent: "flex-end", flexWrap: "nowrap" }}>
                         <DismissSignup id={n.id} name={(n.name || n.project || n.email).split(" ")[0]} />
-                        <AddClientButton label="Set up portal" members={members ?? []} agencyId={agency.id} meId={userId}
+                        <AddClientButton autoDrive={!!agency.drive_clients_folder_id} label="Set up portal" members={members ?? []} agencyId={agency.id} meId={userId}
                           defaults={{ name: n.project ?? n.name ?? "", contactName: n.name ?? "", contactEmail: n.email }} />
                       </span>
                     </td>

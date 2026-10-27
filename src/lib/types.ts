@@ -27,6 +27,8 @@ export type Agency = {
   ceo_shared_with?: string[] | null;
   /** The Google Drive folder with every SOP, shown on the SOPs tab. */
   sop_folder_url?: string | null;
+  /** New clients get their Drive folder made in here. */
+  drive_clients_folder_id?: string | null;
 };
 
 export type Role = "admin" | "account_manager" | "creator";

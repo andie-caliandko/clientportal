@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { ensureShootFolder, savePlanPdfToDrive, saveWaiverToDrive, trashDriveFile } from "@/lib/drive";
+import { buildShootPlanPdf } from "@/lib/shootPlanFile";
 import { notifyClient } from "@/lib/notifications";
 import { requireEditor, requireTeam } from "@/lib/session";
 import { isShootRepeat, shootDates } from "@/lib/shoots";
@@ -24,6 +27,10 @@ function refresh(clientId: string) {
   revalidatePath("/team");
   revalidatePath("/portal", "layout");
 }
+
+/** Drive work never blocks or fails a save; problems are only logged. */
+const inBackground = (label: string, work: () => Promise<unknown>) =>
+  after(async () => { try { await work(); } catch (err) { console.error(label, err); } });
 
 /** Schedule a content shoot, or change one. Repeating shoots schedule their next dates too. */
 export async function saveShoot(_: Result, form: FormData): Promise<Result> {
@@ -65,6 +72,8 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     await planShootTasks({ ...(made as Shoot), series_id: repeat ? made.id : null });
     await syncShootCalendars(made.id);
     if (repeat) await extendSeries(made.id);
+    // Its folder in the client's Content Shoots folder.
+    inBackground("Shoot folder", () => ensureShootFolder(made.id));
     await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date, end)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal/shoots" });
     refresh(clientId);
     return { ok: repeat ? "Shoot scheduled, with the next ones in the series." : "Shoot scheduled." };
@@ -102,6 +111,8 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date, end)}`, link: "/portal/shoots" });
   }
   await syncShootCalendars(id);
+  // The folder follows the date.
+  inBackground("Shoot folder", () => ensureShootFolder(id));
   refresh(clientId);
   revalidatePath("/team/calendar");
   return { ok: "Shoot saved." };
@@ -162,6 +173,11 @@ export async function sendShootPlan(shootId: string, raw: unknown): Promise<Resu
     console.error("sendShootPlan", error);
     return { error: "The plan couldn't be sent." };
   }
+  // The version the client got, saved in the shoot's Drive folder.
+  inBackground("Plan PDF to Drive", async () => {
+    const file = await buildShootPlanPdf(shootId, "sent");
+    if (file) await savePlanPdfToDrive(shootId, file.pdf, file.fileName);
+  });
   await notifyClient(shoot.client_id, {
     kind: "task",
     title: before ? "Content shoot plan updated" : "Your content shoot plan is ready",
@@ -179,21 +195,26 @@ export async function addShootWaiver(shootId: string, modelId: string, filePath:
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots").select("id, client_id").eq("id", shootId).maybeSingle();
   if (!shoot || !filePath.startsWith(`${v.agency.id}/${shoot.client_id}/${shootId}/`)) return { error: "That shoot wasn't found." };
-  const { error } = await supabase.from("shoot_waivers")
-    .insert({ shoot_id: shootId, client_id: shoot.client_id, model_id: modelId || null, file_path: filePath, file_name: fileName.slice(0, 200), uploaded_by: v.userId });
-  if (error) {
+  const { data: made, error } = await supabase.from("shoot_waivers")
+    .insert({ shoot_id: shootId, client_id: shoot.client_id, model_id: modelId || null, file_path: filePath, file_name: fileName.slice(0, 200), uploaded_by: v.userId })
+    .select("id").single();
+  if (error || !made) {
     console.error("addShootWaiver", error);
     return { error: "The waiver couldn't be saved." };
   }
+  // A copy in the shoot's Model Waivers folder in Drive.
+  inBackground("Waiver to Drive", () => saveWaiverToDrive(made.id));
   revalidatePath(`/team/shoots/${shootId}`);
   return { ok: "Waiver saved." };
 }
 
 export async function removeShootWaiver(id: string): Promise<Result> {
-  await requireTeam();
+  const v = await requireTeam();
   const supabase = await createClient();
-  const { data: w } = await supabase.from("shoot_waivers").select("id, shoot_id, file_path").eq("id", id).maybeSingle();
+  const { data: w } = await supabase.from("shoot_waivers").select("id, shoot_id, file_path, drive_file_id").eq("id", id).maybeSingle();
   if (!w) return { error: "That waiver wasn't found." };
+  // Its Drive copy goes to the trash (still restorable from Drive).
+  if (w.drive_file_id) inBackground("Waiver out of Drive", () => trashDriveFile(v.agency.id, w.drive_file_id!));
   await supabase.storage.from("waivers").remove([w.file_path]);
   await supabase.from("shoot_waivers").delete().eq("id", id);
   revalidatePath(`/team/shoots/${w.shoot_id}`);
