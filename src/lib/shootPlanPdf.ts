@@ -1,28 +1,24 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { pdfBrand } from "./pdfBrand";
 import { pdfSafe, wrap } from "./answersPdf";
 import { isScript, lines, usedFor, type ShootPlan } from "./shootPlan";
 
 /** What goes in a table cell: plain text, a checklist, a bulleted list or one checkbox. */
 type Cell = string | { checks: string[] } | { bullets: string[] } | { box: boolean };
 
-const hex = (h: string | undefined, fallback: RGB) => {
-  const m = h?.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  return m ? rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : fallback;
-};
-
 /** A shoot plan as a letter-size PDF, in the same shape as our shoot strategy docs. */
 export async function shootPlanPdf(opts: {
-  agency: string; client: string; title: string; when: string; plan: ShootPlan; accent?: string;
+  agency: string; client: string; title: string; when: string; plan: ShootPlan; primary?: string;
 }) {
   const { plan } = opts;
   const doc = await PDFDocument.create();
   doc.setTitle(`${opts.client} ${opts.title}`);
   doc.setAuthor(opts.agency);
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const ink = rgb(0.13, 0.16, 0.16), muted = rgb(0.42, 0.46, 0.46), line = rgb(0.2, 0.2, 0.2);
-  const accent = hex(opts.accent, rgb(0.21, 0.31, 0.29));
-  const stripe = rgb(0.95, 0.95, 0.95), white = rgb(1, 1, 1);
+  // Brand fonts, and every word in the brand's dark green.
+  const brand = await pdfBrand(doc, opts.primary);
+  const regular = brand.body, bold = brand.label, serif = brand.heading;
+  const ink = brand.ink, muted = brand.ink, accent = brand.ink, line = brand.line;
+  const headFill = brand.tint, stripe = rgb(0.965, 0.976, 0.972), white = rgb(1, 1, 1);
   const W = 612, H = 792, M = 48, width = W - M * 2;
   const SIZE = 9.5, LEAD = 12.5, PAD = 6;
   let page: PDFPage = doc.addPage([W, H]);
@@ -43,11 +39,11 @@ export async function shootPlanPdf(opts: {
     room(60);
     y -= 14;
     section++;
-    text(`${section}. ${t}`, bold, 12, accent);
+    text(`${section}. ${t}`, serif, 17, accent, M, width, 5);
     page.drawLine({ start: { x: M, y: y - 1 }, end: { x: M + width, y: y - 1 }, thickness: 0.8, color: accent });
     y -= 10;
   };
-  const sub = (t: string) => { room(50); y -= 6; text(t, bold, 10.5, accent); y -= 3; };
+  const sub = (t: string) => { room(50); y -= 6; text(t, bold, 10, accent); y -= 3; };
 
   // Cell layout: wrapped lines with their font and an optional marker in front.
   type Line = { t: string; font: PDFFont; color: RGB; mark?: "box" | "checked" | "dot"; indent?: boolean };
@@ -81,8 +77,8 @@ export async function shootPlanPdf(opts: {
       const h = Math.max(...hl.map((l) => l.length)) * LEAD + PAD * 2 - 2;
       room(h + 30);
       cols.forEach((_, i) => {
-        page.drawRectangle({ x: xs[i], y: y - h, width: ws[i], height: h, color: accent, borderColor: line, borderWidth: 0.6 });
-        hl[i].forEach((l, k) => page.drawText(l, { x: xs[i] + PAD, y: y - PAD - SIZE - k * LEAD + 1, size: SIZE, font: bold, color: white }));
+        page.drawRectangle({ x: xs[i], y: y - h, width: ws[i], height: h, color: headFill, borderColor: line, borderWidth: 0.6 });
+        hl[i].forEach((l, k) => page.drawText(l, { x: xs[i] + PAD, y: y - PAD - SIZE - k * LEAD + 1, size: SIZE, font: bold, color: ink }));
       });
       y -= h;
     };
@@ -109,7 +105,7 @@ export async function shootPlanPdf(opts: {
       room(LEAD * 2 + 16);
       const fit = Math.max(1, Math.min(ls.length - i, Math.floor((y - M - 16) / 13.5)));
       const h = fit * 13.5 + 16;
-      page.drawRectangle({ x: M, y: y - h, width, height: h, borderColor: line, borderWidth: 0.6, color: rgb(0.97, 0.97, 0.96) });
+      page.drawRectangle({ x: M, y: y - h, width, height: h, borderColor: line, borderWidth: 0.6, color: stripe });
       ls.slice(i, i + fit).forEach((l, k) => page.drawText(l, { x: M + 10, y: y - 8 - 10 - k * 13.5 + 1, size: 10, font: regular, color: ink }));
       y -= h;
       i += fit;
@@ -120,7 +116,8 @@ export async function shootPlanPdf(opts: {
 
   // Title block
   text(opts.client.toUpperCase(), bold, 9, accent, M, width, 4, true);
-  text(opts.title, bold, 20, accent, M, width, 5, true);
+  y -= 2;
+  text(opts.title, serif, 30, accent, M, width, 10, true);
   text(`Shoot: ${opts.when} | Prepared by ${opts.agency}`, regular, 9.5, muted, M, width, 3, true);
 
   if (plan.timeline.length) {

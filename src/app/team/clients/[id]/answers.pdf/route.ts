@@ -19,6 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     agency: agency.name,
     client: client.name,
     date: new Date().toLocaleDateString("en-US", { timeZone: agency.timezone, month: "long", day: "numeric", year: "numeric" }),
+    primary: agency.brand.colors?.primary,
     items: (questions ?? []).map((q) => ({ position: q.position, prompt: q.prompt, answer: by.get(q.id) ?? "" })),
   });
   const file = `${client.name.replace(/[^\w\s-]/g, "").trim() || "Client"} questionnaire.pdf`;

@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const when = [shoot.end_date && shoot.end_date > shoot.shoot_date ? shootDates(shoot.shoot_date, shoot.end_date) : day, timeLabel(shoot.start_time)].filter(Boolean).join(" · ");
   const pdf = await shootPlanPdf({
     agency: v.agency.brand.shortName ?? v.agency.name, client, title: plan.title || "Content Shoot", when, plan,
-    accent: v.agency.brand.colors?.primary,
+    primary: v.agency.brand.colors?.primary,
   });
   const file = `${client.replace(/[^\w\s-]/g, "").trim() || "Client"} shoot plan ${shoot.shoot_date}.pdf`;
   return new NextResponse(Buffer.from(pdf), {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { answersPdf, pdfSafe, wrap } from "./answersPdf";
+import { pdfBrand } from "./pdfBrand";
 
 describe("answers PDF", () => {
   it("wraps long text and splits very long words", async () => {
@@ -12,6 +13,11 @@ describe("answers PDF", () => {
   it("replaces characters the font can't draw", async () => {
     const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
     expect(pdfSafe("Hi 😀 “there”", font)).toBe("Hi ? “there”");
+  });
+  it("swaps characters the brand font lacks", async () => {
+    const doc = await PDFDocument.create();
+    const { body } = await pdfBrand(doc);
+    expect(pdfSafe("Hi 😀 “there”", body)).toBe("Hi ? “there”");
   });
   it("builds a PDF over several pages", async () => {
     const bytes = await answersPdf({ agency: "Sample Agency", client: "Sample Bakery", date: "Oct 5, 2026",
