@@ -462,6 +462,7 @@ td a:hover { text-decoration: underline; }
   --who-5: #F9D3C7; --who-5-ink: #8C3520;
   --who-6: #DCDFE6; --who-6-ink: #394150;
   --who-7: #DCDDF7; --who-7-ink: #36398A;
+  --shoot: var(--primary); --shoot-ink: var(--cream);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -473,6 +474,7 @@ td a:hover { text-decoration: underline; }
     --who-5: #4B2B22; --who-5-ink: #F8C6B6;
     --who-6: #33373F; --who-6-ink: #D8DCE5;
     --who-7: #2C2D55; --who-7-ink: #CFD0F7;
+    --shoot: var(--khaki); --shoot-ink: #1d2a27;
   }
 }
 .kind.who-0 { background: var(--who-0); color: var(--who-0-ink); }
@@ -978,3 +980,13 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .plan-view .plan-timeline li { display: grid; grid-template-columns: 112px 1fr; gap: 10px; }
 .plan-view .plan-timeline b { font-variant-numeric: tabular-nums; }
 .plan-view .plan-overview { white-space: pre-wrap; }
+
+/* Content shoots on the calendar: one solid color for everyone, unlike the pastel teammate colors. */
+.shoot-ev, .tw-ev.shoot-ev, .ev.shoot-ev { background: var(--shoot); color: var(--shoot-ink); border-color: var(--shoot-ink); text-decoration: none; }
+a.shoot-ev { display: block; }
+.ev.shoot-ev { border-radius: 6px; padding: 4px 6px; margin-bottom: 4px; font-size: .78rem; }
+.shoot-ev b { display: flex; gap: 5px; align-items: flex-start; }
+.shoot-ev b svg { width: 13px; height: 13px; flex: none; margin-top: 1px; }
+.shoot-ev b .mg-time { display: inline; font-size: inherit; opacity: .85; font-weight: 500; }
+.tw-legend i.shoot-ev { border-color: var(--shoot); }
+.shoot-ev:hover { filter: brightness(1.12); }

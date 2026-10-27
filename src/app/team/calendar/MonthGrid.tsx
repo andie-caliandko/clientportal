@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EventChip } from "./EventDialog";
-import type { WeekItem } from "./TogetherWeek";
+import { CalLegend, ShootChip, type Legend, type WeekItem } from "./TogetherWeek";
 
 const SHOW = 4;
 
@@ -11,21 +11,19 @@ export function MonthGrid({ days, month, today, items, legend, dayHref }: {
   month: string;
   today: string;
   items: Record<string, WeekItem[]>;
-  legend: { name: string; color: number }[];
+  legend: Legend;
   dayHref: (date: string) => string;
 }) {
   const weekdays = days.slice(0, 7).map((d) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short" }));
   return (
     <div className="tw">
-      <ul className="tw-legend" aria-label="Colors">
-        {legend.map((l) => <li key={l.name}><i className={`who-${l.color}`} aria-hidden="true" />{l.name}</li>)}
-      </ul>
+      <CalLegend legend={legend} />
       <div className="tw-scroll">
         <div className="mg">
           {weekdays.map((w) => <div key={w} className="mg-wd">{w}</div>)}
           {days.map((d) => {
-            // All-day things first, then by start time.
-            const list = [...(items[d] ?? [])].sort((a, b) => (a.start ?? -1) - (b.start ?? -1));
+            // Shoots first, then all-day things, then by start time.
+            const list = [...(items[d] ?? [])].sort((a, b) => ("shoot" in a ? -2 : a.start ?? -1) - ("shoot" in b ? -2 : b.start ?? -1));
             const more = list.length - SHOW;
             return (
               <div key={d} className={`mg-day ${d.slice(0, 7) === month ? "" : "other"} ${d === today ? "today" : ""}`}>
@@ -33,7 +31,7 @@ export function MonthGrid({ days, month, today, items, legend, dayHref }: {
                   <Link className="mg-num" href={dayHref(d)} aria-label={`Open ${d}`} aria-current={d === today ? "date" : undefined}>{+d.slice(8)}</Link>
                   {d === today && <span className="mg-today">Today</span>}
                 </span>
-                {list.slice(0, more > 0 ? SHOW - 1 : SHOW).map((i) => (
+                {list.slice(0, more > 0 ? SHOW - 1 : SHOW).map((i) => "shoot" in i ? <ShootChip key={i.key} item={i} className="tw-ev mg-ev" /> : (
                   <EventChip key={i.key} info={i.info} className={`tw-ev mg-ev who-${i.color} ${i.ooo ? "ooo" : ""}`} title={`${i.who} · ${i.timeLabel} · ${i.title}`}>
                     <b>{i.start !== undefined && <span className="mg-time">{i.timeLabel.split("–")[0]} </span>}{i.ooo ? `${i.who} out` : i.title}</b>
                   </EventChip>

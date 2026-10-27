@@ -2,12 +2,13 @@ import Link from "next/link";
 import { dateAtHour } from "@/lib/approval";
 import { connectedMembers, googleConfigured, memberEvents, type CalEvent } from "@/lib/google";
 import { requireTeam } from "@/lib/session";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { timeLabel as shootTime } from "@/lib/shoots";
 import { Avatar } from "@/app/Avatar";
 import { ConfirmButton } from "../TeamForms";
 import { disconnectMyGoogle } from "./actions";
 import { AddToSchedule, BookingHours } from "./ScheduleForms";
-import { TogetherWeek, type WeekItem } from "./TogetherWeek";
+import { ShootChip, TogetherWeek, type Legend, type ShootItem, type WeekItem } from "./TogetherWeek";
 import { MonthGrid } from "./MonthGrid";
 import { EventChip, type EventInfo } from "./EventDialog";
 import { memberColors } from "@/lib/memberColors";
@@ -148,7 +149,30 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       }
     }
   }
-  const legend = people.filter((p) => connected.has(p.user_id)).map((p) => ({ name: p.user_id === userId ? "You" : p.display_name, color: colors.get(p.user_id) ?? 0 }));
+  // Content shoots go on everyone's calendar, whoever's account it is, in their own color.
+  const { data: shootRows } = await createAdminClient().from("content_shoots")
+    .select("id, shoot_date, end_date, start_time, clients!inner(name, archived_at)")
+    .eq("agency_id", agency.id).eq("status", "scheduled").is("clients.archived_at", null)
+    .lte("shoot_date", days[days.length - 1]).or(`shoot_date.gte.${first},end_date.gte.${first}`).order("start_time");
+  const shootsByDay: Record<string, ShootItem[]> = Object.fromEntries(days.map((d) => [d, []]));
+  for (const sh of shootRows ?? []) {
+    const name = (sh.clients as unknown as { name: string }).name;
+    const last = sh.end_date && sh.end_date > sh.shoot_date ? sh.end_date : sh.shoot_date;
+    const total = Math.round((Date.parse(last) - Date.parse(sh.shoot_date)) / DAY) + 1;
+    for (const d of days) {
+      if (d < sh.shoot_date || d > last) continue;
+      const n = Math.round((Date.parse(d) - Date.parse(sh.shoot_date)) / DAY) + 1;
+      const item: ShootItem = {
+        key: `shoot-${sh.id}-${d}`, shoot: true, href: `/team/shoots/${sh.id}`,
+        title: `${name} shoot${total > 1 ? ` (day ${n} of ${total})` : ""}`,
+        timeLabel: n === 1 ? shootTime(sh.start_time) ?? "" : "",
+      };
+      shootsByDay[d].push(item);
+      together[d].unshift(item);
+    }
+  }
+  const legend: Legend = people.filter((p) => connected.has(p.user_id)).map((p) => ({ name: p.user_id === userId ? "You" : p.display_name, color: colors.get(p.user_id) ?? 0 }) as Legend[number]);
+  if (shootRows?.length) legend.push({ name: "Content shoot", color: "shoot" });
   const q = (params: Record<string, string>) =>
     `/team/calendar?${new URLSearchParams({ ...(picked ? { date: anchor } : {}), ...(view === "people" ? { view } : {}), ...(range !== "week" ? { range } : {}), ...params })}`;
   const heading = range === "day"
@@ -244,6 +268,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             </tr>
           </thead>
           <tbody>
+            {(shootRows ?? []).length > 0 && (
+              <tr className="sched-shoots">
+                <th scope="row"><span className="sched-who"><b>Content shoots</b></span></th>
+                {days.map((d) => (
+                  <td key={d} className={d === today ? "today" : ""}>
+                    {shootsByDay[d].map((i) => <ShootChip key={i.key} item={i} className="ev" />)}
+                  </td>
+                ))}
+              </tr>
+            )}
             {people.map((p) => {
               const c = cal.get(p.user_id);
               return (

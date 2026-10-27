@@ -1,4 +1,5 @@
 import { layoutDay } from "@/lib/calendarLayout";
+import Link from "next/link";
 import { EventChip, type EventInfo } from "./EventDialog";
 
 const HOUR = 52; // pixels per hour
@@ -14,7 +15,31 @@ export type WeekItem = {
   end?: number;
   timeLabel: string;
   info: EventInfo;
-};
+} | ShootItem;
+
+/** A content shoot: one color for everyone, and it opens the shoot's plan. */
+export type ShootItem = { key: string; shoot: true; title: string; href: string; timeLabel: string; start?: undefined; end?: undefined; ooo?: false; who?: undefined };
+
+export type Legend = { name: string; color: number | "shoot" }[];
+
+const CAMERA = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>;
+
+/** A content shoot chip: links to its plan. */
+export function ShootChip({ item, className }: { item: ShootItem; className: string }) {
+  return (
+    <Link href={item.href} className={`${className} shoot-ev`} title={`Content shoot · ${item.title}${item.timeLabel ? ` · ${item.timeLabel}` : ""}`}>
+      <b>{CAMERA}{item.timeLabel && <span className="mg-time">{item.timeLabel} </span>}{item.title}</b>
+    </Link>
+  );
+}
+
+export function CalLegend({ legend }: { legend: Legend }) {
+  return (
+    <ul className="tw-legend" aria-label="Colors">
+      {legend.map((l) => <li key={l.name}><i className={l.color === "shoot" ? "shoot-ev" : `who-${l.color}`} aria-hidden="true" />{l.name}</li>)}
+    </ul>
+  );
+}
 
 /** Everyone's week on one grid, each person in their own color; overlaps sit side by side. */
 export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
@@ -24,9 +49,9 @@ export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
   nowMinutes: number;
   /** date → that day's events */
   items: Record<string, WeekItem[]>;
-  legend: { name: string; color: number }[];
+  legend: Legend;
 }) {
-  const timed = Object.values(items).flat().filter((i) => i.start !== undefined);
+  const timed = Object.values(items).flat().filter((i): i is Exclude<WeekItem, ShootItem> => i.start !== undefined);
   const first = Math.min(7, ...timed.map((i) => Math.floor(i.start! / 60)));
   const last = Math.max(19, ...timed.map((i) => Math.ceil(i.end! / 60)));
   const hours = Array.from({ length: last - first }, (_, i) => first + i);
@@ -34,9 +59,7 @@ export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
 
   return (
     <div className="tw">
-      <ul className="tw-legend" aria-label="Colors">
-        {legend.map((l) => <li key={l.name}><i className={`who-${l.color}`} aria-hidden="true" />{l.name}</li>)}
-      </ul>
+      <CalLegend legend={legend} />
       <div className="tw-scroll">
         <div className="tw-grid" style={{ "--tw-hours": hours.length, "--tw-hour": `${HOUR}px`, "--tw-days": days.length } as React.CSSProperties}>
           <div className="tw-corner" />
@@ -49,7 +72,7 @@ export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
           <div className="tw-gutter tw-allday-label">All day</div>
           {days.map((d) => (
             <div key={d.date} className={`tw-allday ${d.date === today ? "today" : ""}`}>
-              {(items[d.date] ?? []).filter((i) => i.start === undefined).map((i) => (
+              {(items[d.date] ?? []).filter((i) => i.start === undefined).map((i) => "shoot" in i ? <ShootChip key={i.key} item={i} className="tw-ev" /> : (
                 <EventChip key={i.key} info={i.info} className={`tw-ev who-${i.color} ${i.ooo ? "ooo" : ""}`} title={`${i.who} · ${i.title}`}>
                   <b>{i.ooo ? `${i.who} out` : i.title}</b>
                 </EventChip>
@@ -61,7 +84,7 @@ export function TogetherWeek({ days, today, nowMinutes, items, legend }: {
             {hours.map((h) => <span key={h} style={{ top: (h - first) * HOUR }}>{hourLabel(h)}</span>)}
           </div>
           {days.map((d) => {
-            const placed = layoutDay((items[d.date] ?? []).filter((i) => i.start !== undefined).map((i) => ({ ...i, start: i.start!, end: i.end! })));
+            const placed = layoutDay((items[d.date] ?? []).filter((i): i is Exclude<WeekItem, ShootItem> => i.start !== undefined).map((i) => ({ ...i, start: i.start!, end: i.end! })));
             return (
               <div key={d.date} className={`tw-day ${d.date === today ? "today" : ""}`}>
                 {d.date === today && nowMinutes >= first * 60 && nowMinutes <= last * 60 && (
