@@ -951,3 +951,13 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .file-link.up-tile img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; border-radius: 0; }
 .file-link.up-tile span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ceo-tabs { margin-bottom: 0; } .ceo-tabs button { font-size: .95rem; padding: .55em 1.2em; cursor: pointer; } .tab-count { opacity: .7; margin-left: 4px; font-variant-numeric: tabular-nums; }
+/* Content shoots */
+.shoots li.meet { align-items: flex-start; }
+.shoot-body { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.shoot-details { white-space: pre-wrap; }
+@media (max-width: 640px) { .shoots li.meet { flex-wrap: wrap; } .shoots li.meet .r { margin-left: 70px; } }
+.rail-shoots { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rail-shoots li { display: flex; gap: 10px; align-items: center; }
+.rail-shoots .date { width: 44px; padding: 4px 0; }
+.rail-shoots .date b { font-size: 1.15rem; }
+.rail-shoots .note { display: block; font-size: .8rem; }

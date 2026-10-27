@@ -10,6 +10,7 @@ import { loadNotifications } from "@/lib/notificationsList";
 import { RailPeople } from "./PortalForms";
 import { clientLogoUrl } from "@/lib/links";
 import { openCount } from "./sections";
+import { timeLabel } from "@/lib/shoots";
 import type { PortalBase } from "./context";
 
 type TeamPerson = { user_id: string; display_name: string; title: string | null; role: string; avatar_path: string | null };
@@ -40,6 +41,10 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
   // Their sign-in email, so clients can write to them directly.
   const admin = createAdminClient();
   const emails = new Map(await Promise.all(team.map(async (p) => [p.user_id, (await admin.auth.admin.getUserById(p.user_id)).data.user?.email ?? null] as const)));
+  // Upcoming content shoots, for the Members panel.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.agency.timezone }).format(new Date());
+  const { data: shoots } = await supabase.from("content_shoots").select("id, shoot_date, start_time, location")
+    .eq("client_id", ctx.client.id).eq("status", "scheduled").gte("shoot_date", today).order("shoot_date").limit(3);
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
@@ -105,6 +110,25 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
               {!team.length && <li><span className="note">Your team will show here.</span></li>}
             </ul>
           </div>
+          {(shoots ?? []).length > 0 && (
+            <div className="rail-group">
+              <p className="rail-label">Upcoming content shoots</p>
+              <ul className="rail-shoots">
+                {(shoots ?? []).map((sh) => {
+                  const part = (o: Intl.DateTimeFormatOptions) => new Date(`${sh.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", ...o });
+                  return (
+                    <li key={sh.id}>
+                      <span className="date"><small>{part({ month: "short" })}</small><b>{part({ day: "numeric" })}</b></span>
+                      <span>
+                        <b>{part({ weekday: "long" })}</b>
+                        <span className="note">{[timeLabel(sh.start_time), sh.location].filter(Boolean).join(" · ") || "Details to come"}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <div className="rail-group">
             <p className="rail-label">{ctx.client.name}</p>
             <RailPeople people={contacts} canAdd={!ctx.preview && contacts.length < 2} />

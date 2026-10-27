@@ -1,3 +1,6 @@
+import { loadShoots } from "@/lib/shootsData";
+import { ShootEditor } from "@/app/team/shoots/ShootForms";
+import { ShootList } from "@/app/team/shoots/ShootList";
 import { slackChannelInfo } from "@/lib/slack";
 import { AnswersButton } from "./AnswersButton";
 import { UploadGroups } from "@/app/portal/UploadGroups";
@@ -108,6 +111,8 @@ export default async function ClientDetail({
   const accountTeam = members.filter((m) => onTeam.has(m.user_id) && (m.role !== "admin" || m.user_id === client.account_manager_id));
   // The linked Slack channel's name, so a wrong link is easy to spot.
   const slackInfo = client.slack_channel_id ? await slackChannelInfo(client.slack_channel_id) : null;
+  // Upcoming content shoots for this client.
+  const shoots = await loadShoots(supabase, new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date()), client.id);
   // Shared account logins (no passwords) and who last revealed each one.
   const canReveal = isAdmin || client.account_manager_id === userId;
   const logins = canEdit ? await loadLogins(client.id) : [];
@@ -498,6 +503,17 @@ export default async function ClientDetail({
               {logo ? <img src={logo} alt="Client logo" /> : <span className="note">No logo yet</span>}
             </div>
           )}
+        </div>
+
+        <div className="panel" id="shoots" style={{ gridColumn: "1 / -1" }}>
+          <div className="sec-head">
+            <h2>Content shoots</h2>
+            {canEdit && !client.archived_at && <ShootEditor clientId={client.id} label="Schedule a shoot" />}
+          </div>
+          {shoots.length
+            ? <ShootList shoots={shoots.slice(0, 6)} canEdit={canEdit} showClient={false} timeZone={tz} />
+            : <p className="note">No shoots scheduled. Scheduled shoots show in {client.name}&apos;s portal, and planning tasks start 45 days before.</p>}
+          {shoots.length > 6 && <Link className="note" href="/team/shoots">See all {shoots.length} on Content shoots</Link>}
         </div>
 
         {canEdit && (

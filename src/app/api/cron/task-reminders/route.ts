@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/server";
 import { removeExpiredClientLogins } from "@/lib/archive";
 import { announceRecurringTasks } from "@/lib/repeatTasks";
+import { extendAllSeries } from "@/lib/shoots.server";
 import { flagRenewals } from "@/lib/contracts.server";
 import { remindUnjoinedInvites } from "@/lib/invites.server";
 
@@ -64,9 +65,11 @@ export async function GET(request: NextRequest) {
   const loginsRemoved = await removeExpiredClientLogins();
   // Recurring tasks coming back onto someone's board.
   const recurring = await announceRecurringTasks();
+  // Repeating content shoots stay scheduled ahead (with their planning tasks).
+  const shootsAdded = await extendAllSeries();
   // Contracts reaching their renewal point.
   const renewals = await flagRenewals();
   // Portal invites not accepted yet: 48 hours, then a week later.
   const inviteReminders = await remindUnjoinedInvites();
-  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders });
+  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders, shootsAdded });
 }
