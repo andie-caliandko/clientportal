@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { shootRepeatLabel, timeLabel } from "@/lib/shoots";
+import { daysBetween, shootDates, shootRepeatLabel, timeLabel } from "@/lib/shoots";
 import { CancelShoot, ShootEditor, type ShootRow } from "./ShootForms";
 
-export type ShootItem = ShootRow & { clientName?: string; tasksDone: number; tasksTotal: number; nextTask: { title: string; due: string } | null };
+export type ShootItem = ShootRow & { clientName?: string; managerId?: string | null; tasksDone: number; tasksTotal: number; nextTask: { title: string; due: string } | null };
 
 /** Shoots as date cards: when, where, how often, and how planning is going. */
 export function ShootList({ shoots, canEdit, showClient, timeZone }: { shoots: ShootItem[]; canEdit: boolean; showClient: boolean; timeZone: string }) {
@@ -14,6 +14,7 @@ export function ShootList({ shoots, canEdit, showClient, timeZone }: { shoots: S
           <span className="date"><small>{part(s.shoot_date, { weekday: "short" })}</small><b>{part(s.shoot_date, { day: "numeric" })}</b><small>{part(s.shoot_date, { month: "short" })}</small></span>
           <span className="shoot-body">
             <b>{showClient ? <Link href={`/team/clients/${s.client_id}`}>{s.clientName}</Link> : "Content shoot"}</b>
+            {s.end_date && s.end_date > s.shoot_date && <span className="note"><b>{daysBetween(s.shoot_date, s.end_date) + 1}-day shoot</b> · {shootDates(s.shoot_date, s.end_date)}</span>}
             <span className="note">{[timeLabel(s.start_time), s.location].filter(Boolean).join(" · ") || "Time and place to come"}</span>
             {s.details && <span className="note shoot-details">{s.details}</span>}
             <span className="row" style={{ gap: 6, alignItems: "center" }}>

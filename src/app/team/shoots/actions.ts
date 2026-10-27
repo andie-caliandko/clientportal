@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { notifyClient } from "@/lib/notifications";
 import { requireEditor } from "@/lib/session";
-import { isShootRepeat } from "@/lib/shoots";
+import { isShootRepeat, shootDates } from "@/lib/shoots";
 import { extendSeries, planShootTasks, type Shoot } from "@/lib/shoots.server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string; ok?: string };
 
-const nice = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
+const nice = (d: string, e?: string | null) => e ? shootDates(d, e) :  new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
 
 async function canEdit(clientId: string) {
   const { data } = await (await createClient()).rpc("can_edit_client", { c: clientId });
@@ -32,9 +32,13 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   const repeat = repeatIn && isShootRepeat(repeatIn) ? repeatIn : null;
   if (!clientId) return { error: "Choose a client." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Pick the shoot date." };
+  const endIn = get("end_date");
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(endIn) && endIn !== date ? endIn : null;
+  if (end && end < date) return { error: "The last day can't be before the first day." };
   if (!(await canEdit(clientId))) return { error: "You can't schedule shoots for this client." };
   const fields = {
     shoot_date: date,
+    end_date: end,
     start_time: /^\d{2}:\d{2}$/.test(get("time")) ? get("time") : null,
     location: get("location").slice(0, 200) || null,
     details: get("details").slice(0, 1000) || null,
@@ -48,7 +52,7 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     if (repeat) await admin.from("content_shoots").update({ series_id: made.id }).eq("id", made.id);
     await planShootTasks({ ...(made as Shoot), series_id: repeat ? made.id : null });
     if (repeat) await extendSeries(made.id);
-    await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal" });
+    await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date, end)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal" });
     refresh(clientId);
     return { ok: repeat ? "Shoot scheduled, with the next ones in the series." : "Shoot scheduled." };
   }
@@ -73,9 +77,9 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     await admin.from("content_shoots").update({ repeat, series_id: repeat ? id : null }).eq("id", id);
     if (repeat) await extendSeries(id);
   }
-  if (old.shoot_date !== date) {
+  if (old.shoot_date !== date || (old.end_date ?? null) !== end) {
     await planShootTasks({ ...(saved as Shoot), repeat, series_id: repeat ? (repeat !== old.repeat ? id : old.series_id) : null });
-    await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date)}`, link: "/portal" });
+    await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date, end)}`, link: "/portal" });
   }
   refresh(clientId);
   return { ok: "Shoot saved." };

@@ -7,7 +7,7 @@ import { SHOOT_REPEATS } from "@/lib/shoots";
 import { cancelShoot, saveShoot } from "./actions";
 
 export type ShootRow = {
-  id: string; client_id: string; shoot_date: string; start_time: string | null; location: string | null;
+  id: string; client_id: string; shoot_date: string; end_date?: string | null; start_time: string | null; location: string | null;
   details: string | null; repeat: string | null; series_id: string | null;
 };
 
@@ -38,9 +38,10 @@ export function ShootEditor({ clients, clientId, shoot, label, className = "btn 
                 </select></div>
             )}
             <div className="row top">
-              <div className="field"><label htmlFor={`sh-date-${p}`}>Date</label><input className="input" id={`sh-date-${p}`} name="date" type="date" required defaultValue={shoot?.shoot_date} /></div>
-              <div className="field"><label htmlFor={`sh-time-${p}`}>Start time (optional)</label><input className="input" id={`sh-time-${p}`} name="time" type="time" defaultValue={shoot?.start_time ?? ""} /></div>
+              <div className="field"><label htmlFor={`sh-date-${p}`}>First day</label><input className="input" id={`sh-date-${p}`} name="date" type="date" required defaultValue={shoot?.shoot_date} /></div>
+              <div className="field"><label htmlFor={`sh-end-${p}`}>Last day (if more than one day)</label><input className="input" id={`sh-end-${p}`} name="end_date" type="date" defaultValue={shoot?.end_date ?? ""} /></div>
             </div>
+            <div className="field"><label htmlFor={`sh-time-${p}`}>Start time (optional)</label><input className="input" id={`sh-time-${p}`} name="time" type="time" defaultValue={shoot?.start_time ?? ""} style={{ maxWidth: 220 }} /></div>
             <div className="field"><label htmlFor={`sh-loc-${p}`}>Location (optional)</label><input className="input" id={`sh-loc-${p}`} name="location" defaultValue={shoot?.location ?? ""} placeholder="Their storefront, 12 Main St" /></div>
             <div className="field"><label htmlFor={`sh-rep-${p}`}>Repeats</label>
               <select className="sel" id={`sh-rep-${p}`} name="repeat" defaultValue={shoot?.repeat ?? ""}>

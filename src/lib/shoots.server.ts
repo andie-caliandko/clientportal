@@ -1,11 +1,11 @@
 import "server-only";
 import { dateAtHour } from "./approval";
-import { nextShootDate, planShootSteps, SERIES_HORIZON_DAYS, type ShootRepeat } from "./shoots";
+import { addDays, daysBetween, nextShootDate, planShootSteps, SERIES_HORIZON_DAYS, shootDates, type ShootRepeat } from "./shoots";
 import { createAdminClient } from "./supabase/server";
 
 export type Shoot = {
   id: string; agency_id: string; client_id: string; shoot_date: string; start_time: string | null;
-  location: string | null; details: string | null; repeat: ShootRepeat | null; series_id: string | null; status: string; created_by: string | null;
+  end_date?: string | null; location: string | null; details: string | null; repeat: ShootRepeat | null; series_id: string | null; status: string; created_by: string | null;
 };
 
 const todayIn = (tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
@@ -30,8 +30,8 @@ export async function planShootTasks(shoot: Shoot) {
   const open = (existing ?? []).filter((t) => t.status !== "done").map((t) => t.id);
   if (open.length) await admin.from("tasks").delete().in("id", open);
   if (shoot.status !== "scheduled") return;
-  const when = new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
-  const rows = planShootSteps(shoot.shoot_date, todayIn(tz))
+  const when = shootDates(shoot.shoot_date, shoot.end_date);
+  const rows = planShootSteps(shoot.shoot_date, todayIn(tz), shoot.end_date)
     .filter((s) => !done.has(s.title))
     .map((s) => ({
       agency_id: shoot.agency_id, client_id: shoot.client_id, assignee_id: client?.account_manager_id ?? null,
@@ -53,10 +53,12 @@ export async function extendSeries(seriesId: string) {
   if (!last?.repeat) return 0;
   const tz = await agencyTz(last.agency_id);
   const horizon = new Date(Date.parse(`${todayIn(tz)}T00:00:00Z`) + SERIES_HORIZON_DAYS * 86_400_000).toISOString().slice(0, 10);
+  // Each shoot in the series lasts as many days as the latest one.
+  const length = last.end_date ? daysBetween(last.shoot_date, last.end_date) : 0;
   let date = last.shoot_date, added = 0;
   while ((date = nextShootDate(date, last.repeat)) <= horizon && added < 24) {
     const { data: made } = await admin.from("content_shoots").insert({
-      agency_id: last.agency_id, client_id: last.client_id, shoot_date: date, start_time: last.start_time, location: last.location,
+      agency_id: last.agency_id, client_id: last.client_id, shoot_date: date, end_date: length > 0 ? addDays(date, length) : null, start_time: last.start_time, location: last.location,
       details: last.details, repeat: last.repeat, series_id: seriesId, created_by: last.created_by,
     }).select("*").single();
     if (made) await planShootTasks(made as Shoot);

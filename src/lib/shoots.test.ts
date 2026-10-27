@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextShootDate, planShootSteps, timeLabel } from "./shoots";
+import { nextShootDate, planShootSteps, shootDates, timeLabel } from "./shoots";
 
 describe("content shoots", () => {
   it("steps a series forward, clamping month ends", () => {
@@ -20,6 +20,13 @@ describe("content shoots", () => {
   });
   it("skips planning for a shoot that's already happened", () => {
     expect(planShootSteps("2026-10-20", "2026-10-27").map((s) => s.title)).toEqual(["Upload and organize the shoot photos and video"]);
+  });
+  it("counts the wrap-up from the last day of a multi-day shoot", () => {
+    const steps = planShootSteps("2027-01-15", "2026-10-27", "2027-01-16");
+    expect(steps[0].due).toBe("2026-12-01");
+    expect(steps.at(-1)?.due).toBe("2027-01-19");
+    expect(shootDates("2027-01-15", "2027-01-16")).toBe("Fri, Jan 15 – Sat, Jan 16");
+    expect(shootDates("2027-01-15", null)).toBe("Fri, Jan 15");
   });
   it("labels times", () => {
     expect(timeLabel("10:00")).toBe("10 AM");

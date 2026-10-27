@@ -14,7 +14,7 @@ export const isShootRepeat = (r: string): r is ShootRepeat => SHOOT_REPEATS.some
 /** Repeating shoots are scheduled this far ahead, so their planning tasks start on time. */
 export const SERIES_HORIZON_DAYS = 120;
 
-/** The planning process for every shoot: days before the shoot (negative is after). */
+/** The planning process for every shoot: days before the first day (negative is days after the last day). */
 export const SHOOT_STEPS = [
   { days: 45, title: "Start planning the content shoot", note: "Goals for the shoot, what content we need, and ideas." },
   { days: 30, title: "Confirm shoot details with the client", note: "Location, time, who'll be there, and any products or spaces to feature." },
@@ -41,13 +41,14 @@ export function nextShootDate(date: string, repeat: ShootRepeat) {
 }
 
 /**
- * The planning tasks for a shoot on `shootDate`, given today's date. Steps whose
- * date has already passed are due today, unless the shoot is already over (then they're skipped).
+ * The planning tasks for a shoot from `shootDate` to `endDate` (one day if empty), given
+ * today's date. Steps whose date has already passed are due today, unless the shoot has
+ * already started (then the planning steps are skipped).
  */
-export function planShootSteps(shootDate: string, today: string) {
-  const shoot = toDate(shootDate), now = toDate(today);
+export function planShootSteps(shootDate: string, today: string, endDate?: string | null) {
+  const shoot = toDate(shootDate), end = toDate(endDate && endDate > shootDate ? endDate : shootDate), now = toDate(today);
   return SHOOT_STEPS.flatMap((s) => {
-    const due = shoot - s.days * DAY;
+    const due = s.days >= 0 ? shoot - s.days * DAY : end - s.days * DAY;
     if (due < now && s.days > 0 && shoot < now) return [];
     const at = Math.max(due, now);
     const appears = at - STEP_LEAD_DAYS * DAY;
@@ -60,4 +61,14 @@ export function timeLabel(t: string | null | undefined) {
   if (!t) return null;
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** Days between two dates (for keeping a series' shoots the same length). */
+export const daysBetween = (a: string, b: string) => Math.round((toDate(b) - toDate(a)) / DAY);
+export const addDays = (d: string, n: number) => fromDate(toDate(d) + n * DAY);
+
+/** "Thu, Nov 12" or, for a multi-day shoot, "Thu, Nov 12 – Fri, Nov 13". */
+export function shootDates(start: string, end?: string | null) {
+  const f = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
+  return end && end > start ? `${f(start)} – ${f(end)}` : f(start);
 }
