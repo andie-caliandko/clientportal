@@ -961,3 +961,20 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .rail-shoots .date { width: 44px; padding: 4px 0; }
 .rail-shoots .date b { font-size: 1.15rem; }
 .rail-shoots .note { display: block; font-size: .8rem; }
+
+/* Content shoot plans */
+.plan-status { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; align-items: start; }
+.plan-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.plan-rows li { display: flex; gap: 8px; align-items: center; }
+.plan-rows .input { flex: 1; min-width: 0; }
+.plan-rows .plan-time { flex: 0 0 112px; }
+.plan-grid .panel > .btn { justify-self: start; }
+.plan-num { width: 22px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: .9rem; }
+.plan-tools { display: flex; gap: 6px; }
+.plan-view { display: grid; gap: 14px; }
+.plan-view ol { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.plan-view .plan-timeline { list-style: none; padding: 0; }
+.plan-view .plan-timeline li { display: grid; grid-template-columns: 112px 1fr; gap: 10px; }
+.plan-view .plan-timeline b { font-variant-numeric: tabular-nums; }
+.plan-view .plan-overview { white-space: pre-wrap; }

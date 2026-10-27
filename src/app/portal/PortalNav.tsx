@@ -15,13 +15,14 @@ const ICONS: Record<Section, React.ReactNode> = {
   analytics: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   meetings: <><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3" /></>,
   logins: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
+  shoots: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
 };
 const LABELS: Record<Section, string> = {
   home: "Home", tasks: "Tasks", messages: "Messages", activity: "Activity",
-  files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings", logins: "Logins",
+  files: "Files", strategy: "Strategy", analytics: "Analytics", meetings: "Meetings", logins: "Logins", shoots: "Shoots",
 };
 
-export function PortalNav({ base, openTasks, newMessages }: { base: string; openTasks: number; newMessages: number }) {
+export function PortalNav({ base, openTasks, newMessages, showShoots }: { base: string; openTasks: number; newMessages: number; showShoots: boolean }) {
   const current = (usePathname().slice(base.length).split("/")[1] || "home") as Section;
   // Opening Messages reads them; hide the count from then on (the menu doesn't reload between pages).
   const [readThrough, setReadThrough] = useState(0);
@@ -31,7 +32,7 @@ export function PortalNav({ base, openTasks, newMessages }: { base: string; open
   const unread = current === "messages" ? 0 : Math.max(0, newMessages - readThrough);
   return (
     <nav className="nav" aria-label="Your portal">
-      {(Object.keys(LABELS) as Section[]).map((s) => (
+      {(Object.keys(LABELS) as Section[]).filter((s) => s !== "shoots" || showShoots || current === "shoots").map((s) => (
         <Link key={s} href={s === "home" ? base : `${base}/${s}`} aria-current={s === current ? "page" : undefined}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">{ICONS[s]}</svg>
           {LABELS[s]}

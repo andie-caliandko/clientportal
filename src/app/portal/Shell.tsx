@@ -71,7 +71,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
             <div className="brand" style={{ padding: 0 }}><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={52} /></div>
             {!ctx.preview && notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
           </div>
-          <PortalNav base={ctx.base} openTasks={open} newMessages={newMessages ?? 0} />
+          <PortalNav base={ctx.base} openTasks={open} newMessages={newMessages ?? 0} showShoots={(shoots ?? []).length > 0} />
           <div className="me">
             <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{(me?.display_name ?? ctx.firstName)[0]}</span>
             <div>
@@ -112,7 +112,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
           </div>
           {(shoots ?? []).length > 0 && (
             <div className="rail-group">
-              <p className="rail-label">Upcoming content shoots</p>
+              <p className="rail-label"><Link href={`${ctx.base}/shoots`}>Upcoming content shoots</Link></p>
               <ul className="rail-shoots">
                 {(shoots ?? []).map((sh) => {
                   const part = (o: Intl.DateTimeFormatOptions) => new Date(`${sh.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", ...o });

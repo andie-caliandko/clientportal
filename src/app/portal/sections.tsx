@@ -16,6 +16,8 @@ import { FilePreview } from "./FilePreview";
 import { UploadGroups } from "./UploadGroups";
 import { LoginEditor, RemoveLogin } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
+import { cleanPlan } from "@/lib/shootPlan";
+import { shootDates, timeLabel } from "@/lib/shoots";
 
 /** Everything a portal page needs to know about who's looking. */
 export type PortalCtx = {
@@ -31,7 +33,7 @@ export type PortalCtx = {
   params: { doc?: string; done?: string };
 };
 
-export const SECTIONS = ["home", "tasks", "messages", "activity", "files", "strategy", "analytics", "meetings", "logins"] as const;
+export const SECTIONS = ["home", "tasks", "messages", "activity", "files", "strategy", "analytics", "meetings", "logins", "shoots"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 const DONE_MESSAGES: Record<string, string> = {
@@ -650,6 +652,53 @@ export async function LoginsSection(ctx: PortalCtx) {
         ) : <p className="note">Nothing shared yet. Add the logins for your social accounts, website or anything else we&apos;ll be working in.</p>}
         <p className="note">To change a password, click Edit and type the new one. If you change it on the account itself, update it here too.</p>
       </section>
+    </>
+  );
+}
+
+/** Upcoming content shoots, with each plan the team has sent (drafts never show here). */
+export async function ShootsSection(ctx: PortalCtx) {
+  const admin = createAdminClient();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.agency.timezone }).format(new Date());
+  const { data: shoots } = await admin.from("content_shoots").select("id, shoot_date, end_date, start_time, location, details")
+    .eq("client_id", ctx.client.id).eq("status", "scheduled").or(`shoot_date.gte.${today},end_date.gte.${today}`).order("shoot_date").limit(12);
+  const ids = (shoots ?? []).map((s) => s.id);
+  const { data: shares } = ids.length
+    ? await admin.from("shoot_plan_shares").select("shoot_id, overview, shots, timeline, shared_at").eq("client_id", ctx.client.id).in("shoot_id", ids)
+    : { data: [] };
+  const short = ctx.agency.brand.shortName ?? ctx.agency.name;
+  const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
+  return (
+    <>
+      <PageHead title="Content shoots" sub={`Your upcoming shoots with ${short}. When your shot list and plan are ready, they'll show here.`} />
+      {(shoots ?? []).map((s) => {
+        const share = (shares ?? []).find((x) => x.shoot_id === s.id);
+        const plan = share ? cleanPlan(share) : null;
+        return (
+          <section className="card plan-view" key={s.id}>
+            <div className="sec-head">
+              <h2>{s.end_date && s.end_date > s.shoot_date ? shootDates(s.shoot_date, s.end_date) : day(s.shoot_date)}</h2>
+              {share && <span className="note">Updated {new Date(share.shared_at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric" })}</span>}
+            </div>
+            <p className="note">{[timeLabel(s.start_time), s.location].filter(Boolean).join(" · ") || "Time and place to come"}</p>
+            {s.details && <p className="plan-overview">{s.details}</p>}
+            {plan ? (
+              <>
+                {plan.overview && <div><h3>The plan</h3><p className="plan-overview">{plan.overview}</p></div>}
+                {plan.timeline.length > 0 && (
+                  <div><h3>Timeline</h3>
+                    <ol className="plan-timeline">{plan.timeline.map((t, i) => <li key={i}><b>{t.time}</b><span>{t.text}</span></li>)}</ol></div>
+                )}
+                {plan.shots.length > 0 && (
+                  <div><h3>Shot list</h3>
+                    <ol>{plan.shots.map((x, i) => <li key={i}>{x.text}</li>)}</ol></div>
+                )}
+              </>
+            ) : <p className="note">Your team is putting the plan together. We&apos;ll let you know when it&apos;s here.</p>}
+          </section>
+        );
+      })}
+      {!(shoots ?? []).length && <section className="card"><p className="note">No shoots scheduled right now.</p></section>}
     </>
   );
 }

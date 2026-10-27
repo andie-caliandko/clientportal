@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { notifyClient } from "@/lib/notifications";
-import { requireEditor } from "@/lib/session";
+import { requireEditor, requireTeam } from "@/lib/session";
 import { isShootRepeat, shootDates } from "@/lib/shoots";
+import { cleanPlan, planIsEmpty } from "@/lib/shootPlan";
 import { extendSeries, planShootTasks, type Shoot } from "@/lib/shoots.server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -48,11 +49,14 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   if (!id) {
     const { data: made, error } = await admin.from("content_shoots")
       .insert({ ...fields, agency_id: v.agency.id, client_id: clientId, repeat, created_by: v.userId }).select("*").single();
-    if (error || !made) return { error: "That shoot couldn't be saved." };
+    if (error || !made) {
+      console.error("saveShoot insert", error);
+      return { error: "That shoot couldn't be saved." };
+    }
     if (repeat) await admin.from("content_shoots").update({ series_id: made.id }).eq("id", made.id);
     await planShootTasks({ ...(made as Shoot), series_id: repeat ? made.id : null });
     if (repeat) await extendSeries(made.id);
-    await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date, end)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal" });
+    await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date, end)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal/shoots" });
     refresh(clientId);
     return { ok: repeat ? "Shoot scheduled, with the next ones in the series." : "Shoot scheduled." };
   }
@@ -61,7 +65,10 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   const old = before as Shoot | null;
   if (!old) return { error: "That shoot wasn't found." };
   const { data: saved, error } = await admin.from("content_shoots").update(fields).eq("id", id).select("*").single();
-  if (error || !saved) return { error: "That shoot couldn't be saved." };
+  if (error || !saved) {
+    console.error("saveShoot update", error);
+    return { error: "That shoot couldn't be saved." };
+  }
 
   if (old.series_id) {
     // Later shoots in the series keep the new time, place and details.
@@ -79,7 +86,7 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   }
   if (old.shoot_date !== date || (old.end_date ?? null) !== end) {
     await planShootTasks({ ...(saved as Shoot), repeat, series_id: repeat ? (repeat !== old.repeat ? id : old.series_id) : null });
-    await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date, end)}`, link: "/portal" });
+    await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date, end)}`, link: "/portal/shoots" });
   }
   refresh(clientId);
   return { ok: "Shoot saved." };
@@ -98,7 +105,52 @@ export async function cancelShoot(id: string, following = false): Promise<Result
   }
   await admin.from("content_shoots").update({ status: "cancelled" }).eq("id", id);
   await planShootTasks({ ...shoot, status: "cancelled" });
-  await notifyClient(shoot.client_id, { kind: "task", title: following ? "Content shoots cancelled" : "Content shoot cancelled", body: following ? `From ${nice(shoot.shoot_date)} on` : nice(shoot.shoot_date), link: "/portal" });
+  await notifyClient(shoot.client_id, { kind: "task", title: following ? "Content shoots cancelled" : "Content shoot cancelled", body: following ? `From ${nice(shoot.shoot_date)} on` : nice(shoot.shoot_date), link: "/portal/shoots" });
   refresh(shoot.client_id);
   return { ok: "Cancelled." };
+}
+
+/** Save the team's draft plan for a shoot. The client doesn't see it until it's sent. */
+export async function saveShootPlan(shootId: string, raw: unknown): Promise<Result> {
+  const v = await requireTeam();
+  const supabase = await createClient();
+  const { data: shoot } = await supabase.from("content_shoots").select("id, client_id").eq("id", shootId).maybeSingle();
+  if (!shoot) return { error: "That shoot wasn't found." };
+  const plan = cleanPlan(raw);
+  const { error } = await supabase.from("shoot_plans")
+    .upsert({ shoot_id: shootId, client_id: shoot.client_id, ...plan, updated_by: v.userId, updated_at: new Date().toISOString() });
+  if (error) {
+    console.error("saveShootPlan", error);
+    return { error: "The plan couldn't be saved." };
+  }
+  revalidatePath(`/team/shoots/${shootId}`);
+  return { ok: "Draft saved." };
+}
+
+/** Save the plan and send that version to the client's portal. Later edits stay private until it's sent again. */
+export async function sendShootPlan(shootId: string, raw: unknown): Promise<Result> {
+  const v = await requireTeam();
+  const saved = await saveShootPlan(shootId, raw);
+  if (saved.error) return saved;
+  const plan = cleanPlan(raw);
+  if (planIsEmpty(plan)) return { error: "Add a shot list, timeline or plan before sending." };
+  const { data: shoot } = await (await createClient()).from("content_shoots").select("client_id, shoot_date, end_date").eq("id", shootId).maybeSingle();
+  if (!shoot) return { error: "That shoot wasn't found." };
+  const admin = createAdminClient();
+  const { data: before } = await admin.from("shoot_plan_shares").select("shoot_id").eq("shoot_id", shootId).maybeSingle();
+  const { error } = await admin.from("shoot_plan_shares")
+    .upsert({ shoot_id: shootId, client_id: shoot.client_id, ...plan, shared_by: v.userId, shared_at: new Date().toISOString() });
+  if (error) {
+    console.error("sendShootPlan", error);
+    return { error: "The plan couldn't be sent." };
+  }
+  await notifyClient(shoot.client_id, {
+    kind: "task",
+    title: before ? "Content shoot plan updated" : "Your content shoot plan is ready",
+    body: nice(shoot.shoot_date, shoot.end_date),
+    link: "/portal/shoots",
+  });
+  refresh(shoot.client_id);
+  revalidatePath(`/team/shoots/${shootId}`);
+  return { ok: before ? "Updated plan sent to the client." : "Plan sent to the client." };
 }

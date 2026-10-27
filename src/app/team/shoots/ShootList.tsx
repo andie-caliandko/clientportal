@@ -2,7 +2,10 @@ import Link from "next/link";
 import { daysBetween, shootDates, shootRepeatLabel, timeLabel } from "@/lib/shoots";
 import { CancelShoot, ShootEditor, type ShootRow } from "./ShootForms";
 
-export type ShootItem = ShootRow & { clientName?: string; managerId?: string | null; tasksDone: number; tasksTotal: number; nextTask: { title: string; due: string } | null };
+export type ShootItem = ShootRow & {
+  clientName?: string; managerId?: string | null; tasksDone: number; tasksTotal: number; nextTask: { title: string; due: string } | null;
+  plan: "none" | "draft" | "sent";
+};
 
 /** Shoots as date cards: when, where, how often, and how planning is going. */
 export function ShootList({ shoots, canEdit, showClient, timeZone }: { shoots: ShootItem[]; canEdit: boolean; showClient: boolean; timeZone: string }) {
@@ -20,15 +23,15 @@ export function ShootList({ shoots, canEdit, showClient, timeZone }: { shoots: S
             <span className="row" style={{ gap: 6, alignItems: "center" }}>
               {s.repeat && <span className="pill info">{shootRepeatLabel(s.repeat)}</span>}
               {s.tasksTotal > 0 && <span className={`pill ${s.tasksDone === s.tasksTotal ? "ok" : "warn"}`}>Planning {s.tasksDone} of {s.tasksTotal}</span>}
+              {s.plan !== "none" && <span className={`pill ${s.plan === "sent" ? "ok" : ""}`}>{s.plan === "sent" ? "Plan sent" : "Plan in draft"}</span>}
               {s.nextTask && <span className="note">Next: {s.nextTask.title.split(" · ")[0]}, {new Date(s.nextTask.due).toLocaleDateString("en-US", { timeZone, month: "short", day: "numeric" })}</span>}
             </span>
           </span>
-          {canEdit && (
-            <span className="r row" style={{ gap: 10, alignItems: "center" }}>
-              <ShootEditor shoot={s} label="Edit" className="btn sm line" />
-              <CancelShoot id={s.id} inSeries={!!s.series_id} />
-            </span>
-          )}
+          <span className="r row" style={{ gap: 10, alignItems: "center" }}>
+            <Link href={`/team/shoots/${s.id}`} className="btn sm">{s.plan === "none" ? "Plan shoot" : "Shoot plan"}</Link>
+            {canEdit && <ShootEditor shoot={s} label="Edit" className="btn sm line" />}
+            {canEdit && <CancelShoot id={s.id} inSeries={!!s.series_id} />}
+          </span>
         </li>
       ))}
     </ul>

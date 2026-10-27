@@ -1,6 +1,6 @@
 import {
   ActivitySection, AnalyticsSection, FilesSection, HomeSection, LoginsSection, MeetingsSection,
-  MessagesSection, StrategySection, TasksSection, type PortalCtx, type Section,
+  MessagesSection, ShootsSection, StrategySection, TasksSection, type PortalCtx, type Section,
 } from "./sections";
 
 const PAGES: Record<Section, (ctx: PortalCtx) => Promise<React.ReactNode>> = {
@@ -13,6 +13,7 @@ const PAGES: Record<Section, (ctx: PortalCtx) => Promise<React.ReactNode>> = {
   analytics: AnalyticsSection,
   meetings: MeetingsSection,
   logins: LoginsSection,
+  shoots: ShootsSection,
 };
 
 export const renderSection = (name: Section, ctx: PortalCtx) => PAGES[name](ctx);
