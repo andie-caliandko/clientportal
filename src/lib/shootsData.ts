@@ -4,7 +4,7 @@ import type { ShootItem } from "@/app/team/shoots/ShootList";
 
 /** Scheduled shoots from `from` on (optionally one client's), with their planning progress. RLS limits what the viewer sees. */
 export async function loadShoots(supabase: SupabaseClient, from: string, clientId?: string): Promise<ShootItem[]> {
-  let q = supabase.from("content_shoots").select("id, client_id, shoot_date, end_date, start_time, location, details, repeat, series_id, clients!inner(name, archived_at, account_manager_id)")
+  let q = supabase.from("content_shoots").select("id, client_id, shoot_date, end_date, start_time, location, details, repeat, series_id, crew, photographer, clients!inner(name, archived_at, account_manager_id)")
     .eq("status", "scheduled").or(`shoot_date.gte.${from},end_date.gte.${from}`).is("clients.archived_at", null).order("shoot_date").order("start_time");
   if (clientId) q = q.eq("client_id", clientId);
   const { data } = await q;

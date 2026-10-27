@@ -18,7 +18,12 @@ export type WeekItem = {
 } | ShootItem;
 
 /** A content shoot: one color for everyone, and it opens the shoot's plan. */
-export type ShootItem = { key: string; shoot: true; title: string; href: string; timeLabel: string; start?: undefined; end?: undefined; ooo?: false; who?: undefined };
+export type ShootItem = {
+  key: string; shoot: true; title: string; href: string; timeLabel: string;
+  /** First names of teammates going, their ids, and the photographer. */
+  crew?: string[]; crewIds?: string[]; photographer?: string | null;
+  start?: undefined; end?: undefined; ooo?: false; who?: undefined;
+};
 
 export type Legend = { name: string; color: number | "shoot" }[];
 
@@ -27,8 +32,10 @@ const CAMERA = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 /** A content shoot chip: links to its plan. */
 export function ShootChip({ item, className }: { item: ShootItem; className: string }) {
   return (
-    <Link href={item.href} className={`${className} shoot-ev`} title={`Content shoot · ${item.title}${item.timeLabel ? ` · ${item.timeLabel}` : ""}`}>
+    <Link href={item.href} className={`${className} shoot-ev`}
+      title={[`Content shoot · ${item.title}`, item.timeLabel, item.crew?.length && `Team: ${item.crew.join(", ")}`, item.photographer && `Photographer: ${item.photographer}`].filter(Boolean).join(" · ")}>
       <b>{CAMERA}{item.timeLabel && <span className="mg-time">{item.timeLabel} </span>}{item.title}</b>
+      {!!item.crew?.length && <span className="shoot-crew">{item.crew.join(", ")}</span>}
     </Link>
   );
 }

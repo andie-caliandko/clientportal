@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/session";
 import { cleanPlan } from "@/lib/shootPlan";
 import { shootDates, timeLabel } from "@/lib/shoots";
 import { shootPlanPdf } from "@/lib/shootPlanPdf";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 /**
  * Download a shoot plan as a PDF. The team gets the working draft; clients only ever get the
@@ -15,7 +15,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!v) return new NextResponse("Sign in first", { status: 401 });
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, shoot_date, end_date, start_time, clients(name)").eq("id", id).maybeSingle();
+    .select("id, shoot_date, end_date, start_time, crew, photographer, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) return new NextResponse("Not found", { status: 404 });
   const [{ data: draft }, { data: shared }] = await Promise.all([
     v.kind === "team" && !new URL(req.url).searchParams.has("sent") ? supabase.from("shoot_plans").select("content").eq("shoot_id", id).maybeSingle() : Promise.resolve({ data: null }),
@@ -27,7 +27,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const client = (shoot.clients as unknown as { name: string } | null)?.name ?? "Client";
   const day = new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" });
   const when = [shoot.end_date && shoot.end_date > shoot.shoot_date ? shootDates(shoot.shoot_date, shoot.end_date) : day, timeLabel(shoot.start_time)].filter(Boolean).join(" · ");
+  const crewIds = (shoot.crew ?? []) as string[];
+  const { data: crew } = crewIds.length
+    ? await createAdminClient().from("agency_members").select("user_id, display_name").eq("agency_id", v.agency.id).in("user_id", crewIds)
+    : { data: [] as { user_id: string; display_name: string }[] };
   const pdf = await shootPlanPdf({
+    crew: crewIds.map((id) => (crew ?? []).find((c) => c.user_id === id)?.display_name).filter((x): x is string => !!x),
+    photographer: shoot.photographer,
     agency: v.agency.brand.shortName ?? v.agency.name, client, title: plan.title || "Content Shoot", when, plan,
     primary: v.agency.brand.colors?.primary,
   });

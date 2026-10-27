@@ -12,13 +12,18 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, clients(name)").eq("id", id).maybeSingle();
+    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
   const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
     supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
     supabase.from("shoot_plan_shares").select("content, shared_at").eq("shoot_id", id).maybeSingle(),
     supabase.from("shoot_waivers").select("id, model_id, file_name, file_path").eq("shoot_id", id).order("created_at"),
   ]);
+  const crewIds = (shoot.crew ?? []) as string[];
+  const { data: crew } = crewIds.length
+    ? await supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).in("user_id", crewIds)
+    : { data: [] as { user_id: string; display_name: string }[] };
+  const crewNames = crewIds.map((cid) => (crew ?? []).find((c) => c.user_id === cid)?.display_name).filter(Boolean).join(", ");
   const plan = cleanPlan((draft ?? shared)?.content);
   const signed = waiverRows?.length
     ? (await supabase.storage.from("waivers").createSignedUrls(waiverRows.map((w) => w.file_path), 60 * 60)).data ?? []
@@ -38,6 +43,9 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
           <p className="eyebrow" style={{ marginTop: 10 }}><Link href={`/team/clients/${shoot.client_id}`}>{client?.name}</Link></p>
           <h1 style={{ marginTop: 6 }}>{plan.title || "Shoot plan"}</h1>
           <p className="note">{[when, timeLabel(shoot.start_time), shoot.location].filter(Boolean).join(" · ")}{shoot.status === "cancelled" ? " · Cancelled" : ""}</p>
+          {(crewNames || shoot.photographer) && (
+            <p className="note">{[crewNames && `Team: ${crewNames}`, shoot.photographer && `Photographer: ${shoot.photographer}`].filter(Boolean).join(" · ")}</p>
+          )}
         </div>
       </div>
       <PlanEditor

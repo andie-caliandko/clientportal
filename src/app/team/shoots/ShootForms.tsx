@@ -9,11 +9,16 @@ import { cancelShoot, saveShoot } from "./actions";
 export type ShootRow = {
   id: string; client_id: string; shoot_date: string; end_date?: string | null; start_time: string | null; location: string | null;
   details: string | null; repeat: string | null; series_id: string | null;
+  crew?: string[] | null; photographer?: string | null;
 };
 
+export type TeamPerson = { user_id: string; display_name: string };
+
 /** Schedule a shoot (pick the client, unless it's on a client's page) or edit one. */
-export function ShootEditor({ clients, clientId, shoot, label, className = "btn sm" }: {
+export function ShootEditor({ clients, clientId, shoot, team, label, className = "btn sm" }: {
   clients?: { id: string; name: string }[];
+  /** Teammates who can be marked as going. */
+  team: TeamPerson[];
   clientId?: string;
   shoot?: ShootRow;
   label: string;
@@ -43,6 +48,19 @@ export function ShootEditor({ clients, clientId, shoot, label, className = "btn 
             </div>
             <div className="field"><label htmlFor={`sh-time-${p}`}>Start time (optional)</label><input className="input" id={`sh-time-${p}`} name="time" type="time" defaultValue={shoot?.start_time ?? ""} style={{ maxWidth: 220 }} /></div>
             <div className="field"><label htmlFor={`sh-loc-${p}`}>Location (optional)</label><input className="input" id={`sh-loc-${p}`} name="location" defaultValue={shoot?.location ?? ""} placeholder="Their storefront, 12 Main St" /></div>
+            <fieldset className="field">
+              <legend>Team at the shoot</legend>
+              <span className="plan-chips">
+                {team.map((t) => (
+                  <label key={t.user_id} className="plan-chip">
+                    <input type="checkbox" className="sr-only" name="crew" value={t.user_id} defaultChecked={shoot?.crew?.includes(t.user_id)} />
+                    {t.display_name}
+                  </label>
+                ))}
+              </span>
+              <span className="note">Everyone checked gets it on their Google Calendar (if they&apos;ve connected it).</span>
+            </fieldset>
+            <div className="field"><label htmlFor={`sh-ph-${p}`}>Photographer (optional)</label><input className="input" id={`sh-ph-${p}`} name="photographer" defaultValue={shoot?.photographer ?? ""} placeholder="Name of the photographer" /></div>
             <div className="field"><label htmlFor={`sh-rep-${p}`}>Repeats</label>
               <select className="sel" id={`sh-rep-${p}`} name="repeat" defaultValue={shoot?.repeat ?? ""}>
                 <option value="">Just this once</option>

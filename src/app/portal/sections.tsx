@@ -661,8 +661,13 @@ export async function LoginsSection(ctx: PortalCtx) {
 export async function ShootsSection(ctx: PortalCtx) {
   const admin = createAdminClient();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.agency.timezone }).format(new Date());
-  const { data: shoots } = await admin.from("content_shoots").select("id, shoot_date, end_date, start_time, location, details")
+  const { data: shoots } = await admin.from("content_shoots").select("id, shoot_date, end_date, start_time, location, details, crew, photographer")
     .eq("client_id", ctx.client.id).eq("status", "scheduled").or(`shoot_date.gte.${today},end_date.gte.${today}`).order("shoot_date").limit(12);
+  const crewIds = [...new Set((shoots ?? []).flatMap((s) => (s.crew ?? []) as string[]))];
+  const { data: crewRows } = crewIds.length
+    ? await admin.from("agency_members").select("user_id, display_name").eq("agency_id", ctx.agency.id).in("user_id", crewIds)
+    : { data: [] as { user_id: string; display_name: string }[] };
+  const crewNames = (ids: string[] | null) => (ids ?? []).map((id) => (crewRows ?? []).find((c) => c.user_id === id)?.display_name).filter(Boolean).join(", ");
   const ids = (shoots ?? []).map((s) => s.id);
   const { data: shares } = ids.length
     ? await admin.from("shoot_plan_shares").select("shoot_id, content, shared_at").eq("client_id", ctx.client.id).in("shoot_id", ids)
@@ -682,6 +687,9 @@ export async function ShootsSection(ctx: PortalCtx) {
               {share && <span className="note">Updated {new Date(share.shared_at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric" })}</span>}
             </div>
             <p className="note">{[timeLabel(s.start_time), s.location].filter(Boolean).join(" · ") || "Time and place to come"}</p>
+            {(crewNames(s.crew) || s.photographer) && (
+              <p className="note">{[crewNames(s.crew) && `Your ${short} team: ${crewNames(s.crew)}`, s.photographer && `Photographer: ${s.photographer}`].filter(Boolean).join(" · ")}</p>
+            )}
             {s.details && <p className="plan-overview">{s.details}</p>}
             {plan ? (
               <>

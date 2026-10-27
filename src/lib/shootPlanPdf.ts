@@ -9,6 +9,8 @@ type Cell = string | { checks: string[] } | { bullets: string[] } | { box: boole
 /** A shoot plan as a letter-size PDF, in the same shape as our shoot strategy docs. */
 export async function shootPlanPdf(opts: {
   agency: string; client: string; title: string; when: string; plan: ShootPlan; primary?: string;
+  /** Who's going: our teammates and the photographer. */
+  crew?: string[]; photographer?: string | null;
 }) {
   const { plan } = opts;
   const doc = await PDFDocument.create();
@@ -119,6 +121,8 @@ export async function shootPlanPdf(opts: {
   y -= 2;
   text(opts.title, serif, 30, accent, M, width, 10, true);
   text(`Shoot: ${opts.when} | Prepared by ${opts.agency}`, regular, 9.5, muted, M, width, 3, true);
+  const onSet = [opts.crew?.length && `${opts.agency} team: ${opts.crew.join(", ")}`, opts.photographer && `Photographer: ${opts.photographer}`].filter(Boolean).join(" | ");
+  if (onSet) text(onSet, regular, 9.5, muted, M, width, 3, true);
 
   if (plan.timeline.length) {
     heading("Shoot schedule");

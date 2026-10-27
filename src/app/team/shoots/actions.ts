@@ -5,7 +5,7 @@ import { notifyClient } from "@/lib/notifications";
 import { requireEditor, requireTeam } from "@/lib/session";
 import { isShootRepeat, shootDates } from "@/lib/shoots";
 import { cleanPlan, planIsEmpty } from "@/lib/shootPlan";
-import { extendSeries, planShootTasks, type Shoot } from "@/lib/shoots.server";
+import { clearShootCalendars, extendSeries, planShootTasks, syncShootCalendars, type Shoot } from "@/lib/shoots.server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string; ok?: string };
@@ -19,6 +19,7 @@ async function canEdit(clientId: string) {
 
 function refresh(clientId: string) {
   revalidatePath("/team/shoots");
+  revalidatePath("/team/calendar");
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team");
   revalidatePath("/portal", "layout");
@@ -37,7 +38,14 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   const end = /^\d{4}-\d{2}-\d{2}$/.test(endIn) && endIn !== date ? endIn : null;
   if (end && end < date) return { error: "The last day can't be before the first day." };
   if (!(await canEdit(clientId))) return { error: "You can't schedule shoots for this client." };
+  // Teammates going: only people on this agency's team.
+  const picked = [...new Set(form.getAll("crew").map(String))];
+  const { data: members } = picked.length
+    ? await createAdminClient().from("agency_members").select("user_id").eq("agency_id", v.agency.id).in("user_id", picked)
+    : { data: [] as { user_id: string }[] };
   const fields = {
+    crew: (members ?? []).map((m) => m.user_id as string),
+    photographer: get("photographer").slice(0, 120) || null,
     shoot_date: date,
     end_date: end,
     start_time: /^\d{2}:\d{2}$/.test(get("time")) ? get("time") : null,
@@ -55,6 +63,7 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     }
     if (repeat) await admin.from("content_shoots").update({ series_id: made.id }).eq("id", made.id);
     await planShootTasks({ ...(made as Shoot), series_id: repeat ? made.id : null });
+    await syncShootCalendars(made.id);
     if (repeat) await extendSeries(made.id);
     await notifyClient(clientId, { kind: "task", title: "Content shoot scheduled", body: `${nice(date, end)}${fields.location ? ` · ${fields.location}` : ""}`, link: "/portal/shoots" });
     refresh(clientId);
@@ -71,13 +80,17 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
   }
 
   if (old.series_id) {
-    // Later shoots in the series keep the new time, place and details.
-    await admin.from("content_shoots").update({ start_time: fields.start_time, location: fields.location, details: fields.details })
-      .eq("series_id", old.series_id).eq("status", "scheduled").gt("shoot_date", old.shoot_date);
+    // Later shoots in the series keep the new time, place, details and who's going.
+    const { data: later } = await admin.from("content_shoots")
+      .update({ start_time: fields.start_time, location: fields.location, details: fields.details, crew: fields.crew, photographer: fields.photographer })
+      .eq("series_id", old.series_id).eq("status", "scheduled").gt("shoot_date", old.shoot_date).select("id");
+    for (const l of later ?? []) await syncShootCalendars(l.id);
   }
   if (repeat !== old.repeat) {
     // The schedule changed from here on: drop the later shoots (their tasks go too) and start again from this one.
     if (old.series_id) {
+      const { data: dropped } = await admin.from("content_shoots").select("id").eq("series_id", old.series_id).eq("status", "scheduled").gt("shoot_date", old.shoot_date);
+      await clearShootCalendars((dropped ?? []).map((d) => d.id));
       await admin.from("content_shoots").delete().eq("series_id", old.series_id).eq("status", "scheduled").gt("shoot_date", old.shoot_date);
       await admin.from("content_shoots").update({ repeat: null }).eq("series_id", old.series_id).lt("shoot_date", old.shoot_date);
     }
@@ -88,7 +101,9 @@ export async function saveShoot(_: Result, form: FormData): Promise<Result> {
     await planShootTasks({ ...(saved as Shoot), repeat, series_id: repeat ? (repeat !== old.repeat ? id : old.series_id) : null });
     await notifyClient(clientId, { kind: "task", title: "Content shoot moved", body: `Now ${nice(date, end)}`, link: "/portal/shoots" });
   }
+  await syncShootCalendars(id);
   refresh(clientId);
+  revalidatePath("/team/calendar");
   return { ok: "Shoot saved." };
 }
 
@@ -100,11 +115,14 @@ export async function cancelShoot(id: string, following = false): Promise<Result
   const shoot = data as Shoot | null;
   if (!shoot || !(await canEdit(shoot.client_id))) return { error: "That shoot wasn't found." };
   if (following && shoot.series_id) {
+    const { data: dropped } = await admin.from("content_shoots").select("id").eq("series_id", shoot.series_id).eq("status", "scheduled").gt("shoot_date", shoot.shoot_date);
+    await clearShootCalendars((dropped ?? []).map((d) => d.id));
     await admin.from("content_shoots").delete().eq("series_id", shoot.series_id).eq("status", "scheduled").gt("shoot_date", shoot.shoot_date);
     await admin.from("content_shoots").update({ repeat: null }).eq("series_id", shoot.series_id);
   }
   await admin.from("content_shoots").update({ status: "cancelled" }).eq("id", id);
   await planShootTasks({ ...shoot, status: "cancelled" });
+  await syncShootCalendars(id);
   await notifyClient(shoot.client_id, { kind: "task", title: following ? "Content shoots cancelled" : "Content shoot cancelled", body: following ? `From ${nice(shoot.shoot_date)} on` : nice(shoot.shoot_date), link: "/portal/shoots" });
   refresh(shoot.client_id);
   return { ok: "Cancelled." };

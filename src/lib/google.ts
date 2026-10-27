@@ -317,6 +317,14 @@ export async function createMemberEvent(userId: string, input: {
   return toCalEvent(await gcal<GEvent>(auth.token, `/calendars/primary/events?${params}`, { method: "POST", body: JSON.stringify(body) }));
 }
 
+/** Adds an all-day event (from `from` up to, not including, `toExclusive`) to a teammate's calendar. */
+export async function createMemberAllDayEvent(userId: string, input: { title: string; description?: string; from: string; toExclusive: string }) {
+  const auth = await memberAuth(userId);
+  if (!auth) throw new Error("Google Calendar isn't connected.");
+  const body = { summary: input.title, description: input.description, start: { date: input.from }, end: { date: input.toExclusive } };
+  return toCalEvent(await gcal<GEvent>(auth.token, "/calendars/primary/events?sendUpdates=none", { method: "POST", body: JSON.stringify(body) }));
+}
+
 /**
  * Marks a teammate out of office from `start` to `end`. Uses Google's own Out
  * of office event (which declines new meetings for them); accounts that don't

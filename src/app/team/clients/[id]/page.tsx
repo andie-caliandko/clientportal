@@ -508,10 +508,10 @@ export default async function ClientDetail({
         <div className="panel" id="shoots" style={{ gridColumn: "1 / -1" }}>
           <div className="sec-head">
             <h2>Content shoots</h2>
-            {canEdit && !client.archived_at && <ShootEditor clientId={client.id} label="Schedule a shoot" />}
+            {canEdit && !client.archived_at && <ShootEditor clientId={client.id} team={members} label="Schedule a shoot" />}
           </div>
           {shoots.length
-            ? <ShootList shoots={shoots.slice(0, 6)} canEdit={canEdit} showClient={false} timeZone={tz} />
+            ? <ShootList shoots={shoots.slice(0, 6)} canEdit={canEdit} showClient={false} timeZone={tz} team={members} />
             : <p className="note">No shoots scheduled. Scheduled shoots show in {client.name}&apos;s portal, and planning tasks start 45 days before.</p>}
           {shoots.length > 6 && <Link className="note" href="/team/shoots">See all {shoots.length} on Content shoots</Link>}
         </div>

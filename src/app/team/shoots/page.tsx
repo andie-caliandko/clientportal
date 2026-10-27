@@ -34,14 +34,14 @@ export default async function ShootsPage({ searchParams }: { searchParams: Promi
         </div>
         <div className="row" style={{ alignItems: "center", gap: 10 }}>
           {isAdmin && managers.length > 0 && <ShootFilter who={who} managers={managers} />}
-          {canEdit && <ShootEditor clients={clients ?? []} label="Schedule a shoot" />}
+          {canEdit && <ShootEditor clients={clients ?? []} team={members ?? []} label="Schedule a shoot" />}
         </div>
       </div>
       <p className="note">Clients see their upcoming shoots in their portal. Each shoot gives the account manager planning tasks, starting 45 days before; they show up on the board a week before each is due.</p>
       {months.map((m) => (
         <div className="panel" key={m}>
           <h2>{monthLabel(m)}</h2>
-          <ShootList shoots={shoots.filter((s) => s.shoot_date.startsWith(m))} canEdit={canEdit} showClient timeZone={tz} />
+          <ShootList shoots={shoots.filter((s) => s.shoot_date.startsWith(m))} canEdit={canEdit} showClient timeZone={tz} team={members ?? []} />
         </div>
       ))}
       {!shoots.length && <div className="panel"><p className="note">No shoots scheduled yet.{canEdit ? " Use Schedule a shoot to add one." : ""}</p></div>}

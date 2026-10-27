@@ -126,11 +126,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     };
   };
 
+  // Content shoots go on everyone's calendar, whoever's account it is, in their own color.
+  const { data: shootRows } = await createAdminClient().from("content_shoots")
+    .select("id, shoot_date, end_date, start_time, crew, photographer, clients!inner(name, archived_at)")
+    .eq("agency_id", agency.id).eq("status", "scheduled").is("clients.archived_at", null)
+    .lte("shoot_date", days[days.length - 1]).or(`shoot_date.gte.${first},end_date.gte.${first}`).order("start_time");
+  // The Google events we made for people going to a shoot show as the shoot itself, not twice.
+  const { data: shootEvents } = shootRows?.length
+    ? await createAdminClient().from("shoot_calendar_events").select("event_id").in("shoot_id", shootRows.map((r) => r.id))
+    : { data: [] as { event_id: string }[] };
+  const shootEventIds = new Set((shootEvents ?? []).map((e) => e.event_id));
+  const firstName = (id: string) => (id === userId ? "You" : everyone.find((p) => p.user_id === id)?.display_name.split(" ")[0]);
   // One grid for everyone: all-day items on top, timed ones placed by the hour.
   const colors = memberColors(everyone.map((p) => p.user_id));
   const together: Record<string, WeekItem[]> = Object.fromEntries(days.map((d) => [d, []]));
   for (const p of people) {
     for (const e of cal.get(p.user_id)?.week ?? []) {
+      if (shootEventIds.has(e.id)) continue;
       for (const d of days) {
         if (!onDay(e, d)) continue;
         const s0 = new Date(e.start).getTime(), e0 = new Date(e.end).getTime();
@@ -149,11 +161,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       }
     }
   }
-  // Content shoots go on everyone's calendar, whoever's account it is, in their own color.
-  const { data: shootRows } = await createAdminClient().from("content_shoots")
-    .select("id, shoot_date, end_date, start_time, clients!inner(name, archived_at)")
-    .eq("agency_id", agency.id).eq("status", "scheduled").is("clients.archived_at", null)
-    .lte("shoot_date", days[days.length - 1]).or(`shoot_date.gte.${first},end_date.gte.${first}`).order("start_time");
   const shootsByDay: Record<string, ShootItem[]> = Object.fromEntries(days.map((d) => [d, []]));
   for (const sh of shootRows ?? []) {
     const name = (sh.clients as unknown as { name: string }).name;
@@ -166,6 +173,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         key: `shoot-${sh.id}-${d}`, shoot: true, href: `/team/shoots/${sh.id}`,
         title: `${name} shoot${total > 1 ? ` (day ${n} of ${total})` : ""}`,
         timeLabel: n === 1 ? shootTime(sh.start_time) ?? "" : "",
+        crew: ((sh.crew ?? []) as string[]).map(firstName).filter((x): x is string => !!x),
+        crewIds: (sh.crew ?? []) as string[],
+        photographer: sh.photographer,
       };
       shootsByDay[d].push(item);
       together[d].unshift(item);
@@ -292,10 +302,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                     </span>
                   </th>
                   {days.map((d) => {
-                    const items = (c?.week ?? []).filter((e) => onDay(e, d));
+                    const items = (c?.week ?? []).filter((e) => onDay(e, d) && !shootEventIds.has(e.id));
+                    const theirShoots = shootsByDay[d].filter((i) => i.crewIds?.includes(p.user_id));
                     const out = items.some((e) => e.ooo);
                     return (
                       <td key={d} className={`${out ? "out" : ""} ${d === today ? "today" : ""}`}>
+                        {theirShoots.map((i) => <ShootChip key={i.key} item={i} className="ev" />)}
                         {items.map((e) => (
                           <EventChip key={e.id} info={infoFor(p, e)} className={`ev ${e.ooo ? "ooo" : ""}`} title={e.title}>
                             {e.ooo ? <b>Out of office</b> : (
