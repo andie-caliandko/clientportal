@@ -86,23 +86,6 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
       </div>
 
       <div className="panel">
-        <div className="sec-head"><h2>Schedule</h2><span className="note">How the day runs</span></div>
-        <ol className="plan-rows">
-          {plan.timeline.map((t, i) => (
-            <li key={i}>
-              <input className="input plan-time" id={`tl-time-${i}`} aria-label="Time" value={t.time} placeholder="9:00 AM" onChange={(e) => setTime(i, { time: e.target.value })} />
-              <input className="input" aria-label="Activity" value={t.text} placeholder="Arrive, gear and lighting check" onChange={(e) => setTime(i, { text: e.target.value })} />
-              <span className="plan-tools">
-                <button type="button" className="linkbtn note" aria-label="Move up" onClick={() => set({ timeline: move(plan.timeline, i, -1) })}>↑</button>
-                <button type="button" className="linkbtn note" aria-label="Move down" onClick={() => set({ timeline: move(plan.timeline, i, 1) })}>↓</button>
-                <button type="button" className="linkbtn note" aria-label="Remove" onClick={() => set({ timeline: plan.timeline.filter((_, k) => k !== i) })}>✕</button>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <div><button type="button" className="btn sm line" onClick={() => { set({ timeline: [...plan.timeline, { time: "", text: "" }] }); focusSoon(`tl-time-${plan.timeline.length}`); }}>Add a time</button></div>
-      </div>
-      <div className="panel">
         <h2>Overview</h2>
         <div className="field"><label htmlFor="pl-title">Title</label>
           <input className="input" id="pl-title" value={plan.title} placeholder="Content Shoot" onChange={(e) => set({ title: e.target.value })} style={{ maxWidth: 420 }} /></div>
@@ -140,6 +123,23 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
         <div><button type="button" className="btn sm line" onClick={() => { set({ locations: [...plan.locations, { id: newId(), venue: "", address: "", notes: "" }] }); focusSoon(`loc-venue-${plan.locations.length}`); }}>Add a location</button></div>
       </div>
 
+      <div className="panel">
+        <div className="sec-head"><h2>Schedule</h2><span className="note">How the day runs</span></div>
+        <ol className="plan-rows">
+          {plan.timeline.map((t, i) => (
+            <li key={i}>
+              <input className="input plan-time" id={`tl-time-${i}`} aria-label="Time" value={t.time} placeholder="9:00 AM" onChange={(e) => setTime(i, { time: e.target.value })} />
+              <input className="input" aria-label="Activity" value={t.text} placeholder="Arrive, gear and lighting check" onChange={(e) => setTime(i, { text: e.target.value })} />
+              <span className="plan-tools">
+                <button type="button" className="linkbtn note" aria-label="Move up" onClick={() => set({ timeline: move(plan.timeline, i, -1) })}>↑</button>
+                <button type="button" className="linkbtn note" aria-label="Move down" onClick={() => set({ timeline: move(plan.timeline, i, 1) })}>↓</button>
+                <button type="button" className="linkbtn note" aria-label="Remove" onClick={() => set({ timeline: plan.timeline.filter((_, k) => k !== i) })}>✕</button>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div><button type="button" className="btn sm line" onClick={() => { set({ timeline: [...plan.timeline, { time: "", text: "" }] }); focusSoon(`tl-time-${plan.timeline.length}`); }}>Add a time</button></div>
+      </div>
       <div className="plan-setups">
         <div className="sec-head">
           <div><h2>Setups</h2><p className="note">Each look, scene or area you&apos;re shooting, in priority order. Each gets its own shot list and video scripts.</p></div>

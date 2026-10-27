@@ -124,12 +124,6 @@ export async function shootPlanPdf(opts: {
   const onSet = [opts.crew?.length && `${opts.agency} team: ${opts.crew.join(", ")}`, opts.photographer && `Photographer: ${opts.photographer}`].filter(Boolean).join(" | ");
   if (onSet) text(onSet, regular, 9.5, muted, M, width, 3, true);
 
-  if (plan.timeline.length) {
-    heading("Shoot schedule");
-    sub(opts.when);
-    table([{ label: "Time", w: 0.22 }, { label: "Activity", w: 0.78 }], plan.timeline.map((t) => [t.time, t.text]));
-  }
-
   if (plan.purpose || plan.goal || plan.tone || plan.setups.length) {
     heading("Shoot overview");
     if (plan.purpose) { text(plan.purpose, regular, 10, ink, M, width, 4); y -= 4; }
@@ -161,6 +155,12 @@ export async function shootPlanPdf(opts: {
       [{ label: "Venue", w: 0.2 }, { label: "Address", w: 0.3 }, { label: "Use for", w: 0.22 }, { label: "Notes", w: 0.28 }],
       plan.locations.map((l) => [l.venue, l.address, usedFor(plan, l.venue).join(", "), l.notes]),
     );
+  }
+
+  if (plan.timeline.length) {
+    heading("Shoot schedule");
+    sub(opts.when);
+    table([{ label: "Time", w: 0.22 }, { label: "Activity", w: 0.78 }], plan.timeline.map((t) => [t.time, t.text]));
   }
 
   if (plan.setups.length || plan.bonus) {

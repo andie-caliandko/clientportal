@@ -6,12 +6,6 @@ export function ShootPlanView({ plan }: { plan: ShootPlan }) {
   const bonus = lines(plan.bonus);
   return (
     <div className="plan-view">
-      {plan.timeline.length > 0 && (
-        <div>
-          <h3>Schedule</h3>
-          <ol className="plan-timeline">{plan.timeline.map((t, i) => <li key={i}><b>{t.time}</b><span>{t.text}</span></li>)}</ol>
-        </div>
-      )}
       {(plan.purpose || plan.goal || plan.tone) && (
         <div>
           <h3>Overview</h3>
@@ -27,6 +21,12 @@ export function ShootPlanView({ plan }: { plan: ShootPlan }) {
             <thead><tr><th>Venue</th><th>Address</th><th>Used for</th><th>Notes</th></tr></thead>
             <tbody>{plan.locations.map((l) => <tr key={l.id}><td>{l.venue}</td><td>{l.address}</td><td>{usedFor(plan, l.venue).join(", ")}</td><td>{l.notes}</td></tr>)}</tbody>
           </table></div>
+        </div>
+      )}
+      {plan.timeline.length > 0 && (
+        <div>
+          <h3>Schedule</h3>
+          <ol className="plan-timeline">{plan.timeline.map((t, i) => <li key={i}><b>{t.time}</b><span>{t.text}</span></li>)}</ol>
         </div>
       )}
       {plan.needsModels && plan.models.length > 0 && (
