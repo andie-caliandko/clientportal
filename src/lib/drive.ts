@@ -388,3 +388,41 @@ export async function syncDocumentsToDrive(filter: { documentIds?: string[]; lim
   }
   return synced;
 }
+
+/** Copy gallery photos and videos into the shoot's Drive folder, in a Gallery folder. */
+export async function syncGalleryToDrive(filter: { shootId?: string; itemIds?: string[]; limit?: number } = {}) {
+  const admin = createAdminClient();
+  // Copies that started over half an hour ago and never finished get another go.
+  const stale = new Date(Date.now() - 30 * 60_000).toISOString();
+  let q = admin.from("shoot_gallery_items").select("id, shoot_id, file_name, file_path")
+    .or(`drive_status.eq.pending,and(drive_status.eq.copying,drive_claimed_at.lt.${stale})`).order("created_at").limit(filter.limit ?? 20);
+  if (filter.shootId) q = q.eq("shoot_id", filter.shootId);
+  if (filter.itemIds?.length) q = q.in("id", filter.itemIds);
+  const { data: rows } = await q;
+  const folders = new Map<string, { token: string; folderId: string } | null>();
+  let synced = 0;
+  for (const row of rows ?? []) {
+    // Claim it, so a second run at the same time leaves it alone.
+    const { data: claimed } = await admin.from("shoot_gallery_items").update({ drive_status: "copying", drive_claimed_at: new Date().toISOString() })
+      .eq("id", row.id).or(`drive_status.eq.pending,and(drive_status.eq.copying,drive_claimed_at.lt.${stale})`).select("id");
+    if (!claimed?.length) continue;
+    try {
+      if (!folders.has(row.shoot_id)) {
+        const shoot = await ensureShootFolder(row.shoot_id);
+        folders.set(row.shoot_id, shoot ? { token: shoot.token, folderId: await findOrCreateFolder(shoot.token, shoot.folderId, "Gallery") } : null);
+      }
+      const folder = folders.get(row.shoot_id);
+      // No Drive folder for this client: nothing to copy to, and don't keep trying.
+      if (!folder) { await admin.from("shoot_gallery_items").update({ drive_status: "skipped" }).eq("id", row.id); continue; }
+      const { data: signed } = await admin.storage.from("galleries").createSignedUrl(row.file_path, 60 * 30);
+      if (!signed?.signedUrl) throw new Error("No link to the file");
+      const fileId = await uploadOne(folder.token, folder.folderId, row.file_name, signed.signedUrl);
+      await admin.from("shoot_gallery_items").update({ drive_status: "done", drive_file_id: fileId }).eq("id", row.id);
+      synced++;
+    } catch (err) {
+      await admin.from("shoot_gallery_items").update({ drive_status: "pending" }).eq("id", row.id);
+      console.error(`Drive copy failed for gallery item ${row.id}:`, err);
+    }
+  }
+  return synced;
+}

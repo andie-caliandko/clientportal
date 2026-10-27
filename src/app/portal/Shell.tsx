@@ -45,6 +45,8 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.agency.timezone }).format(new Date());
   const { data: shoots } = await supabase.from("content_shoots").select("id, shoot_date, end_date, start_time, location")
     .eq("client_id", ctx.client.id).eq("status", "scheduled").or(`shoot_date.gte.${today},end_date.gte.${today}`).order("shoot_date").limit(3);
+  const { count: galleries } = await supabase.from("content_shoots").select("id", { count: "exact", head: true })
+    .eq("client_id", ctx.client.id).not("gallery_sent_at", "is", null);
   const notes = ctx.preview ? { userId: null, items: [] } : await loadNotifications();
   const me = contacts.find((c) => c.user_id === ctx.userId);
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
@@ -71,7 +73,7 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
             <div className="brand" style={{ padding: 0 }}><Logo brand={ctx.agency.brand} name={ctx.agency.name} height={52} /></div>
             {!ctx.preview && notes.userId && <Bell userId={notes.userId} initial={notes.items} />}
           </div>
-          <PortalNav base={ctx.base} openTasks={open} newMessages={newMessages ?? 0} showShoots={(shoots ?? []).length > 0} />
+          <PortalNav base={ctx.base} openTasks={open} newMessages={newMessages ?? 0} showShoots={(shoots ?? []).length > 0 || (galleries ?? 0) > 0} />
           <div className="me">
             <span className="av" style={{ background: "var(--hi)", color: "var(--primary)" }}>{(me?.display_name ?? ctx.firstName)[0]}</span>
             <div>

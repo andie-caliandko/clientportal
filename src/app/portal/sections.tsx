@@ -18,6 +18,9 @@ import { LoginEditor, RemoveLogin } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 import { cleanPlan } from "@/lib/shootPlan";
 import { ShootPlanView } from "@/app/ShootPlanView";
+import { GalleryView } from "./GalleryView";
+import { galleryCovers, loadGallery } from "@/lib/gallery.server";
+import { galleryCount } from "@/lib/gallery";
 import { shootDates, timeLabel } from "@/lib/shoots";
 
 /** Everything a portal page needs to know about who's looking. */
@@ -31,7 +34,7 @@ export type PortalCtx = {
   preview: boolean;
   /** "/portal" for clients, "/preview/<id>" for the team. */
   base: string;
-  params: { doc?: string; done?: string };
+  params: { doc?: string; done?: string; gallery?: string };
 };
 
 export const SECTIONS = ["home", "tasks", "messages", "activity", "files", "strategy", "analytics", "meetings", "logins", "shoots"] as const;
@@ -660,6 +663,14 @@ export async function LoginsSection(ctx: PortalCtx) {
 /** Upcoming content shoots, with each plan the team has sent (drafts never show here). */
 export async function ShootsSection(ctx: PortalCtx) {
   const admin = createAdminClient();
+  if (ctx.params.gallery) return GallerySection(ctx, ctx.params.gallery);
+  // Galleries the team has sent, newest shoot first.
+  const { data: sentGalleries } = await admin.from("content_shoots").select("id, shoot_date, end_date, gallery_cover_id, gallery_sent_at")
+    .eq("client_id", ctx.client.id).not("gallery_sent_at", "is", null).order("shoot_date", { ascending: false }).limit(24);
+  const covers = await galleryCovers(sentGalleries ?? []);
+  const { data: counts } = (sentGalleries ?? []).length
+    ? await admin.from("shoot_gallery_items").select("shoot_id, mime, file_name").in("shoot_id", (sentGalleries ?? []).map((g) => g.id))
+    : { data: [] as { shoot_id: string; mime: string | null; file_name: string }[] };
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.agency.timezone }).format(new Date());
   const { data: shoots } = await admin.from("content_shoots").select("id, shoot_date, end_date, start_time, location, details, crew, photographer")
     .eq("client_id", ctx.client.id).eq("status", "scheduled").or(`shoot_date.gte.${today},end_date.gte.${today}`).order("shoot_date").limit(12);
@@ -676,7 +687,26 @@ export async function ShootsSection(ctx: PortalCtx) {
   const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
   return (
     <>
-      <PageHead title="Content shoots" sub={`Your upcoming shoots with ${short}. When your shot list and plan are ready, they'll show here.`} />
+      <PageHead title="Content shoots" sub={`Your upcoming shoots with ${short}, their plans, and the galleries from past shoots.`} />
+      {(sentGalleries ?? []).length > 0 && (
+        <section className="card" style={{ display: "grid", gap: 12 }}>
+          <h2>Galleries</h2>
+          <ul className="gallery-cards">
+            {(sentGalleries ?? []).map((g) => (
+              <li key={g.id}>
+                <Link href={`${ctx.base}/shoots?gallery=${g.id}`}>
+                  <span className="gallery-card-img">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {covers.get(g.id) ? <img src={covers.get(g.id)!} alt="" loading="lazy" /> : null}
+                  </span>
+                  <b>{g.end_date && g.end_date > g.shoot_date ? shootDates(g.shoot_date, g.end_date) : new Date(`${g.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" })}</b>
+                  <span className="note">{galleryCount((counts ?? []).filter((c) => c.shoot_id === g.id).map((c) => ({ mime: c.mime, name: c.file_name })))}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {(shoots ?? []).map((s) => {
         const share = (shares ?? []).find((x) => x.shoot_id === s.id);
         const plan = share ? cleanPlan(share.content) : null;
@@ -702,6 +732,43 @@ export async function ShootsSection(ctx: PortalCtx) {
         );
       })}
       {!(shoots ?? []).length && <section className="card"><p className="note">No shoots scheduled right now.</p></section>}
+    </>
+  );
+}
+
+/** One gallery the team has sent, full page. */
+async function GallerySection(ctx: PortalCtx, shootId: string) {
+  const admin = createAdminClient();
+  const { data: shoot } = await admin.from("content_shoots").select("id, client_id, shoot_date, end_date, gallery_sent_at, gallery_cover_id")
+    .eq("id", shootId).eq("client_id", ctx.client.id).maybeSingle();
+  // The team preview can look before it's sent; clients only once it is.
+  if (!shoot || (!shoot.gallery_sent_at && !ctx.preview)) {
+    return (
+      <>
+        <PageHead title="Gallery" sub="This gallery isn't available." />
+        <p><Link href={`${ctx.base}/shoots`}>← Content shoots</Link></p>
+      </>
+    );
+  }
+  const [items, covers, { data: share }] = await Promise.all([
+    loadGallery(shoot.id),
+    galleryCovers([shoot]),
+    admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle(),
+  ]);
+  const title = cleanPlan(share?.content).title || "Content Shoot";
+  const date = shoot.end_date && shoot.end_date > shoot.shoot_date ? shootDates(shoot.shoot_date, shoot.end_date)
+    : new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return (
+    <>
+      <p><Link href={`${ctx.base}/shoots`} className="note">← Content shoots</Link></p>
+      <GalleryView
+        title={title}
+        sub={`${ctx.client.name} · ${date} · ${galleryCount(items)}`}
+        cover={covers.get(shoot.id) ?? null}
+        items={items}
+        canFavorite={!ctx.preview}
+        zipName={`${ctx.client.name} ${shoot.shoot_date}`}
+      />
     </>
   );
 }

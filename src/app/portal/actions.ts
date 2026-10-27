@@ -288,3 +288,15 @@ export async function bookCall(requestId: string, start: string): Promise<{ erro
   revalidatePath("/portal");
   return { ok: `You're booked for ${when}. A Google Calendar invite with the Meet link is on its way to your email.` };
 }
+
+/** The client hearts (or un-hearts) a photo in a gallery they've been sent. */
+export async function toggleGalleryFavorite(itemId: string, on: boolean) {
+  const v = await requireClient();
+  const admin = createAdminClient();
+  const { data: item } = await admin.from("shoot_gallery_items").select("id, client_id, shoot_id, content_shoots(gallery_sent_at)").eq("id", itemId).maybeSingle();
+  const sent = (item?.content_shoots as unknown as { gallery_sent_at: string | null } | null)?.gallery_sent_at;
+  if (!item || item.client_id !== v.client.id || !sent) return { error: "That photo wasn't found." };
+  await admin.from("shoot_gallery_items").update({ favorite: on }).eq("id", itemId);
+  revalidatePath(`/team/shoots/${item.shoot_id}`);
+  return { ok: true };
+}

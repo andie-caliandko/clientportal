@@ -5,7 +5,7 @@ import { SECTIONS, type Section } from "../../sections";
 
 export default async function PortalPage({ params, searchParams }: {
   params: Promise<{ section?: string[] }>;
-  searchParams: Promise<{ doc?: string; done?: string }>;
+  searchParams: Promise<{ doc?: string; done?: string; gallery?: string }>;
 }) {
   const { section = [] } = await params;
   const name = (section[0] ?? "home") as Section;

@@ -5,6 +5,8 @@ import { cleanPlan, samePlan } from "@/lib/shootPlan";
 import { shootDates, timeLabel } from "@/lib/shoots";
 import { createClient } from "@/lib/supabase/server";
 import { PlanEditor } from "./PlanEditor";
+import { GalleryManager } from "./GalleryManager";
+import { loadGallery } from "@/lib/gallery.server";
 
 /** Plan one shoot: shot list, timeline and notes. Private to the team until someone sends it to the client. */
 export default async function ShootPlanPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +14,7 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, clients(name)").eq("id", id).maybeSingle();
+    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
   const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
     supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
@@ -24,6 +26,7 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
     ? await supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).in("user_id", crewIds)
     : { data: [] as { user_id: string; display_name: string }[] };
   const crewNames = crewIds.map((cid) => (crew ?? []).find((c) => c.user_id === cid)?.display_name).filter(Boolean).join(", ");
+  const gallery = await loadGallery(shoot.id);
   const plan = cleanPlan((draft ?? shared)?.content);
   const signed = waiverRows?.length
     ? (await supabase.storage.from("waivers").createSignedUrls(waiverRows.map((w) => w.file_path), 60 * 60)).data ?? []
@@ -51,6 +54,15 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
           <a className="btn sm line" href={`https://drive.google.com/drive/folders/${shoot.drive_folder_id}`} target="_blank" rel="noreferrer">Open Drive folder</a>
         )}
       </div>
+      <GalleryManager
+        shootId={shoot.id}
+        clientId={shoot.client_id}
+        agencyId={agency.id}
+        items={gallery}
+        coverId={shoot.gallery_cover_id}
+        sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
+        previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
+      />
       <PlanEditor
         shootId={shoot.id}
         initial={plan}
