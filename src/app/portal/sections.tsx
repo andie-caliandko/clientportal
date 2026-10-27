@@ -17,6 +17,7 @@ import { UploadGroups } from "./UploadGroups";
 import { LoginEditor, RemoveLogin } from "@/app/logins/LoginForms";
 import { loadLogins } from "@/app/logins/data";
 import { cleanPlan } from "@/lib/shootPlan";
+import { ShootPlanView } from "@/app/ShootPlanView";
 import { shootDates, timeLabel } from "@/lib/shoots";
 
 /** Everything a portal page needs to know about who's looking. */
@@ -664,7 +665,7 @@ export async function ShootsSection(ctx: PortalCtx) {
     .eq("client_id", ctx.client.id).eq("status", "scheduled").or(`shoot_date.gte.${today},end_date.gte.${today}`).order("shoot_date").limit(12);
   const ids = (shoots ?? []).map((s) => s.id);
   const { data: shares } = ids.length
-    ? await admin.from("shoot_plan_shares").select("shoot_id, overview, shots, timeline, shared_at").eq("client_id", ctx.client.id).in("shoot_id", ids)
+    ? await admin.from("shoot_plan_shares").select("shoot_id, content, shared_at").eq("client_id", ctx.client.id).in("shoot_id", ids)
     : { data: [] };
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
   const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
@@ -673,7 +674,7 @@ export async function ShootsSection(ctx: PortalCtx) {
       <PageHead title="Content shoots" sub={`Your upcoming shoots with ${short}. When your shot list and plan are ready, they'll show here.`} />
       {(shoots ?? []).map((s) => {
         const share = (shares ?? []).find((x) => x.shoot_id === s.id);
-        const plan = share ? cleanPlan(share) : null;
+        const plan = share ? cleanPlan(share.content) : null;
         return (
           <section className="card plan-view" key={s.id}>
             <div className="sec-head">
@@ -684,15 +685,9 @@ export async function ShootsSection(ctx: PortalCtx) {
             {s.details && <p className="plan-overview">{s.details}</p>}
             {plan ? (
               <>
-                {plan.overview && <div><h3>The plan</h3><p className="plan-overview">{plan.overview}</p></div>}
-                {plan.timeline.length > 0 && (
-                  <div><h3>Timeline</h3>
-                    <ol className="plan-timeline">{plan.timeline.map((t, i) => <li key={i}><b>{t.time}</b><span>{t.text}</span></li>)}</ol></div>
-                )}
-                {plan.shots.length > 0 && (
-                  <div><h3>Shot list</h3>
-                    <ol>{plan.shots.map((x, i) => <li key={i}>{x.text}</li>)}</ol></div>
-                )}
+                {plan.title && <h3 style={{ margin: 0 }}>{plan.title}</h3>}
+                <ShootPlanView plan={plan} />
+                <div><a className="btn sm line" href={`/api/shoots/${s.id}/plan.pdf?sent=1`}>Download PDF</a></div>
               </>
             ) : <p className="note">Your team is putting the plan together. We&apos;ll let you know when it&apos;s here.</p>}
           </section>

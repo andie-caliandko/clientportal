@@ -14,11 +14,16 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
   const { data: shoot } = await supabase.from("content_shoots")
     .select("id, client_id, shoot_date, end_date, start_time, location, details, status, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
-  const [{ data: draft }, { data: shared }] = await Promise.all([
-    supabase.from("shoot_plans").select("overview, shots, timeline, updated_at").eq("shoot_id", id).maybeSingle(),
-    supabase.from("shoot_plan_shares").select("overview, shots, timeline, shared_at").eq("shoot_id", id).maybeSingle(),
+  const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
+    supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
+    supabase.from("shoot_plan_shares").select("content, shared_at").eq("shoot_id", id).maybeSingle(),
+    supabase.from("shoot_waivers").select("id, model_id, file_name, file_path").eq("shoot_id", id).order("created_at"),
   ]);
-  const plan = cleanPlan(draft ?? shared);
+  const plan = cleanPlan((draft ?? shared)?.content);
+  const signed = waiverRows?.length
+    ? (await supabase.storage.from("waivers").createSignedUrls(waiverRows.map((w) => w.file_path), 60 * 60)).data ?? []
+    : [];
+  const waivers = (waiverRows ?? []).map((w) => ({ id: w.id, model_id: w.model_id, file_name: w.file_name, url: signed.find((x) => x.path === w.file_path)?.signedUrl ?? null }));
   const client = shoot.clients as unknown as { name: string } | null;
   const when = shoot.end_date && shoot.end_date > shoot.shoot_date ? shootDates(shoot.shoot_date, shoot.end_date)
     : new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -31,15 +36,18 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
         <div>
           <Link href="/team/shoots" className="note">← Content shoots</Link>
           <p className="eyebrow" style={{ marginTop: 10 }}><Link href={`/team/clients/${shoot.client_id}`}>{client?.name}</Link></p>
-          <h1 style={{ marginTop: 6 }}>Shoot plan</h1>
+          <h1 style={{ marginTop: 6 }}>{plan.title || "Shoot plan"}</h1>
           <p className="note">{[when, timeLabel(shoot.start_time), shoot.location].filter(Boolean).join(" · ")}{shoot.status === "cancelled" ? " · Cancelled" : ""}</p>
         </div>
       </div>
       <PlanEditor
         shootId={shoot.id}
         initial={plan}
-        sent={shared ? { at: sentAt!, plan: cleanPlan(shared) } : null}
-        changedSinceSent={!!shared && !samePlan(plan, cleanPlan(shared))}
+        clientId={shoot.client_id}
+        agencyId={agency.id}
+        sent={shared ? { at: sentAt! } : null}
+        changedSinceSent={!!shared && !samePlan(plan, cleanPlan(shared.content))}
+        waivers={waivers}
       />
     </section>
   );

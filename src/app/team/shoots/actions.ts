@@ -118,7 +118,7 @@ export async function saveShootPlan(shootId: string, raw: unknown): Promise<Resu
   if (!shoot) return { error: "That shoot wasn't found." };
   const plan = cleanPlan(raw);
   const { error } = await supabase.from("shoot_plans")
-    .upsert({ shoot_id: shootId, client_id: shoot.client_id, ...plan, updated_by: v.userId, updated_at: new Date().toISOString() });
+    .upsert({ shoot_id: shootId, client_id: shoot.client_id, content: plan, updated_by: v.userId, updated_at: new Date().toISOString() });
   if (error) {
     console.error("saveShootPlan", error);
     return { error: "The plan couldn't be saved." };
@@ -133,13 +133,13 @@ export async function sendShootPlan(shootId: string, raw: unknown): Promise<Resu
   const saved = await saveShootPlan(shootId, raw);
   if (saved.error) return saved;
   const plan = cleanPlan(raw);
-  if (planIsEmpty(plan)) return { error: "Add a shot list, timeline or plan before sending." };
+  if (planIsEmpty(plan)) return { error: "Add an overview, a setup or a schedule before sending." };
   const { data: shoot } = await (await createClient()).from("content_shoots").select("client_id, shoot_date, end_date").eq("id", shootId).maybeSingle();
   if (!shoot) return { error: "That shoot wasn't found." };
   const admin = createAdminClient();
   const { data: before } = await admin.from("shoot_plan_shares").select("shoot_id").eq("shoot_id", shootId).maybeSingle();
   const { error } = await admin.from("shoot_plan_shares")
-    .upsert({ shoot_id: shootId, client_id: shoot.client_id, ...plan, shared_by: v.userId, shared_at: new Date().toISOString() });
+    .upsert({ shoot_id: shootId, client_id: shoot.client_id, content: plan, shared_by: v.userId, shared_at: new Date().toISOString() });
   if (error) {
     console.error("sendShootPlan", error);
     return { error: "The plan couldn't be sent." };
@@ -153,4 +153,31 @@ export async function sendShootPlan(shootId: string, raw: unknown): Promise<Resu
   refresh(shoot.client_id);
   revalidatePath(`/team/shoots/${shootId}`);
   return { ok: before ? "Updated plan sent to the client." : "Plan sent to the client." };
+}
+
+/** Record a signed model waiver the browser just uploaded to the waivers bucket (team only). */
+export async function addShootWaiver(shootId: string, modelId: string, filePath: string, fileName: string): Promise<Result> {
+  const v = await requireTeam();
+  const supabase = await createClient();
+  const { data: shoot } = await supabase.from("content_shoots").select("id, client_id").eq("id", shootId).maybeSingle();
+  if (!shoot || !filePath.startsWith(`${v.agency.id}/${shoot.client_id}/${shootId}/`)) return { error: "That shoot wasn't found." };
+  const { error } = await supabase.from("shoot_waivers")
+    .insert({ shoot_id: shootId, client_id: shoot.client_id, model_id: modelId || null, file_path: filePath, file_name: fileName.slice(0, 200), uploaded_by: v.userId });
+  if (error) {
+    console.error("addShootWaiver", error);
+    return { error: "The waiver couldn't be saved." };
+  }
+  revalidatePath(`/team/shoots/${shootId}`);
+  return { ok: "Waiver saved." };
+}
+
+export async function removeShootWaiver(id: string): Promise<Result> {
+  await requireTeam();
+  const supabase = await createClient();
+  const { data: w } = await supabase.from("shoot_waivers").select("id, shoot_id, file_path").eq("id", id).maybeSingle();
+  if (!w) return { error: "That waiver wasn't found." };
+  await supabase.storage.from("waivers").remove([w.file_path]);
+  await supabase.from("shoot_waivers").delete().eq("id", id);
+  revalidatePath(`/team/shoots/${w.shoot_id}`);
+  return { ok: "Removed." };
 }
