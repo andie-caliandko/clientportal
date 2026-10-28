@@ -112,25 +112,24 @@ export async function PortalShell({ ctx, children }: { ctx: PortalBase; children
               {!team.length && <li><span className="note">Your team will show here.</span></li>}
             </ul>
           </div>
-          {(shoots ?? []).length > 0 && (
-            <div className="rail-group">
-              <p className="rail-label"><Link href={`${ctx.base}/shoots`}>Upcoming content shoots</Link></p>
-              <ul className="rail-shoots">
-                {(shoots ?? []).map((sh) => {
-                  const part = (o: Intl.DateTimeFormatOptions) => new Date(`${sh.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", ...o });
-                  return (
-                    <li key={sh.id}>
-                      <span className="date"><small>{part({ month: "short" })}</small><b>{part({ day: "numeric" })}</b></span>
-                      <span>
-                        <b>{sh.end_date && sh.end_date > sh.shoot_date ? shootDates(sh.shoot_date, sh.end_date) : part({ weekday: "long" })}</b>
-                        <span className="note">{[timeLabel(sh.start_time), sh.location].filter(Boolean).join(" · ") || "Details to come"}</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+          {/* Always here; empty until a shoot is scheduled (the Shoots tab on the left only shows once there is one). */}
+          <div className="rail-group">
+            <p className="rail-label">{(shoots ?? []).length ? <Link href={`${ctx.base}/shoots`}>Upcoming content shoots</Link> : "Upcoming content shoots"}</p>
+            {(shoots ?? []).length > 0 && <ul className="rail-shoots">
+              {(shoots ?? []).map((sh) => {
+                const part = (o: Intl.DateTimeFormatOptions) => new Date(`${sh.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", ...o });
+                return (
+                  <li key={sh.id}>
+                    <span className="date"><small>{part({ month: "short" })}</small><b>{part({ day: "numeric" })}</b></span>
+                    <span>
+                      <b>{sh.end_date && sh.end_date > sh.shoot_date ? shootDates(sh.shoot_date, sh.end_date) : part({ weekday: "long" })}</b>
+                      <span className="note">{[timeLabel(sh.start_time), sh.location].filter(Boolean).join(" · ") || "Details to come"}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>}
+          </div>
           <div className="rail-group">
             <p className="rail-label">{ctx.client.name}</p>
             <RailPeople people={contacts} canAdd={!ctx.preview && contacts.length < 2} />
