@@ -64,7 +64,7 @@ export async function submitQuestionnaire(): Promise<{ error?: string }> {
   redirect("/portal?done=questionnaire");
 }
 
-export async function finishUploads(kind: "branding" | "content", files: { name: string; path: string }[]) {
+export async function finishUploads(kind: "branding" | "content", files: { name: string; path: string; note?: string }[]) {
   const v = await requireClient();
   if (!files.length) return;
   const supabase = await createClient();
@@ -77,6 +77,7 @@ export async function finishUploads(kind: "branding" | "content", files: { name:
         kind,
         file_name: f.name,
         storage_path: f.path,
+        note: f.note?.trim().slice(0, 1000) || null,
         created_by: v.userId,
       })),
     )
@@ -89,7 +90,7 @@ export async function finishUploads(kind: "branding" | "content", files: { name:
     task: `Review ${files.length} ${kind} file${files.length > 1 ? "s" : ""} from ${v.client.name}`,
     source: "portal",
     subject: `${files.length} ${kind} file${files.length > 1 ? "s" : ""} uploaded`,
-    body: `${v.clientUser.display_name} uploaded:\n${files.map((f) => `- ${f.name}`).join("\n")}`,
+    body: `${v.clientUser.display_name} uploaded:\n${files.map((f) => `- ${f.name}${f.note?.trim() ? `: "${f.note.trim()}"` : ""}`).join("\n")}`,
   });
   revalidatePath("/portal");
   redirect(`/portal?done=${kind}`);

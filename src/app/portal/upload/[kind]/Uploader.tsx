@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { uploadResumable } from "@/lib/resumableUpload";
 import type { Brand } from "@/lib/types";
 import { finishUploads } from "../../actions";
 
-type Item = { name: string; path?: string; state: "uploading" | "done" | "failed" };
+type Item = { key: string; name: string; path?: string; state: "uploading" | "done" | "failed"; progress: number; error?: string; note: string; preview?: string };
 
 export function Uploader({ kind, title, help, folder, brand, agencyName, driveUrl }: {
   kind: "branding" | "content";
@@ -23,18 +23,27 @@ export function Uploader({ kind, title, help, folder, brand, agencyName, driveUr
   const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
 
+  const update = (key: string, p: Partial<Item>) => setItems((cur) => cur.map((it) => (it.key === key ? { ...it, ...p } : it)));
+
   async function upload(files: FileList | null) {
     if (!files?.length) return;
-    const supabase = createClient();
-    for (const file of Array.from(files)) {
-      const safe = file.name.replace(/[^\w.\-]+/g, "_");
-      const path = `${folder}/${Date.now()}-${safe}`;
-      setItems((cur) => [...cur, { name: file.name, state: "uploading" }]);
-      const { error } = await supabase.storage.from("uploads").upload(path, file);
-      setItems((cur) =>
-        cur.map((it) => (it.name === file.name && it.state === "uploading" ? { ...it, path, state: error ? "failed" : "done" } : it)),
-      );
-    }
+    const list = Array.from(files).map((file, n) => ({
+      file,
+      key: `${Date.now()}-${n}-${file.name}`,
+      preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+    }));
+    setItems((cur) => [...cur, ...list.map(({ file, key, preview }) => ({ key, name: file.name, state: "uploading" as const, progress: 0, note: "", preview }))]);
+    // Two at a time; each big file goes up in pieces and can recover from a dropped connection.
+    const queue = [...list];
+    await Promise.all(Array.from({ length: 2 }, async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        const { file, key } = next;
+        const path = `${folder}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+        const error = await uploadResumable("uploads", path, file, { onProgress: (f) => update(key, { progress: f }) });
+        update(key, error ? { state: "failed", error } : { state: "done", path, progress: 1 });
+      }
+    }));
+    if (input.current) input.current.value = "";
   }
 
   const done = items.filter((i) => i.state === "done");
@@ -62,16 +71,36 @@ export function Uploader({ kind, title, help, folder, brand, agencyName, driveUr
         <p><b>Drag files here</b> or</p>
         <button className="btn" onClick={() => input.current?.click()}>Choose files</button>
         <input ref={input} type="file" multiple hidden onChange={(e) => upload(e.target.files)} />
-        <p className="note">Your files go straight to your {agencyName} team.</p>
+        <p className="note">Your files go straight to your {agencyName} team. Add a caption or notes to each one so we know what it is and how you&apos;d like it used.</p>
       </div>
       {items.length > 0 && (
-        <ul className="files">
-          {items.map((it, n) => (
-            <li key={n}>
-              {it.name}
-              <span style={{ color: it.state === "failed" ? "var(--crit)" : it.state === "done" ? "var(--ok)" : "var(--ink-2)" }}>
-                {it.state === "uploading" ? "Uploading…" : it.state === "done" ? "Uploaded" : "Didn't upload. Try again."}
-              </span>
+        <ul className="files up-files">
+          {items.map((it) => (
+            <li key={it.key}>
+              <div className="up-file">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {it.preview ? <img src={it.preview} alt="" /> : <span className="up-icon" aria-hidden="true">{/\.(mov|mp4|m4v|webm)$/i.test(it.name) ? "▶" : "▤"}</span>}
+                <div className="up-body">
+                  <span className="up-name">
+                    <b>{it.name}</b>
+                    <span style={{ color: it.state === "failed" ? "var(--crit)" : it.state === "done" ? "var(--ok)" : "var(--ink-2)" }}>
+                      {it.state === "uploading" ? `Uploading ${Math.round(it.progress * 100)}%` : it.state === "done" ? "Uploaded" : it.error}
+                    </span>
+                  </span>
+                  {it.state === "uploading" && <span className="up-bar"><span style={{ width: `${Math.round(it.progress * 100)}%` }} /></span>}
+                  {it.state === "failed" && it.error?.includes("upload limit") && (
+                    <span className="note">{driveUrl ? <>Add it to your <a href={driveUrl} target="_blank" rel="noreferrer">Google Drive folder</a> instead, or send it in a message with a link.</> : "Send it to your team as a link (Google Drive, Dropbox or WeTransfer) in a message instead."}</span>
+                  )}
+                  {it.state !== "failed" && (
+                    <>
+                      <label className="sr-only" htmlFor={`note-${it.key}`}>Caption or notes for {it.name}</label>
+                      <textarea className="input up-note" id={`note-${it.key}`} rows={2} value={it.note} maxLength={1000}
+                        placeholder="Caption or notes: what is this, and anything we should know?"
+                        onChange={(e) => update(it.key, { note: e.target.value })} />
+                    </>
+                  )}
+                </div>
+              </div>
             </li>
           ))}
         </ul>
@@ -81,7 +110,7 @@ export function Uploader({ kind, title, help, folder, brand, agencyName, driveUr
         <button
           className="btn lg"
           disabled={!done.length || busy || pending}
-          onClick={() => startTransition(() => finishUploads(kind, done.map((d) => ({ name: d.name, path: d.path! }))))}
+          onClick={() => startTransition(() => finishUploads(kind, done.map((d) => ({ name: d.name, path: d.path!, note: d.note }))))}
         >
           {pending ? "Sending…" : "I'm done uploading"}
         </button>

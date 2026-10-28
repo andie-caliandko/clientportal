@@ -12,16 +12,18 @@ const kindOf = (name: string, type?: string | null) => {
   return "other";
 };
 
-export type GalleryFile = { url: string; name: string; type?: string | null };
+export type GalleryFile = { url: string; name: string; type?: string | null; note?: string | null };
 
 /**
  * A file or image that opens in a preview over the page instead of a new tab.
  * Given the files around it (`gallery` and its `index`), the preview steps
  * left and right through them with the arrows, arrow keys or a swipe.
  */
-export function FilePreview({ url, name, type, thumbnail = false, className, label, gallery, index = 0 }: {
+export function FilePreview({ url, name, type, note, thumbnail = false, className, label, gallery, index = 0 }: {
   url: string;
   name: string;
+  /** The client's caption, shown with the big view. */
+  note?: string | null;
   type?: string | null;
   gallery?: GalleryFile[];
   index?: number;
@@ -36,7 +38,7 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
   const swipe = useRef<number | null>(null);
   const swiped = useRef(false);
   const many = (gallery?.length ?? 0) > 1;
-  const cur = gallery?.[at] ?? { url, name, type };
+  const cur: GalleryFile = gallery?.[at] ?? { url, name, type, note };
   const kind = kindOf(cur.name, cur.type);
   const step = (d: number) => gallery && setAt((i) => (i + d + gallery.length) % gallery.length);
   // Storage links download (rather than open) when asked to.
@@ -89,6 +91,7 @@ export function FilePreview({ url, name, type, thumbnail = false, className, lab
               <button type="button" className="lightbox-nav next" aria-label="Next file" onClick={(e) => { e.stopPropagation(); step(1); }}>›</button>
             </>
           )}
+          {cur.note && <p className="lightbox-note" onClick={(e) => e.stopPropagation()}><b>Their note:</b> {cur.note}</p>}
           <div className="lightbox-body" key={cur.url}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {kind === "image" && <img src={cur.url} alt={cur.name} />}

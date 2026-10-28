@@ -470,7 +470,7 @@ export async function ActivitySection(ctx: PortalCtx) {
 
 export async function FilesSection(ctx: PortalCtx) {
   const supabase = await createClient();
-  const { data } = await supabase.from("uploads").select("id, kind, file_name, storage_path, created_at").eq("client_id", ctx.client.id).order("created_at", { ascending: false });
+  const { data } = await supabase.from("uploads").select("id, kind, file_name, storage_path, note, created_at").eq("client_id", ctx.client.id).order("created_at", { ascending: false });
   const rows = data ?? [];
   const urls = rows.length
     ? (await supabase.storage.from("uploads").createSignedUrls(rows.map((r) => r.storage_path), 60 * 60)).data ?? []
@@ -504,7 +504,7 @@ export async function FilesSection(ctx: PortalCtx) {
             </div>
             {list.length ? (
               <UploadGroups timeZone={ctx.agency.timezone} showKind={false}
-                items={list.map((f) => ({ id: f.id, url: urlFor.get(f.storage_path) ?? null, name: f.file_name, kind: f.kind, at: f.created_at }))} />
+                items={list.map((f) => ({ id: f.id, url: urlFor.get(f.storage_path) ?? null, name: f.file_name, kind: f.kind, at: f.created_at, note: f.note }))} />
             ) : (
               <p className="note">Nothing yet. Use the button above to send us your {kind} files.</p>
             )}

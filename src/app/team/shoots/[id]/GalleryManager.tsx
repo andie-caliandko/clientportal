@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
+import { uploadResumable } from "@/lib/resumableUpload";
 import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover } from "../galleryActions";
 
 const THUMB = 900;
@@ -61,9 +62,9 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
     const one = async (f: File) => {
       const base = `${agencyId}/${clientId}/${shootId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const path = `${base}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
-      const { error } = await supabase.storage.from("galleries").upload(path, f, { contentType: f.type || undefined });
+      const error = await uploadResumable("galleries", path, f, { contentType: f.type || undefined });
       if (error) {
-        failed.push(`${f.name}: ${/size|large|exceed/i.test(error.message) ? "too large to upload" : "didn't upload"}`);
+        failed.push(`${f.name}: ${error}`);
       } else {
         const p = await preview(f);
         let thumbPath: string | null = null;

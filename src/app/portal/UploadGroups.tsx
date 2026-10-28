@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FilePreview } from "./FilePreview";
 
-export type UploadItem = { id: string; url: string | null; name: string; kind: string; at: string; drive?: "in" | "copying" | null; driveUrl?: string | null };
+export type UploadItem = { id: string; url: string | null; name: string; kind: string; at: string; drive?: "in" | "copying" | null; driveUrl?: string | null; note?: string | null };
 
 const KIND: Record<string, string> = { branding: "Branding", content: "Content", task: "Task", message: "Message" };
 const SHOWN = 12;
@@ -31,7 +31,7 @@ export function UploadGroups({ items, timeZone, showKind = true }: { items: Uplo
 
 function Group({ group, open, timeZone, showKind }: { group: { kind: string; date: string; files: UploadItem[] }; open: boolean; timeZone: string; showKind: boolean }) {
   const [all, setAll] = useState(false);
-  const gallery = group.files.flatMap((f) => (f.url ? [{ url: f.url, name: f.name }] : []));
+  const gallery = group.files.flatMap((f) => (f.url ? [{ url: f.url, name: f.name, note: f.note }] : []));
   const shown = all ? group.files : group.files.slice(0, SHOWN);
   const copying = group.files.filter((f) => f.drive === "copying").length;
   const inDrive = group.files.filter((f) => f.drive === "in").length;
@@ -49,11 +49,12 @@ function Group({ group, open, timeZone, showKind }: { group: { kind: string; dat
       </summary>
       <ul className="up-grid">
         {shown.map((f) => (
-          <li key={f.id} title={f.name}>
+          <li key={f.id} title={f.note ? `${f.name}: ${f.note}` : f.name}>
             {f.url
-              ? <FilePreview url={f.url} name={f.name} thumbnail className="up-tile" label={f.name}
+              ? <FilePreview url={f.url} name={f.name} note={f.note} thumbnail className="up-tile" label={f.name}
                   gallery={gallery} index={gallery.findIndex((x) => x.url === f.url)} />
               : <span className="up-tile">{f.name}</span>}
+            {f.note && <span className="up-caption">{f.note}</span>}
           </li>
         ))}
       </ul>

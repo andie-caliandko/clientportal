@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { uploadResumable } from "@/lib/resumableUpload";
 import { completeClientTask } from "./actions";
 
 export type ClientTask = {
@@ -64,8 +64,8 @@ function DoneForm({ task, folder, onCancel, onDone }: {
           let filePath: string | null = null;
           if (file) {
             filePath = `${folder}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
-            const { error } = await createClient().storage.from("uploads").upload(filePath, file);
-            if (error) return onDone({ error: "Your file didn't upload. Try again, or mark it done without the file." });
+            const error = await uploadResumable("uploads", filePath, file);
+            if (error) return onDone({ error: `${error} You can mark it done without the file and send a link in a message.` });
           }
           onDone(await completeClientTask({ id: task.id, comment, filePath }));
         });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { uploadResumable } from "@/lib/resumableUpload";
 
 type Picked = { name: string; path?: string; size: number; type: string; state: "uploading" | "done" | "failed" };
 
@@ -21,15 +21,10 @@ export function MessageComposer({ folder, placeholder, send, hidden = {} }: {
 
   async function pick(list: FileList | null) {
     if (!list?.length) return;
-    const supabase = createClient();
     for (const file of Array.from(list).slice(0, 10)) {
-      if (file.size > 50 * 1024 * 1024) {
-        setFiles((cur) => [...cur, { name: file.name, size: file.size, type: file.type, state: "failed" }]);
-        continue;
-      }
       const path = `${folder}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
       setFiles((cur) => [...cur, { name: file.name, size: file.size, type: file.type, state: "uploading" }]);
-      const { error } = await supabase.storage.from("uploads").upload(path, file, { contentType: file.type || undefined });
+      const error = await uploadResumable("uploads", path, file, { contentType: file.type || undefined });
       setFiles((cur) => cur.map((f) => (f.name === file.name && f.state === "uploading" ? { ...f, path, state: error ? "failed" : "done" } : f)));
     }
     if (input.current) input.current.value = "";
@@ -57,7 +52,7 @@ export function MessageComposer({ folder, placeholder, send, hidden = {} }: {
           {files.map((f, i) => (
             <li key={i} className={f.state}>
               {f.name}
-              <span>{f.state === "uploading" ? "Uploading…" : f.state === "failed" ? "Didn't upload (50 MB max)" : ""}</span>
+              <span>{f.state === "uploading" ? "Uploading…" : f.state === "failed" ? "Didn't upload (too large, or the connection dropped)" : ""}</span>
               <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button>
             </li>
           ))}

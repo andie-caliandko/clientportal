@@ -47,7 +47,7 @@ async function findOrCreateFolder(token: string, parentId: string, name: string)
 }
 
 /** Streams one file from portal storage into Drive. Returns the Drive file id. */
-async function uploadOne(token: string, folderId: string, name: string, sourceUrl: string) {
+async function uploadOne(token: string, folderId: string, name: string, sourceUrl: string, description?: string | null) {
   const source = await fetch(sourceUrl);
   if (!source.ok || !source.body) throw new Error(`Couldn't read ${name} from storage`);
   const type = source.headers.get("content-type") ?? "application/octet-stream";
@@ -59,7 +59,8 @@ async function uploadOne(token: string, folderId: string, name: string, sourceUr
       "X-Upload-Content-Type": type,
       ...(source.headers.get("content-length") ? { "X-Upload-Content-Length": source.headers.get("content-length")! } : {}),
     },
-    body: JSON.stringify({ name, parents: [folderId] }),
+    // The client's caption shows in Drive's file details.
+    body: JSON.stringify({ name, parents: [folderId], ...(description ? { description } : {}) }),
   });
   const session = start.headers.get("location");
   if (!session) throw new Error(`Drive refused the upload: ${await start.text()}`);
@@ -124,7 +125,7 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
   const admin = createAdminClient();
   let q = admin
     .from("uploads")
-    .select("id, kind, file_name, storage_path, client_id, client:clients!inner(agency_id, drive_folder_id, archived_at)")
+    .select("id, kind, file_name, storage_path, note, client_id, client:clients!inner(agency_id, drive_folder_id, archived_at)")
     .is("drive_file_id", null)
     .in("kind", Object.keys(SUBFOLDER))
     .not("client.drive_folder_id", "is", null)
@@ -154,7 +155,7 @@ export async function syncUploadsToDrive(filter: { uploadIds?: string[]; limit?:
       if (!folders.has(key)) folders.set(key, await findOrCreateFolder(agency.token, base, sub));
       const { data: signed } = await admin.storage.from("uploads").createSignedUrl(row.storage_path, 60 * 30);
       if (!signed?.signedUrl) continue;
-      const fileId = await uploadOne(agency.token, folders.get(key)!, row.file_name, signed.signedUrl);
+      const fileId = await uploadOne(agency.token, folders.get(key)!, row.file_name, signed.signedUrl, row.note);
       await admin.from("uploads").update({ drive_file_id: fileId }).eq("id", row.id);
       synced++;
     } catch (err) {

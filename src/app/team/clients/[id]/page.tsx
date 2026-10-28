@@ -73,7 +73,7 @@ export default async function ClientDetail({
     supabase.from("agency_members").select("user_id, display_name, role, avatar_path").eq("agency_id", agency.id).order("display_name"),
     supabase.from("tasks").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50),
     loadTaskPeople(supabase, agency.id, userId),
-    supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(300),
+    supabase.from("uploads").select("id, kind, file_name, storage_path, drive_file_id, note, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(300),
     supabase.from("call_requests").select("*").eq("client_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(10),
     connectedMembers(agency.id),
     supabase.from("client_briefs").select("*").eq("client_id", id).order("created_at", { ascending: false }),
@@ -569,8 +569,9 @@ export default async function ClientDetail({
                 <a className="btn sm line" style={{ justifySelf: "start" }} href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open their Drive folder</a>
               )}
               <UploadGroups timeZone={tz} items={uploadRows.map((u) => ({
-                id: u.id, url: uploadLinks.get(u.storage_path) ?? null, name: u.file_name, kind: u.kind, at: u.created_at,
-                drive: u.drive_file_id ? "in" : client.drive_folder_id ? "copying" : null,
+                id: u.id, url: uploadLinks.get(u.storage_path) ?? null, name: u.file_name, kind: u.kind, at: u.created_at, note: u.note,
+                // Only branding and content are copied to Drive; the team files anything else.
+                drive: u.drive_file_id ? "in" : client.drive_folder_id && (u.kind === "branding" || u.kind === "content") ? "copying" : null,
               }))} />
             </>
           ) : (
