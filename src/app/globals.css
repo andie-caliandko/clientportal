@@ -51,6 +51,9 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* Nothing can make the page itself scroll sideways (wide tables and calendars scroll inside their own boxes).
+   clip, not hidden, so sticky headers keep working. */
+html, body { overflow-x: clip; }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.55; }
 h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--head); text-wrap: balance; margin: 0; line-height: 1.08; }
 p { margin: 0; }
