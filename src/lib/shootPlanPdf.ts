@@ -144,8 +144,8 @@ export async function shootPlanPdf(opts: {
     heading("Models");
     const setupName = (id: string) => plan.setups.find((s) => s.id === id)?.name ?? "";
     table(
-      [{ label: "Name", w: 0.24 }, { label: "Setups", w: 0.26 }, { label: "Size", w: 0.14 }, { label: "Waiver signed", w: 0.14 }, { label: "Notes", w: 0.22 }],
-      plan.models.map((m) => [m.name, m.setupIds.map(setupName).filter(Boolean).join(", "), m.size, { box: m.waiverSigned }, m.notes]),
+      [{ label: "Name", w: 0.26 }, { label: "Setups", w: 0.28 }, { label: "Waiver (if needed)", w: 0.16 }, { label: "Notes", w: 0.3 }],
+      plan.models.map((m) => [m.name, m.setupIds.map(setupName).filter(Boolean).join(", "), { box: m.waiverSigned }, m.notes]),
     );
   }
 

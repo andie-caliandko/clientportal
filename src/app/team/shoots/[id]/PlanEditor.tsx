@@ -229,7 +229,7 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
             {plan.models.length > 0 && (
               <div className="plan-table-wrap">
                 <table className="plan-table">
-                  <thead><tr><th>Name</th><th>Setups</th><th>Size</th><th>Waiver</th><th>Notes</th><th><span className="sr-only">Remove</span></th></tr></thead>
+                  <thead><tr><th>Name</th><th>Setups</th><th>Waiver (if needed)</th><th>Notes</th><th><span className="sr-only">Remove</span></th></tr></thead>
                   <tbody>
                     {plan.models.map((m, i) => (
                       <tr key={m.id}>
@@ -246,7 +246,6 @@ export function PlanEditor({ shootId, clientId, agencyId, initial, sent, changed
                             {!plan.setups.length && <span className="note">Add setups first</span>}
                           </span>
                         </td>
-                        <td><input className="input" aria-label="Size" value={m.size} style={{ width: 70 }} onChange={(e) => setModel(i, { size: e.target.value })} /></td>
                         <td>
                           <label className="row" style={{ gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
                             <input type="checkbox" checked={m.waiverSigned} onChange={(e) => setModel(i, { waiverSigned: e.target.checked })} /> Signed

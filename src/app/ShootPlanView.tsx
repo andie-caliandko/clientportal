@@ -33,8 +33,8 @@ export function ShootPlanView({ plan }: { plan: ShootPlan }) {
         <div>
           <h3>Models</h3>
           <div className="plan-table-wrap"><table className="plan-table read">
-            <thead><tr><th>Name</th><th>Setups</th><th>Size</th><th>Waiver</th></tr></thead>
-            <tbody>{plan.models.map((m) => <tr key={m.id}><td>{m.name}</td><td>{m.setupIds.map(setupName).filter(Boolean).join(", ")}</td><td>{m.size}</td><td>{m.waiverSigned ? "Signed" : "Not yet"}</td></tr>)}</tbody>
+            <thead><tr><th>Name</th><th>Setups</th><th>Waiver (if needed)</th></tr></thead>
+            <tbody>{plan.models.map((m) => <tr key={m.id}><td>{m.name}</td><td>{m.setupIds.map(setupName).filter(Boolean).join(", ")}</td><td>{m.waiverSigned ? "Signed" : "—"}</td></tr>)}</tbody>
           </table></div>
         </div>
       )}
