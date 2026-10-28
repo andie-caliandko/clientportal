@@ -752,7 +752,7 @@ async function GallerySection(ctx: PortalCtx, shootId: string) {
   }
   const [items, covers, { data: share }] = await Promise.all([
     loadGallery(shoot.id),
-    galleryCovers([shoot]),
+    galleryCovers([shoot], { full: true }),
     admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle(),
   ]);
   const title = cleanPlan(share?.content).title || "Content Shoot";

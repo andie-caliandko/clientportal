@@ -25,15 +25,20 @@ export async function loadGallery(shootId: string): Promise<GalleryItem[]> {
   }));
 }
 
-/** The cover photo's preview link, for gallery cards. */
-export async function galleryCovers(shoots: { id: string; gallery_cover_id: string | null }[]) {
+/**
+ * The cover photo's link: the small preview for gallery cards, or (`full`) the original photo
+ * for the big banner at the top of a gallery, where the preview would look blurry.
+ */
+export async function galleryCovers(shoots: { id: string; gallery_cover_id: string | null }[], { full = false } = {}) {
   const admin = createAdminClient();
   const out = new Map<string, string | null>();
   for (const s of shoots) {
     let q = admin.from("shoot_gallery_items").select("file_path, thumb_path, mime").eq("shoot_id", s.id);
     q = s.gallery_cover_id ? q.eq("id", s.gallery_cover_id) : q.not("thumb_path", "is", null).order("position").order("created_at");
     const { data } = await q.limit(1).maybeSingle();
-    const path = data?.thumb_path ?? (data?.mime?.startsWith("image/") ? data.file_path : null);
+    // Browsers can't show HEIC (iPhone) originals, so those keep the preview.
+    const original = data?.mime?.startsWith("image/") && !/hei[cf]/i.test(data.mime) ? data.file_path : null;
+    const path = full ? original ?? data?.thumb_path : data?.thumb_path ?? original;
     out.set(s.id, path ? (await admin.storage.from("galleries").createSignedUrl(path, HOURS)).data?.signedUrl ?? null : null);
   }
   return out;
