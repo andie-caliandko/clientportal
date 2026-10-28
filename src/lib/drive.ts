@@ -11,21 +11,39 @@ const SUBFOLDER: Record<string, string> = { branding: "Branding", content: "Cont
 const STANDARD = Object.values(SUBFOLDER);
 const API = "https://www.googleapis.com/drive/v3";
 
-async function findOrCreateFolder(token: string, parentId: string, name: string) {
-  const q = encodeURIComponent(
-    `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-  );
-  const found = await fetch(`${API}/files?q=${q}&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
+const folderQuery = (parentId: string, name: string) => encodeURIComponent(
+  `name = '${name.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+);
+
+/** Folders with this name in the parent, oldest first. */
+async function foldersNamed(token: string, parentId: string, name: string) {
+  const found = await fetch(`${API}/files?q=${folderQuery(parentId, name)}&fields=files(id)&orderBy=createdTime&supportsAllDrives=true&includeItemsFromAllDrives=true`, {
     headers: { Authorization: `Bearer ${token}` },
   }).then((r) => r.json());
-  if (found.files?.[0]?.id) return found.files[0].id as string;
+  return ((found.files ?? []) as { id: string }[]).map((f) => f.id);
+}
+
+/**
+ * The folder with this name in the parent, made if it isn't there. Two runs at the same moment can
+ * both make one, so after making it we look again and keep only the oldest (ours goes to the trash).
+ */
+async function findOrCreateFolder(token: string, parentId: string, name: string) {
+  const existing = await foldersNamed(token, parentId, name);
+  if (existing[0]) return existing[0];
   const created = await fetch(`${API}/files?supportsAllDrives=true&fields=id`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
   }).then((r) => r.json());
   if (!created.id) throw new Error(`Couldn't create Drive folder: ${JSON.stringify(created.error ?? created)}`);
-  return created.id as string;
+  const all = await foldersNamed(token, parentId, name);
+  const keep = all[0] ?? created.id;
+  if (keep !== created.id) {
+    await fetch(`${API}/files/${created.id}?supportsAllDrives=true`, {
+      method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }),
+    });
+  }
+  return keep as string;
 }
 
 /** Streams one file from portal storage into Drive. Returns the Drive file id. */
@@ -276,7 +294,20 @@ const shootFolderName = (date: string, end?: string | null) => `${date}${end && 
  * The shoot's own folder in Content Shoots (made the first time, renamed if the date moves).
  * Null when the client has no Drive folder or Google isn't connected.
  */
-export async function ensureShootFolder(shootId: string) {
+export function ensureShootFolder(shootId: string) {
+  // Several things ask for the folder at once (saving, sending the plan, gallery uploads three at a
+  // time): share one run per shoot instead of each making its own.
+  let run = shootFolderRuns.get(shootId);
+  if (!run) {
+    run = makeShootFolder(shootId).finally(() => shootFolderRuns.delete(shootId));
+    shootFolderRuns.set(shootId, run);
+  }
+  return run;
+}
+
+const shootFolderRuns = new Map<string, Promise<{ token: string; folderId: string } | null>>();
+
+async function makeShootFolder(shootId: string): Promise<{ token: string; folderId: string } | null> {
   const admin = createAdminClient();
   const { data: shoot } = await admin.from("content_shoots")
     .select("id, shoot_date, end_date, status, drive_folder_id, clients(agency_id, drive_folder_id)").eq("id", shootId).maybeSingle();
@@ -303,7 +334,13 @@ export async function ensureShootFolder(shootId: string) {
   if (shoot.status !== "scheduled") return null;
   const parent = await findOrCreateFolder(agency.token, client.drive_folder_id, SHOOTS_FOLDER);
   const folderId = await findOrCreateFolder(agency.token, parent, name);
-  await admin.from("content_shoots").update({ drive_folder_id: folderId }).eq("id", shootId);
+  // Only saved if nothing else saved one first (a run elsewhere at the same moment); otherwise use theirs.
+  const { data: saved } = await admin.from("content_shoots").update({ drive_folder_id: folderId })
+    .eq("id", shootId).or(`drive_folder_id.is.null,drive_folder_id.eq.${shoot.drive_folder_id ?? "none"}`).select("id");
+  if (!saved?.length) {
+    const { data: winner } = await admin.from("content_shoots").select("drive_folder_id").eq("id", shootId).maybeSingle();
+    if (winner?.drive_folder_id) return { token: agency.token, folderId: winner.drive_folder_id as string };
+  }
   return { token: agency.token, folderId };
 }
 
