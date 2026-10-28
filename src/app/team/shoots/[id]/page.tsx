@@ -6,12 +6,17 @@ import { shootDates, timeLabel } from "@/lib/shoots";
 import { createClient } from "@/lib/supabase/server";
 import { PlanEditor } from "./PlanEditor";
 import { GalleryManager } from "./GalleryManager";
+import { ShootTabs } from "./ShootTabs";
 import { loadGallery } from "@/lib/gallery.server";
 
-/** Plan one shoot: shot list, timeline and notes. Private to the team until someone sends it to the client. */
-export default async function ShootPlanPage({ params }: { params: Promise<{ id: string }> }) {
+/**
+ * One shoot, in two tabs: Plan (private to the team until it's sent to the client) and Gallery
+ * (photos and videos to upload and send).
+ */
+export default async function ShootPlanPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { agency } = await requireTeam();
   const { id } = await params;
+  const { tab } = await searchParams;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
     .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, clients(name)").eq("id", id).maybeSingle();
@@ -44,7 +49,7 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
         <div>
           <Link href="/team/shoots" className="note">← Content shoots</Link>
           <p className="eyebrow" style={{ marginTop: 10 }}><Link href={`/team/clients/${shoot.client_id}`}>{client?.name}</Link></p>
-          <h1 style={{ marginTop: 6 }}>{plan.title || "Shoot plan"}</h1>
+          <h1 style={{ marginTop: 6 }}>{plan.title || "Content shoot"}</h1>
           <p className="note">{[when, timeLabel(shoot.start_time), shoot.location].filter(Boolean).join(" · ")}{shoot.status === "cancelled" ? " · Cancelled" : ""}</p>
           {(crewNames || shoot.photographer) && (
             <p className="note">{[crewNames && `Team: ${crewNames}`, shoot.photographer && `Photographer: ${shoot.photographer}`].filter(Boolean).join(" · ")}</p>
@@ -54,23 +59,31 @@ export default async function ShootPlanPage({ params }: { params: Promise<{ id: 
           <a className="btn sm line" href={`https://drive.google.com/drive/folders/${shoot.drive_folder_id}`} target="_blank" rel="noreferrer">Open Drive folder</a>
         )}
       </div>
-      <GalleryManager
-        shootId={shoot.id}
-        clientId={shoot.client_id}
-        agencyId={agency.id}
-        items={gallery}
-        coverId={shoot.gallery_cover_id}
-        sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
-        previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
-      />
-      <PlanEditor
-        shootId={shoot.id}
-        initial={plan}
-        clientId={shoot.client_id}
-        agencyId={agency.id}
-        sent={shared ? { at: sentAt! } : null}
-        changedSinceSent={!!shared && !samePlan(plan, cleanPlan(shared.content))}
-        waivers={waivers}
+      <ShootTabs
+        initial={tab === "gallery" ? "gallery" : "plan"}
+        galleryCount={gallery.length}
+        plan={(
+          <PlanEditor
+            shootId={shoot.id}
+            initial={plan}
+            clientId={shoot.client_id}
+            agencyId={agency.id}
+            sent={shared ? { at: sentAt! } : null}
+            changedSinceSent={!!shared && !samePlan(plan, cleanPlan(shared.content))}
+            waivers={waivers}
+          />
+        )}
+        gallery={(
+          <GalleryManager
+            shootId={shoot.id}
+            clientId={shoot.client_id}
+            agencyId={agency.id}
+            items={gallery}
+            coverId={shoot.gallery_cover_id}
+            sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
+            previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
+          />
+        )}
       />
     </section>
   );

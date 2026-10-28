@@ -21,25 +21,30 @@ export default async function ShootsPage({ searchParams }: { searchParams: Promi
   const supabase = await createClient();
   // Everyone sees only the accounts they're on (admins see all, and can narrow to one account manager).
   const [allShoots, { data: clients }, { data: members }] = await Promise.all([
-    loadShoots(supabase, today),
+    // From a year back, so shoots that already happened (and need their gallery) are here too.
+    loadShoots(supabase, addDays(today, -365)),
     supabase.from("clients").select("id, name, account_manager_id").is("archived_at", null).order("name"),
     supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).order("display_name"),
   ]);
   const managers = (members ?? []).filter((m) => (clients ?? []).some((c) => c.account_manager_id === m.user_id));
   const who = isAdmin && whoParam && managers.some((m) => m.user_id === whoParam) ? whoParam : "all";
-  const shoots = who === "all" ? allShoots : allShoots.filter((s) => s.managerId === who);
+  const mine = who === "all" ? allShoots : allShoots.filter((s) => s.managerId === who);
+  // Over once its last day has passed.
+  const isPast = (s: (typeof mine)[number]) => (s.end_date && s.end_date > s.shoot_date ? s.end_date : s.shoot_date) < today;
+  const shoots = mine.filter((s) => !isPast(s));
+  const past = mine.filter(isPast).reverse();
   const cutoff = addDays(today, UPCOMING_DAYS);
   const soon = shoots.filter((s) => s.shoot_date <= cutoff);
   const later = shoots.filter((s) => s.shoot_date > cutoff);
   const monthLabel = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", year: "numeric" });
   // Shoots grouped under month headings.
-  const byMonth = (list: typeof shoots, empty: string) => {
+  const byMonth = (list: typeof shoots, empty: string, isPastList = false) => {
     const months = [...new Set(list.map((s) => s.shoot_date.slice(0, 7)))];
     if (!list.length) return <p className="note">{empty}{canEdit && !shoots.length ? " Use Schedule a shoot to add one." : ""}</p>;
     return months.map((m) => (
       <div className="shoot-month" key={m}>
         <h2>{monthLabel(m)}</h2>
-        <ShootList shoots={list.filter((s) => s.shoot_date.startsWith(m))} canEdit={canEdit} showClient timeZone={tz} team={members ?? []} />
+        <ShootList shoots={list.filter((s) => s.shoot_date.startsWith(m))} canEdit={canEdit} showClient timeZone={tz} team={members ?? []} past={isPastList} />
       </div>
     ));
   };
@@ -55,10 +60,11 @@ export default async function ShootsPage({ searchParams }: { searchParams: Promi
           {canEdit && <ShootEditor clients={clients ?? []} team={members ?? []} label="Schedule a shoot" />}
         </div>
       </div>
-      <p className="note">Upcoming is the next {UPCOMING_DAYS} days; Looking ahead is everything after. Clients see their upcoming shoots in their portal. Each shoot gives the account manager planning tasks, starting 45 days before; they show up on the board a week before each is due.</p>
+      <p className="note">Upcoming is the next {UPCOMING_DAYS} days; Looking ahead is everything after; Past is the last year, where you upload and send galleries. Clients see their upcoming shoots in their portal. Each shoot gives the account manager planning tasks, starting 45 days before; they show up on the board a week before each is due.</p>
       <CeoTabs label="Shoots" tabs={[
         { id: "upcoming", label: "Upcoming", count: soon.length, content: byMonth(soon, `Nothing in the next ${UPCOMING_DAYS} days.`) },
         { id: "ahead", label: "Looking ahead", count: later.length, content: byMonth(later, "Nothing scheduled further out yet.") },
+        { id: "past", label: "Past", count: past.length, content: byMonth(past, "No shoots in the last year.", true) },
       ]} />
     </section>
   );
