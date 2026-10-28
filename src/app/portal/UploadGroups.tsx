@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FilePreview } from "./FilePreview";
+import { Modal } from "@/app/Modal";
 
 export type UploadItem = { id: string; url: string | null; name: string; kind: string; at: string; drive?: "in" | "copying" | null; driveUrl?: string | null; note?: string | null };
 
@@ -13,7 +14,16 @@ const SHOWN = 12;
  * of small previews. The newest group starts open; big groups show 12 at first.
  * Clicking a file opens it and steps left and right through its group.
  */
-export function UploadGroups({ items, timeZone, showKind = true }: { items: UploadItem[]; timeZone: string; showKind?: boolean }) {
+export function UploadGroups({ items, timeZone, showKind = true, latestOnly = false, driveUrl }: {
+  items: UploadItem[];
+  timeZone: string;
+  showKind?: boolean;
+  /** Show just the newest upload, with "View all files" opening the rest in a pop-up. */
+  latestOnly?: boolean;
+  /** Their Google Drive folder, shown beside "View all files". */
+  driveUrl?: string | null;
+}) {
+  const [all, setAll] = useState(false);
   const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
   const groups: { key: string; kind: string; date: string; files: UploadItem[] }[] = [];
   for (const it of items) {
@@ -22,10 +32,27 @@ export function UploadGroups({ items, timeZone, showKind = true }: { items: Uplo
     if (g) g.files.push(it);
     else groups.push({ key, kind: it.kind, date: it.at, files: [it] });
   }
-  return (
+  const list = (gs: typeof groups) => (
     <div className="up-groups">
-      {groups.map((g, i) => <Group key={g.key} group={g} open={i === 0} timeZone={timeZone} showKind={showKind} />)}
+      {gs.map((g, i) => <Group key={g.key} group={g} open={i === 0} timeZone={timeZone} showKind={showKind} />)}
     </div>
+  );
+  if (!latestOnly) return list(groups);
+  return (
+    <>
+      <p className="eyebrow">Most recent upload</p>
+      {list(groups.slice(0, 1))}
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <button type="button" className="btn sm" onClick={() => setAll(true)}>View all files ({items.length})</button>
+        {driveUrl && <a className="btn sm line" href={driveUrl} target="_blank" rel="noreferrer">Open their Drive folder</a>}
+      </div>
+      {all && (
+        <Modal title={`All files (${items.length})`} onClose={() => setAll(false)} wide>
+          {driveUrl && <p className="note">Also in their <a href={driveUrl} target="_blank" rel="noreferrer">Google Drive folder</a> (branding and content).</p>}
+          {list(groups)}
+        </Modal>
+      )}
+    </>
   );
 }
 

@@ -560,22 +560,24 @@ export default async function ClientDetail({
           <h2>Files from the client</h2>
           <p className="note">
             {client.drive_folder_id
-              ? "Everything they upload is also copied into their Google Drive folder."
-              : "Add their Google Drive folder under Client info, and uploads will be copied there."}
+              ? "Branding and content uploads are also copied into their Google Drive folder."
+              : "Add their Google Drive folder under Client info, and branding and content uploads will be copied there."}
           </p>
           {uploadRows.length ? (
             <>
-              {client.drive_folder_id && (
-                <a className="btn sm line" style={{ justifySelf: "start" }} href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open their Drive folder</a>
-              )}
-              <UploadGroups timeZone={tz} items={uploadRows.map((u) => ({
+              <UploadGroups timeZone={tz} latestOnly driveUrl={client.drive_folder_id ? driveFolderUrl(client.drive_folder_id) : null} items={uploadRows.map((u) => ({
                 id: u.id, url: uploadLinks.get(u.storage_path) ?? null, name: u.file_name, kind: u.kind, at: u.created_at, note: u.note,
                 // Only branding and content are copied to Drive; the team files anything else.
                 drive: u.drive_file_id ? "in" : client.drive_folder_id && (u.kind === "branding" || u.kind === "content") ? "copying" : null,
               }))} />
             </>
           ) : (
-            <p className="note">Nothing uploaded yet.</p>
+            <>
+              <p className="note">Nothing uploaded yet.</p>
+              {client.drive_folder_id && (
+                <a className="btn sm line" style={{ justifySelf: "start" }} href={driveFolderUrl(client.drive_folder_id)} target="_blank" rel="noreferrer">Open their Drive folder</a>
+              )}
+            </>
           )}
         </div>
 
