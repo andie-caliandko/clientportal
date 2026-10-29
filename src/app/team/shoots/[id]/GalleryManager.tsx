@@ -6,31 +6,49 @@ import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadResumable } from "@/lib/resumableUpload";
-import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
+import { addGalleryItem, hideGallery, removeGalleryItem, replaceGalleryThumb, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
 
-const THUMB = 900;
+// Previews are sharp on big phone and laptop screens (a grid tile is ~360px wide, twice that on retina)
+// while staying a fraction of the original's size.
+const THUMB = 1400;
 
-/** A small JPEG preview of a photo or the first moment of a video, made in the browser. Null if it can't be read (like HEIC). */
-async function preview(file: File): Promise<{ blob: Blob; width: number; height: number } | null> {
+/**
+ * A JPEG preview of a photo or video frame, shrunk in steps with high-quality smoothing so
+ * edges stay clean (one big jump from a 6000px photo looks jagged and soft).
+ * Takes a file just chosen, or (to redo an old preview) a link to the original.
+ */
+async function preview(src: { file: Blob; video: boolean } | { url: string; video: boolean }): Promise<{ blob: Blob; width: number; height: number } | null> {
   try {
     let source: CanvasImageSource, w: number, h: number;
-    if (file.type.startsWith("image/")) {
-      const bmp = await createImageBitmap(file);
+    if (!src.video) {
+      const bmp = await createImageBitmap("file" in src ? src.file : await (await fetch(src.url)).blob());
       source = bmp; w = bmp.width; h = bmp.height;
-    } else if (file.type.startsWith("video/")) {
+    } else {
       const video = document.createElement("video");
-      video.muted = true; video.playsInline = true; video.preload = "auto";
-      video.src = URL.createObjectURL(file);
+      video.muted = true; video.playsInline = true; video.preload = "auto"; video.crossOrigin = "anonymous";
+      video.src = "file" in src ? URL.createObjectURL(src.file) : src.url;
       await new Promise<void>((ok, fail) => { video.onloadeddata = () => ok(); video.onerror = () => fail(); });
       video.currentTime = Math.min(0.5, video.duration / 2 || 0);
       await new Promise<void>((ok) => { video.onseeked = () => ok(); });
       source = video; w = video.videoWidth; h = video.videoHeight;
-    } else return null;
+    }
     const scale = Math.min(1, THUMB / Math.max(w, h));
+    const tw = Math.round(w * scale), th = Math.round(h * scale);
+    let cw = w, ch = h;
+    while (cw / 2 >= tw) {
+      const step = document.createElement("canvas");
+      step.width = Math.round(cw / 2); step.height = Math.round(ch / 2);
+      const ctx = step.getContext("2d")!;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(source, 0, 0, step.width, step.height);
+      source = step; cw = step.width; ch = step.height;
+    }
     const canvas = document.createElement("canvas");
-    canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
-    canvas.getContext("2d")!.drawImage(source, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/jpeg", 0.82));
+    canvas.width = tw; canvas.height = th;
+    const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(source, 0, 0, tw, th);
+    const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/jpeg", 0.86));
     return blob ? { blob, width: w, height: h } : null;
   } catch {
     return null;
@@ -38,10 +56,13 @@ async function preview(file: File): Promise<{ blob: Blob; width: number; height:
 }
 
 /** Upload photos and videos, pick a cover, then send the gallery to the client's portal. */
-export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken }: {
+export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, viewers, timeZone }: {
   shootId: string; clientId: string; agencyId: string; items: GalleryItem[]; coverId: string | null; sentAt: string | null; previewHref: string;
   /** The gallery's no-sign-in share link, once one has been made. */
   shareToken: string | null;
+  /** People who entered their email to open the share link. */
+  viewers: GalleryViewer[];
+  timeZone: string;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -68,7 +89,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       if (error) {
         failed.push(`${f.name}: ${error}`);
       } else {
-        const p = await preview(f);
+        const p = await preview({ file: f, video: f.type.startsWith("video/") });
         let thumbPath: string | null = null;
         if (p) {
           thumbPath = `${base}-thumb.jpg`;
@@ -87,6 +108,30 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
     setProgress(null);
     setErrors(failed);
     if (input.current) input.current.value = "";
+    router.refresh();
+  };
+
+  // Galleries uploaded before previews were sharpened get new ones made from the originals.
+  const [redo, setRedo] = useState<{ done: number; total: number } | null>(null);
+  const sharpen = async () => {
+    const list = items.filter((i) => i.url && (isVideo(i) || (i.mime ?? "").startsWith("image/")));
+    if (!list.length) return;
+    setMsg({});
+    setRedo({ done: 0, total: list.length });
+    const supabase = createClient();
+    let done = 0, failed = 0;
+    const one = async (i: GalleryItem) => {
+      const p = await preview({ url: i.url!, video: isVideo(i) });
+      const path = `${agencyId}/${clientId}/${shootId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-thumb.jpg`;
+      const ok = p && !(await supabase.storage.from("galleries").upload(path, p.blob, { contentType: "image/jpeg" })).error
+        && !(await replaceGalleryThumb(i.id, path, p.width, p.height)).error;
+      if (!ok) failed++;
+      setRedo({ done: ++done, total: list.length });
+    };
+    const queue = [...list];
+    await Promise.all(Array.from({ length: 3 }, async () => { for (let i = queue.shift(); i; i = queue.shift()) await one(i); }));
+    setRedo(null);
+    setMsg(failed ? { error: `${failed} preview${failed === 1 ? "" : "s"} couldn't be redone (iPhone HEIC photos only preview in Safari).` } : { ok: "Previews sharpened." });
     router.refresh();
   };
 
@@ -115,7 +160,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       </div>
       {msg.error && <p className="error">{msg.error}</p>}
       {msg.ok && <p className="flash" role="status">{msg.ok}</p>}
-      {items.length > 0 && <ShareLink shootId={shootId} token={shareToken} />}
+      {items.length > 0 && <ShareLink shootId={shootId} token={shareToken} viewers={viewers} timeZone={timeZone} />}
 
       <label htmlFor="gallery-files" className={`gallery-drop ${drag ? "on" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -127,6 +172,13 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       </label>
       {errors.length > 0 && <div className="error">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
 
+      {items.length > 0 && (
+        <p className="note">
+          {redo ? `Sharpening previews: ${redo.done} of ${redo.total}… (keep this page open)` : (
+            <>Previews look soft? <button type="button" className="linkbtn" disabled={!!progress || pending} onClick={sharpen}>Sharpen previews</button> remakes them from the originals.</>
+          )}
+        </p>
+      )}
       {items.length > 0 && (
         <ul className="gallery-admin">
           {items.map((i) => (
@@ -152,7 +204,9 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
  * A link to the gallery that opens without signing in, to text or email to anyone
  * (one-time shoots, or clients who aren't in the portal).
  */
-function ShareLink({ shootId, token }: { shootId: string; token: string | null }) {
+export type GalleryViewer = { email: string; first: string; last: string; visits: number };
+
+function ShareLink({ shootId, token, viewers, timeZone }: { shootId: string; token: string | null; viewers: GalleryViewer[]; timeZone: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
@@ -173,7 +227,7 @@ function ShareLink({ shootId, token }: { shootId: string; token: string | null }
     <div className="share-link">
       <div>
         <b>Share link</b>
-        <p className="note">{url ? "Anyone with this link can view and download the gallery, no sign-in needed." : "A link anyone can open, no sign-in needed. Good for one-time shoots."}</p>
+        <p className="note">{url ? "Anyone with this link can view and download the gallery after entering their email (no password)." : "A link anyone can open with just their email, no portal sign-in. Good for one-time shoots."}</p>
       </div>
       {url ? (
         <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -186,6 +240,22 @@ function ShareLink({ shootId, token }: { shootId: string; token: string | null }
         <button type="button" className="btn sm line" disabled={pending} onClick={make}>{pending ? "Making link…" : "Get share link"}</button>
       )}
       {note && <p className="note" role="status">{note}</p>}
+      {viewers.length > 0 && (
+        <details className="share-viewers">
+          <summary>Viewed by {viewers.length} {viewers.length === 1 ? "person" : "people"}</summary>
+          <table>
+            <thead><tr><th>Email</th><th>First opened</th><th>Last opened</th><th>Visits</th></tr></thead>
+            <tbody>
+              {viewers.map((v) => (
+                <tr key={v.email}><td>{v.email}</td><td>{when(v.first, timeZone)}</td><td>{when(v.last, timeZone)}</td><td>{v.visits}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
     </div>
   );
 }
+
+const when = (iso: string, timeZone: string) =>
+  new Date(iso).toLocaleString("en-US", { timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });

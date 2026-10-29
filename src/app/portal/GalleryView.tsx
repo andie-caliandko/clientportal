@@ -16,10 +16,12 @@ const HEART = (on: boolean) => (
  * A content shoot gallery as the client sees it: cover, grid, a full-screen viewer
  * (arrows, arrow keys, swipe), favorites and downloads.
  */
-export function GalleryView({ title, sub, cover, items: initial, canFavorite, zipName }: {
+export function GalleryView({ title, sub, cover, coverPreview, items: initial, canFavorite, zipName }: {
   title: string;
   sub: string;
   cover: string | null;
+  /** The cover's small preview, shown while the full-size cover loads. */
+  coverPreview?: string | null;
   items: GalleryItem[];
   /** Clients can heart photos; the team preview can't. */
   canFavorite: boolean;
@@ -74,7 +76,7 @@ export function GalleryView({ title, sub, cover, items: initial, canFavorite, zi
   return (
     <section className="gallery">
       <header className={`gallery-hero ${cover ? "" : "plain"}`}>
-        {cover && <img src={cover} alt="" />}
+        {cover && <Photo item={{ url: cover, thumb: coverPreview ?? cover, mime: null }} alt="" />}
         <div className="gallery-hero-text">
           <p className="eyebrow">Content shoot gallery</p>
           <h1>{title}</h1>
@@ -105,7 +107,7 @@ export function GalleryView({ title, sub, cover, items: initial, canFavorite, zi
           <li key={i.id}>
             <button type="button" className="gallery-tile" onClick={() => setOpen(k)} aria-label={`Open ${i.name}`}>
               {i.thumb && !(isVideo(i) && i.thumb === i.url) ? (
-                <img src={i.thumb} alt="" loading="lazy" style={i.width && i.height ? { aspectRatio: `${i.width} / ${i.height}` } : undefined} />
+                <img src={i.thumb} alt="" loading="lazy" decoding="async" style={i.width && i.height ? { aspectRatio: `${i.width} / ${i.height}` } : undefined} />
               ) : isVideo(i) ? (
                 <video src={`${i.url}#t=0.5`} preload="metadata" muted playsInline />
               ) : <span className="gallery-file">{i.name}</span>}
@@ -124,6 +126,20 @@ export function GalleryView({ title, sub, cover, items: initial, canFavorite, zi
       )}
     </section>
   );
+}
+
+/** The preview shows at once; the full-size original takes over once it has loaded. */
+function Photo({ item, alt }: { item: Pick<GalleryItem, "url" | "thumb" | "mime"> & { name?: string }; alt?: string }) {
+  const [full, setFull] = useState(false);
+  const browserSafe = !/hei[cf]/i.test(item.mime ?? "");
+  useEffect(() => {
+    if (!item.url || !browserSafe || item.url === item.thumb) return;
+    const img = new Image();
+    img.onload = () => setFull(true);
+    img.src = item.url;
+    return () => { img.onload = null; };
+  }, [item.url, item.thumb, browserSafe]);
+  return <img src={(full ? item.url : item.thumb) ?? item.url ?? undefined} alt={alt ?? item.name ?? ""} />;
 }
 
 function Viewer({ items, at, setAt, onHeart }: { items: GalleryItem[]; at: number; setAt: (n: number | null) => void; onHeart: ((id: string) => void) | null }) {
@@ -160,7 +176,7 @@ function Viewer({ items, at, setAt, onHeart }: { items: GalleryItem[]; at: numbe
       <div className="gallery-stage" onClick={(e) => { if (e.target === e.currentTarget) setAt(null); }}>
         {isVideo(item)
           ? <video key={item.id} src={item.url ?? undefined} controls autoPlay playsInline />
-          : <img key={item.id} src={item.url ?? item.thumb ?? undefined} alt={item.name} />}
+          : <Photo key={item.id} item={item} />}
       </div>
       {items.length > 1 && (
         <>

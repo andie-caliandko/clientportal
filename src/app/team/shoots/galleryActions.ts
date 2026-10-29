@@ -117,3 +117,14 @@ export async function stopGalleryLink(shootId: string): Promise<Result> {
   refresh(shootId);
   return { ok: "Link turned off." };
 }
+
+/** Swap in a sharper preview the browser just made from the original (the old one is deleted). */
+export async function replaceGalleryThumb(itemId: string, thumbPath: string, width: number, height: number): Promise<Result> {
+  const v = await requireTeam();
+  const supabase = await createClient();
+  const { data: item } = await supabase.from("shoot_gallery_items").select("id, shoot_id, client_id, thumb_path").eq("id", itemId).maybeSingle();
+  if (!item || !thumbPath.startsWith(`${v.agency.id}/${item.client_id}/${item.shoot_id}/`) || !thumbPath.endsWith("-thumb.jpg")) return { error: "That file wasn't found." };
+  await supabase.from("shoot_gallery_items").update({ thumb_path: thumbPath, width, height }).eq("id", itemId);
+  if (item.thumb_path && item.thumb_path !== thumbPath) await supabase.storage.from("galleries").remove([item.thumb_path]);
+  return { ok: "Updated." };
+}

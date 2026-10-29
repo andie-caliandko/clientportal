@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { after } from "next/server";
+import { recordView, VIEWER_COOKIE } from "@/lib/galleryViewers";
+import { EmailGate } from "./EmailGate";
 import { GalleryView } from "@/app/portal/GalleryView";
 import { Logo } from "@/lib/brand";
 import type { Brand } from "@/lib/types";
@@ -14,13 +18,14 @@ export const metadata: Metadata = { title: "Content shoot gallery", robots: { in
 
 /**
  * A shoot's gallery opened from its share link, no sign-in: for one-time shoots and
- * anyone who isn't in the portal. Viewing and downloading only (favorites live in the portal).
+ * anyone who isn't in the portal. Visitors give their email first so the team can see who looked.
+ * Viewing and downloading only (favorites live in the portal).
  */
 export default async function SharedGalleryPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const admin = createAdminClient();
   const { data: shoot } = /^[\w-]{16,64}$/.test(token)
-    ? await admin.from("content_shoots").select("id, shoot_date, end_date, gallery_cover_id, clients(name), agencies(name, brand)")
+    ? await admin.from("content_shoots").select("id, client_id, shoot_date, end_date, gallery_cover_id, clients(name), agencies(name, brand)")
       .eq("gallery_share_token", token).maybeSingle()
     : { data: null };
   const agency = shoot?.agencies as unknown as { name: string; brand: Brand } | null;
@@ -35,12 +40,31 @@ export default async function SharedGalleryPage({ params }: { params: Promise<{ 
       </main>
     );
   }
-  const [items, covers, { data: share }] = await Promise.all([
+  const email = (await cookies()).get(VIEWER_COOKIE)?.value;
+  const client = shoot.clients as unknown as { name: string } | null;
+  if (!email) {
+    const { data: share } = await admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle();
+    return (
+      <main className="auth">
+        <div className="auth-card">
+          {agency && <Logo brand={agency.brand} name={agency.name} height={72} />}
+          <div>
+            {client?.name && <p className="eyebrow">{client.name}</p>}
+            <h1 style={{ marginTop: client?.name ? 8 : 0 }}>{cleanPlan(share?.content).title || "Your content shoot gallery"}</h1>
+            <p className="note" style={{ marginTop: 8 }}>Enter your email to view and download the photos and videos.</p>
+          </div>
+          <EmailGate token={token} />
+        </div>
+      </main>
+    );
+  }
+  after(async () => { try { await recordView(shoot, email); } catch (err) { console.error("Gallery view", err); } });
+  const [items, covers, previews, { data: share }] = await Promise.all([
     loadGallery(shoot.id),
     galleryCovers([shoot], { full: true }),
+    galleryCovers([shoot]),
     admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle(),
   ]);
-  const client = shoot.clients as unknown as { name: string } | null;
   const title = cleanPlan(share?.content).title || "Content Shoot";
   const date = shoot.end_date && shoot.end_date > shoot.shoot_date ? shootDates(shoot.shoot_date, shoot.end_date)
     : new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -51,6 +75,7 @@ export default async function SharedGalleryPage({ params }: { params: Promise<{ 
         title={title}
         sub={[client?.name, date, galleryCount(items)].filter(Boolean).join(" · ")}
         cover={covers.get(shoot.id) ?? null}
+        coverPreview={previews.get(shoot.id) ?? null}
         items={items}
         canFavorite={false}
         zipName={`${client?.name ?? "Gallery"} ${shoot.shoot_date}`}

@@ -16,12 +16,17 @@ export async function loadGallery(shootId: string): Promise<GalleryItem[]> {
   const bucket = admin.storage.from("galleries");
   const paths = rows.flatMap((r) => [r.file_path, r.thumb_path].filter((p): p is string => !!p));
   const { data: signed } = await bucket.createSignedUrls(paths, HOURS);
-  const url = (p: string | null) => (p ? signed?.find((s) => s.path === p)?.signedUrl ?? null : null);
-  // Download links carry the file's name, so it saves as "IMG_0412.jpg" rather than a storage key.
-  const downloads = await Promise.all(rows.map((r) => bucket.createSignedUrl(r.file_path, HOURS, { download: r.file_name }).then((x) => x.data?.signedUrl ?? null)));
-  return rows.map((r, i) => ({
+  const byPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+  const url = (p: string | null) => (p ? byPath.get(p) ?? null : null);
+  // Download links carry the file's name, so it saves as "IMG_0412.jpg" rather than a storage key
+  // (the same signed link plus Storage's download parameter: no extra request per photo).
+  const download = (r: { file_path: string; file_name: string }) => {
+    const u = url(r.file_path);
+    return u ? `${u}${u.includes("?") ? "&" : "?"}download=${encodeURIComponent(r.file_name)}` : null;
+  };
+  return rows.map((r) => ({
     id: r.id, name: r.file_name, mime: r.mime, width: r.width, height: r.height, favorite: r.favorite,
-    thumb: url(r.thumb_path) ?? url(r.file_path), url: url(r.file_path), download: downloads[i],
+    thumb: url(r.thumb_path) ?? url(r.file_path), url: url(r.file_path), download: download(r),
   }));
 }
 

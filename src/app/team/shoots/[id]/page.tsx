@@ -31,7 +31,10 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
     ? await supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).in("user_id", crewIds)
     : { data: [] as { user_id: string; display_name: string }[] };
   const crewNames = crewIds.map((cid) => (crew ?? []).find((c) => c.user_id === cid)?.display_name).filter(Boolean).join(", ");
-  const gallery = await loadGallery(shoot.id);
+  const [gallery, { data: viewerRows }] = await Promise.all([
+    loadGallery(shoot.id),
+    supabase.from("gallery_viewers").select("email, first_viewed_at, last_viewed_at, visits").eq("shoot_id", id).order("last_viewed_at", { ascending: false }),
+  ]);
   const plan = cleanPlan((draft ?? shared)?.content);
   const signed = waiverRows?.length
     ? (await supabase.storage.from("waivers").createSignedUrls(waiverRows.map((w) => w.file_path), 60 * 60)).data ?? []
@@ -83,6 +86,8 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
             sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
             previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
             shareToken={shoot.gallery_share_token}
+            viewers={(viewerRows ?? []).map((r) => ({ email: r.email, first: r.first_viewed_at, last: r.last_viewed_at, visits: r.visits }))}
+            timeZone={agency.timezone}
           />
         )}
       />

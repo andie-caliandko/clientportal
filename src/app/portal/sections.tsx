@@ -750,9 +750,10 @@ async function GallerySection(ctx: PortalCtx, shootId: string) {
       </>
     );
   }
-  const [items, covers, { data: share }] = await Promise.all([
+  const [items, covers, previews, { data: share }] = await Promise.all([
     loadGallery(shoot.id),
     galleryCovers([shoot], { full: true }),
+    galleryCovers([shoot]),
     admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle(),
   ]);
   const title = cleanPlan(share?.content).title || "Content Shoot";
@@ -765,6 +766,7 @@ async function GallerySection(ctx: PortalCtx, shootId: string) {
         title={title}
         sub={`${ctx.client.name} · ${date} · ${galleryCount(items)}`}
         cover={covers.get(shoot.id) ?? null}
+        coverPreview={previews.get(shoot.id) ?? null}
         items={items}
         canFavorite={!ctx.preview}
         zipName={`${ctx.client.name} ${shoot.shoot_date}`}
