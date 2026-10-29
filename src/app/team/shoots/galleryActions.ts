@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncGalleryToDrive, trashDriveFile } from "@/lib/drive";
@@ -92,4 +93,27 @@ export async function hideGallery(shootId: string): Promise<Result> {
   await createAdminClient().from("content_shoots").update({ gallery_sent_at: null }).eq("id", shootId);
   refresh(shootId);
   return { ok: "Hidden from the client." };
+}
+
+/** A private link anyone can open to see the gallery, no sign-in (made once, then reused). */
+export async function shareGalleryLink(shootId: string): Promise<Result & { token?: string }> {
+  await requireTeam();
+  if (!(await shootFor(shootId))) return { error: "That shoot wasn't found." };
+  const admin = createAdminClient();
+  const { data: cur } = await admin.from("content_shoots").select("gallery_share_token").eq("id", shootId).single();
+  if (cur?.gallery_share_token) return { token: cur.gallery_share_token };
+  const token = randomBytes(18).toString("base64url");
+  const { error } = await admin.from("content_shoots").update({ gallery_share_token: token }).eq("id", shootId);
+  if (error) return { error: "The link couldn't be made. Try again." };
+  refresh(shootId);
+  return { ok: "Link ready.", token };
+}
+
+/** Turn the share link off; anyone who has it sees "not available". A new link is a new address. */
+export async function stopGalleryLink(shootId: string): Promise<Result> {
+  await requireTeam();
+  if (!(await shootFor(shootId))) return { error: "That shoot wasn't found." };
+  await createAdminClient().from("content_shoots").update({ gallery_share_token: null }).eq("id", shootId);
+  refresh(shootId);
+  return { ok: "Link turned off." };
 }

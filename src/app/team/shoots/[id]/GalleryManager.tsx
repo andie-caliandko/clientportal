@@ -1,12 +1,12 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- photos come from short-lived storage links */
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadResumable } from "@/lib/resumableUpload";
-import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover } from "../galleryActions";
+import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
 
 const THUMB = 900;
 
@@ -38,8 +38,10 @@ async function preview(file: File): Promise<{ blob: Blob; width: number; height:
 }
 
 /** Upload photos and videos, pick a cover, then send the gallery to the client's portal. */
-export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref }: {
+export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken }: {
   shootId: string; clientId: string; agencyId: string; items: GalleryItem[]; coverId: string | null; sentAt: string | null; previewHref: string;
+  /** The gallery's no-sign-in share link, once one has been made. */
+  shareToken: string | null;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -113,6 +115,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       </div>
       {msg.error && <p className="error">{msg.error}</p>}
       {msg.ok && <p className="flash" role="status">{msg.ok}</p>}
+      {items.length > 0 && <ShareLink shootId={shootId} token={shareToken} />}
 
       <label htmlFor="gallery-files" className={`gallery-drop ${drag ? "on" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -141,6 +144,48 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * A link to the gallery that opens without signing in, to text or email to anyone
+ * (one-time shoots, or clients who aren't in the portal).
+ */
+function ShareLink({ shootId, token }: { shootId: string; token: string | null }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [note, setNote] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => { setUrl(token ? `${window.location.origin}/g/${token}` : null); }, [token]);
+  const copy = async (link: string) => {
+    try { await navigator.clipboard.writeText(link); setNote("Link copied. Paste it into a text or email."); }
+    catch { setNote("Select the link and copy it."); }
+  };
+  const make = () => start(async () => {
+    const r = await shareGalleryLink(shootId);
+    if (r.error || !r.token) return setNote(r.error ?? "The link couldn't be made.");
+    await copy(`${window.location.origin}/g/${r.token}`);
+    router.refresh();
+  });
+  const stop = () => start(async () => { const r = await stopGalleryLink(shootId); setNote(r.error ?? r.ok ?? null); router.refresh(); });
+  return (
+    <div className="share-link">
+      <div>
+        <b>Share link</b>
+        <p className="note">{url ? "Anyone with this link can view and download the gallery, no sign-in needed." : "A link anyone can open, no sign-in needed. Good for one-time shoots."}</p>
+      </div>
+      {url ? (
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input id={`share-${shootId}`} className="share-url" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Gallery link" />
+          <button type="button" className="btn sm" onClick={() => copy(url)}>Copy link</button>
+          <a className="btn sm line" href={url} target="_blank" rel="noreferrer">Open gallery</a>
+          <button type="button" className="linkbtn note" disabled={pending} onClick={stop}>Turn off link</button>
+        </div>
+      ) : (
+        <button type="button" className="btn sm line" disabled={pending} onClick={make}>{pending ? "Making link…" : "Get share link"}</button>
+      )}
+      {note && <p className="note" role="status">{note}</p>}
     </div>
   );
 }
