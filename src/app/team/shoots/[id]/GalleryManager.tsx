@@ -56,10 +56,12 @@ async function preview(src: { file: Blob; video: boolean }): Promise<{ blob: Blo
 }
 
 /** Upload photos and videos, pick a cover, then send the gallery to the client's portal. */
-export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, viewers, timeZone, sizing }: {
+export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, namedLink, viewers, timeZone, sizing }: {
   shootId: string; clientId: string; agencyId: string; items: GalleryItem[]; coverId: string | null; sentAt: string | null; previewHref: string;
   /** The gallery's no-sign-in share link, once one has been made. */
   shareToken: string | null;
+  /** Whether the link ends in the client's name (older links end in random letters). */
+  namedLink: boolean;
   /** People who entered their email to open the share link. */
   viewers: GalleryViewer[];
   timeZone: string;
@@ -138,7 +140,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       </div>
       {msg.error && <p className="error">{msg.error}</p>}
       {msg.ok && <p className="flash" role="status">{msg.ok}</p>}
-      {items.length > 0 && <ShareLink shootId={shootId} token={shareToken} viewers={viewers} timeZone={timeZone} />}
+      {items.length > 0 && <ShareLink shootId={shootId} token={shareToken} named={namedLink} viewers={viewers} timeZone={timeZone} />}
 
       <label htmlFor="gallery-files" className={`gallery-drop ${drag ? "on" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -178,7 +180,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
  */
 export type GalleryViewer = { email: string; first: string; last: string; visits: number };
 
-function ShareLink({ shootId, token, viewers, timeZone }: { shootId: string; token: string | null; viewers: GalleryViewer[]; timeZone: string }) {
+function ShareLink({ shootId, token, named, viewers, timeZone }: { shootId: string; token: string | null; named: boolean; viewers: GalleryViewer[]; timeZone: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
@@ -206,6 +208,7 @@ function ShareLink({ shootId, token, viewers, timeZone }: { shootId: string; tok
           <input id={`share-${shootId}`} className="share-url" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Gallery link" />
           <button type="button" className="btn sm" onClick={() => copy(url)}>Copy link</button>
           <a className="btn sm line" href={url} target="_blank" rel="noreferrer">Open gallery</a>
+          {!named && <button type="button" className="linkbtn" disabled={pending} onClick={make}>Use a link with their name</button>}
           <button type="button" className="linkbtn note" disabled={pending} onClick={stop}>Turn off link</button>
         </div>
       ) : (

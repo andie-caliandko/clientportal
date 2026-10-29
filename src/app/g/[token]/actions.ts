@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { recordView, VIEWER_COOKIE } from "@/lib/galleryViewers";
+import { recordView, SHARE_PATH, VIEWER_COOKIE } from "@/lib/galleryViewers";
 import { createAdminClient } from "@/lib/supabase/server";
 
 /** Someone opening a shared gallery gives their email first; the team sees who's looked. */
@@ -10,8 +10,8 @@ export async function enterGallery(token: string, _prev: { error?: string } | nu
   const email = String(form.get("email") ?? "").trim().toLowerCase().slice(0, 200);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: "Enter a valid email address." };
   const admin = createAdminClient();
-  const { data: shoot } = /^[\w-]{16,64}$/.test(token)
-    ? await admin.from("content_shoots").select("id, client_id").eq("gallery_share_token", token).maybeSingle()
+  const { data: shoot } = SHARE_PATH.test(token)
+    ? await admin.from("content_shoots").select("id, client_id").or(`gallery_share_slug.eq.${token},gallery_share_token.eq.${token}`).maybeSingle()
     : { data: null };
   if (!shoot) return { error: "This gallery isn't available anymore." };
   await recordView(shoot, email, true);

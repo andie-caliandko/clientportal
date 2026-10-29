@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncGalleryToDrive, trashDriveFile } from "@/lib/drive";
@@ -98,25 +97,39 @@ export async function hideGallery(shootId: string): Promise<Result> {
   return { ok: "Hidden from the client." };
 }
 
-/** A private link anyone can open to see the gallery, no sign-in (made once, then reused). */
+/**
+ * The gallery's share link, ending in the client's business name (/g/an-unblurred-lady).
+ * A second shared gallery for the same client adds the shoot date (an-unblurred-lady-oct-14).
+ * Made once, then reused; a gallery shared before keeps its old address working too.
+ */
 export async function shareGalleryLink(shootId: string): Promise<Result & { token?: string }> {
   await requireTeam();
   if (!(await shootFor(shootId))) return { error: "That shoot wasn't found." };
   const admin = createAdminClient();
-  const { data: cur } = await admin.from("content_shoots").select("gallery_share_token").eq("id", shootId).single();
-  if (cur?.gallery_share_token) return { token: cur.gallery_share_token };
-  const token = randomBytes(18).toString("base64url");
-  const { error } = await admin.from("content_shoots").update({ gallery_share_token: token }).eq("id", shootId);
-  if (error) return { error: "The link couldn't be made. Try again." };
-  refresh(shootId);
-  return { ok: "Link ready.", token };
+  const { data: cur } = await admin.from("content_shoots").select("shoot_date, gallery_share_token, gallery_share_slug, clients(name, slug)").eq("id", shootId).single();
+  if (!cur) return { error: "That shoot wasn't found." };
+  if (cur.gallery_share_slug) return { token: cur.gallery_share_slug };
+  const client = cur.clients as unknown as { name: string; slug: string } | null;
+  const name = (client?.name || client?.slug || "gallery").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "gallery";
+  const day = new Date(`${cur.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).toLowerCase().replace(/\W+/g, "-");
+  const tries = [name, `${name}-${day}`, ...Array.from({ length: 8 }, (_, n) => `${name}-${day}-${n + 2}`)];
+  for (const slug of tries) {
+    // The unique column settles any tie between two galleries shared at the same moment.
+    const { error } = await admin.from("content_shoots").update({ gallery_share_slug: slug }).eq("id", shootId).is("gallery_share_slug", null);
+    if (!error) {
+      refresh(shootId);
+      return { ok: "Link ready.", token: slug };
+    }
+    if (error.code !== "23505") break;
+  }
+  return { error: "The link couldn't be made. Try again." };
 }
 
-/** Turn the share link off; anyone who has it sees "not available". A new link is a new address. */
+/** Turn the share link off; anyone who has it sees "not available" until a link is made again. */
 export async function stopGalleryLink(shootId: string): Promise<Result> {
   await requireTeam();
   if (!(await shootFor(shootId))) return { error: "That shoot wasn't found." };
-  await createAdminClient().from("content_shoots").update({ gallery_share_token: null }).eq("id", shootId);
+  await createAdminClient().from("content_shoots").update({ gallery_share_token: null, gallery_share_slug: null }).eq("id", shootId);
   refresh(shootId);
   return { ok: "Link turned off." };
 }

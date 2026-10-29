@@ -24,7 +24,7 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
   const { tab } = await searchParams;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, gallery_share_token, clients(name)").eq("id", id).maybeSingle();
+    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, gallery_share_token, gallery_share_slug, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
   const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
     supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
@@ -93,7 +93,8 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
             coverId={shoot.gallery_cover_id}
             sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
             previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
-            shareToken={shoot.gallery_share_token}
+            shareToken={shoot.gallery_share_slug ?? shoot.gallery_share_token}
+            namedLink={!!shoot.gallery_share_slug}
             viewers={(viewerRows ?? []).map((r) => ({ email: r.email, first: r.first_viewed_at, last: r.last_viewed_at, visits: r.visits }))}
             timeZone={agency.timezone}
             sizing={sizing}

@@ -4,6 +4,9 @@ import { createAdminClient } from "./supabase/server";
 /** Remembers, per share link, the email someone gave to open a gallery. */
 export const VIEWER_COOKIE = "gallery_viewer";
 
+/** A share link's ending: the business name (an-unblurred-lady-oct-14) or an older random one. Checked before it goes into a query. */
+export const SHARE_PATH = /^[A-Za-z0-9_-]{2,80}$/;
+
 /** Add or update the viewer's row. Return visits within half an hour of the last count as the same visit. */
 export async function recordView(shoot: { id: string; client_id: string }, email: string, fresh = false) {
   const admin = createAdminClient();

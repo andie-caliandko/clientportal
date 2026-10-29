@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { after } from "next/server";
-import { recordView, VIEWER_COOKIE } from "@/lib/galleryViewers";
+import { recordView, SHARE_PATH, VIEWER_COOKIE } from "@/lib/galleryViewers";
 import { sizeGalleryItems } from "@/lib/galleryPreviews";
 import { EmailGate } from "./EmailGate";
 import { GalleryView } from "@/app/portal/GalleryView";
@@ -26,9 +26,9 @@ export const metadata: Metadata = { title: "Content shoot gallery", robots: { in
 export default async function SharedGalleryPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const admin = createAdminClient();
-  const { data: shoot } = /^[\w-]{16,64}$/.test(token)
+  const { data: shoot } = SHARE_PATH.test(token)
     ? await admin.from("content_shoots").select("id, client_id, shoot_date, end_date, gallery_cover_id, clients(name), agencies(name, brand)")
-      .eq("gallery_share_token", token).maybeSingle()
+      .or(`gallery_share_slug.eq.${token},gallery_share_token.eq.${token}`).maybeSingle()
     : { data: null };
   const agency = shoot?.agencies as unknown as { name: string; brand: Brand } | null;
   const header = agency && <div className="share-brand"><Logo brand={agency.brand} name={agency.name} height={56} /></div>;
