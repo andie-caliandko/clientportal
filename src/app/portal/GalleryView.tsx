@@ -76,7 +76,7 @@ export function GalleryView({ title, sub, cover, coverPreview, items: initial, c
   return (
     <section className="gallery">
       <header className={`gallery-hero ${cover ? "" : "plain"}`}>
-        {cover && <Photo item={{ url: cover, thumb: coverPreview ?? cover, mime: null }} alt="" />}
+        {cover && <Photo item={{ url: cover, large: null, thumb: coverPreview ?? cover, mime: null }} alt="" />}
         <div className="gallery-hero-text">
           <p className="eyebrow">Content shoot gallery</p>
           <h1>{title}</h1>
@@ -128,24 +128,36 @@ export function GalleryView({ title, sub, cover, coverPreview, items: initial, c
   );
 }
 
-/** The preview shows at once; the full-size original takes over once it has loaded. */
-function Photo({ item, alt }: { item: Pick<GalleryItem, "url" | "thumb" | "mime"> & { name?: string }; alt?: string }) {
-  const [full, setFull] = useState(false);
-  const browserSafe = !/hei[cf]/i.test(item.mime ?? "");
+/** The large version for the full-screen view, or the original when there isn't one yet (never HEIC, which browsers can't show). */
+const bigOf = (i: Pick<GalleryItem, "url" | "large" | "mime">) => i.large ?? (/hei[cf]/i.test(i.mime ?? "") ? null : i.url);
+
+/** The preview shows at once; the big version takes over once it has loaded. */
+function Photo({ item, alt }: { item: Pick<GalleryItem, "url" | "large" | "thumb" | "mime"> & { name?: string }; alt?: string }) {
+  const big = bigOf(item);
+  const [ready, setReady] = useState<string | null>(null);
   useEffect(() => {
-    if (!item.url || !browserSafe || item.url === item.thumb) return;
+    if (!big || big === item.thumb) return;
     const img = new Image();
-    img.onload = () => setFull(true);
-    img.src = item.url;
+    img.onload = () => setReady(big);
+    img.src = big;
+    if (img.complete && img.naturalWidth) setReady(big);
     return () => { img.onload = null; };
-  }, [item.url, item.thumb, browserSafe]);
-  return <img src={(full ? item.url : item.thumb) ?? item.url ?? undefined} alt={alt ?? item.name ?? ""} />;
+  }, [big, item.thumb]);
+  return <img src={(ready === big ? big : item.thumb) ?? big ?? undefined} alt={alt ?? item.name ?? ""} />;
 }
 
 function Viewer({ items, at, setAt, onHeart }: { items: GalleryItem[]; at: number; setAt: (n: number | null) => void; onHeart: ((id: string) => void) | null }) {
   const item = items[at];
   const swipe = useRef<number | null>(null);
   const go = useCallback((d: number) => setAt((at + d + items.length) % items.length), [at, items.length, setAt]);
+  // The next and previous photos load in the background, so arrowing through is instant.
+  useEffect(() => {
+    for (const d of [1, -1, 2]) {
+      const n = items[(at + d + items.length) % items.length];
+      const big = n && !isVideo(n) ? n.large : null; // not 8MB originals
+      if (big) new Image().src = big;
+    }
+  }, [at, items]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") setAt(null);

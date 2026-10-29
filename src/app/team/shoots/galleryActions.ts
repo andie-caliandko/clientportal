@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { syncGalleryToDrive, trashDriveFile } from "@/lib/drive";
+import { sizeGalleryItems } from "@/lib/galleryPreviews";
 import { notifyClient } from "@/lib/notifications";
 import { emailClient } from "@/lib/notify";
 import { requireTeam } from "@/lib/session";
@@ -41,6 +42,8 @@ export async function addGalleryItem(shootId: string, item: {
     return { error: `${item.name} uploaded but couldn't be added to the gallery.` };
   }
   // A copy in the shoot's Drive folder (Gallery).
+  // Its sharp grid preview and large version, made from the original.
+  after(async () => { try { await sizeGalleryItems({ itemIds: [made.id] }); } catch (err) { console.error("Gallery previews", err); } });
   after(async () => { try { await syncGalleryToDrive({ itemIds: [made.id] }); } catch (err) { console.error("Gallery to Drive", err); } });
   return { id: made.id };
 }
@@ -49,9 +52,9 @@ export async function addGalleryItem(shootId: string, item: {
 export async function removeGalleryItem(id: string): Promise<Result> {
   const v = await requireTeam();
   const supabase = await createClient();
-  const { data: item } = await supabase.from("shoot_gallery_items").select("id, shoot_id, file_path, thumb_path, drive_file_id").eq("id", id).maybeSingle();
+  const { data: item } = await supabase.from("shoot_gallery_items").select("*").eq("id", id).maybeSingle();
   if (!item) return { error: "That file wasn't found." };
-  await supabase.storage.from("galleries").remove([item.file_path, item.thumb_path].filter((p): p is string => !!p));
+  await supabase.storage.from("galleries").remove([item.file_path, item.thumb_path, item.large_path].filter((p): p is string => !!p));
   await supabase.from("shoot_gallery_items").delete().eq("id", id);
   await supabase.from("content_shoots").update({ gallery_cover_id: null }).eq("id", item.shoot_id).eq("gallery_cover_id", id);
   if (item.drive_file_id) after(async () => { try { await trashDriveFile(v.agency.id, item.drive_file_id!); } catch { /* already gone */ } });
@@ -116,15 +119,4 @@ export async function stopGalleryLink(shootId: string): Promise<Result> {
   await createAdminClient().from("content_shoots").update({ gallery_share_token: null }).eq("id", shootId);
   refresh(shootId);
   return { ok: "Link turned off." };
-}
-
-/** Swap in a sharper preview the browser just made from the original (the old one is deleted). */
-export async function replaceGalleryThumb(itemId: string, thumbPath: string, width: number, height: number): Promise<Result> {
-  const v = await requireTeam();
-  const supabase = await createClient();
-  const { data: item } = await supabase.from("shoot_gallery_items").select("id, shoot_id, client_id, thumb_path").eq("id", itemId).maybeSingle();
-  if (!item || !thumbPath.startsWith(`${v.agency.id}/${item.client_id}/${item.shoot_id}/`) || !thumbPath.endsWith("-thumb.jpg")) return { error: "That file wasn't found." };
-  await supabase.from("shoot_gallery_items").update({ thumb_path: thumbPath, width, height }).eq("id", itemId);
-  if (item.thumb_path && item.thumb_path !== thumbPath) await supabase.storage.from("galleries").remove([item.thumb_path]);
-  return { ok: "Updated." };
 }

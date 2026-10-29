@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadResumable } from "@/lib/resumableUpload";
-import { addGalleryItem, hideGallery, removeGalleryItem, replaceGalleryThumb, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
+import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
 
 // Previews are sharp on big phone and laptop screens (a grid tile is ~360px wide, twice that on retina)
 // while staying a fraction of the original's size.
@@ -15,18 +15,18 @@ const THUMB = 1400;
 /**
  * A JPEG preview of a photo or video frame, shrunk in steps with high-quality smoothing so
  * edges stay clean (one big jump from a 6000px photo looks jagged and soft).
- * Takes a file just chosen, or (to redo an old preview) a link to the original.
+ * Shown right after upload; the server then swaps in its own sharper versions of photos.
  */
-async function preview(src: { file: Blob; video: boolean } | { url: string; video: boolean }): Promise<{ blob: Blob; width: number; height: number } | null> {
+async function preview(src: { file: Blob; video: boolean }): Promise<{ blob: Blob; width: number; height: number } | null> {
   try {
     let source: CanvasImageSource, w: number, h: number;
     if (!src.video) {
-      const bmp = await createImageBitmap("file" in src ? src.file : await (await fetch(src.url)).blob());
+      const bmp = await createImageBitmap(src.file);
       source = bmp; w = bmp.width; h = bmp.height;
     } else {
       const video = document.createElement("video");
-      video.muted = true; video.playsInline = true; video.preload = "auto"; video.crossOrigin = "anonymous";
-      video.src = "file" in src ? URL.createObjectURL(src.file) : src.url;
+      video.muted = true; video.playsInline = true; video.preload = "auto";
+      video.src = URL.createObjectURL(src.file);
       await new Promise<void>((ok, fail) => { video.onloadeddata = () => ok(); video.onerror = () => fail(); });
       video.currentTime = Math.min(0.5, video.duration / 2 || 0);
       await new Promise<void>((ok) => { video.onseeked = () => ok(); });
@@ -56,13 +56,15 @@ async function preview(src: { file: Blob; video: boolean } | { url: string; vide
 }
 
 /** Upload photos and videos, pick a cover, then send the gallery to the client's portal. */
-export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, viewers, timeZone }: {
+export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, viewers, timeZone, sizing }: {
   shootId: string; clientId: string; agencyId: string; items: GalleryItem[]; coverId: string | null; sentAt: string | null; previewHref: string;
   /** The gallery's no-sign-in share link, once one has been made. */
   shareToken: string | null;
   /** People who entered their email to open the share link. */
   viewers: GalleryViewer[];
   timeZone: string;
+  /** Photos still waiting for their server-made previews. */
+  sizing: number;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -111,30 +113,6 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
     router.refresh();
   };
 
-  // Galleries uploaded before previews were sharpened get new ones made from the originals.
-  const [redo, setRedo] = useState<{ done: number; total: number } | null>(null);
-  const sharpen = async () => {
-    const list = items.filter((i) => i.url && (isVideo(i) || (i.mime ?? "").startsWith("image/")));
-    if (!list.length) return;
-    setMsg({});
-    setRedo({ done: 0, total: list.length });
-    const supabase = createClient();
-    let done = 0, failed = 0;
-    const one = async (i: GalleryItem) => {
-      const p = await preview({ url: i.url!, video: isVideo(i) });
-      const path = `${agencyId}/${clientId}/${shootId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-thumb.jpg`;
-      const ok = p && !(await supabase.storage.from("galleries").upload(path, p.blob, { contentType: "image/jpeg" })).error
-        && !(await replaceGalleryThumb(i.id, path, p.width, p.height)).error;
-      if (!ok) failed++;
-      setRedo({ done: ++done, total: list.length });
-    };
-    const queue = [...list];
-    await Promise.all(Array.from({ length: 3 }, async () => { for (let i = queue.shift(); i; i = queue.shift()) await one(i); }));
-    setRedo(null);
-    setMsg(failed ? { error: `${failed} preview${failed === 1 ? "" : "s"} couldn't be redone (iPhone HEIC photos only preview in Safari).` } : { ok: "Previews sharpened." });
-    router.refresh();
-  };
-
   const act = (fn: () => Promise<{ error?: string; ok?: string }>) => start(async () => { setMsg(await fn()); setConfirm(false); router.refresh(); });
 
   return (
@@ -172,13 +150,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       </label>
       {errors.length > 0 && <div className="error">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
 
-      {items.length > 0 && (
-        <p className="note">
-          {redo ? `Sharpening previews: ${redo.done} of ${redo.total}… (keep this page open)` : (
-            <>Previews look soft? <button type="button" className="linkbtn" disabled={!!progress || pending} onClick={sharpen}>Sharpen previews</button> remakes them from the originals.</>
-          )}
-        </p>
-      )}
+      {sizing > 0 && <p className="note" role="status">Making sharp previews for {sizing} photo{sizing === 1 ? "" : "s"}. They swap in on their own over the next few minutes.</p>}
       {items.length > 0 && (
         <ul className="gallery-admin">
           {items.map((i) => (

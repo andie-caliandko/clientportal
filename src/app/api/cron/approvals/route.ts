@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { clientActivity, emailClient } from "@/lib/notify";
 import { formatDue } from "@/lib/approval";
 import { syncDocumentsToDrive, syncGalleryToDrive, syncUploadsToDrive } from "@/lib/drive";
+import { sizeGalleryItems } from "@/lib/galleryPreviews";
 import { createAdminClient } from "@/lib/supabase/server";
 
 // Runs every hour (see vercel.json; needs Vercel Pro):
@@ -74,6 +75,8 @@ export async function GET(request: NextRequest) {
   const reports = await syncDocumentsToDrive({ limit: 25 }).catch((err) => { console.error("Reports to Drive", err); return 0; });
   // Gallery photos and videos that didn't make it into the shoot's Drive folder yet.
   const gallery = Date.now() - started < 240_000 ? await syncGalleryToDrive({ limit: 20 }).catch((err) => { console.error("Gallery to Drive", err); return 0; }) : 0;
+  // Sharp previews for gallery photos that don't have them yet.
+  const sized = Date.now() - started < 250_000 ? await sizeGalleryItems({ limit: 40 }).catch((err) => { console.error("Gallery previews", err); return 0; }) : 0;
 
-  return NextResponse.json({ reminded: reminders?.length ?? 0, autoApproved: expired?.length ?? 0, driveSynced: synced, reportsSynced: reports, gallerySynced: gallery });
+  return NextResponse.json({ gallerySized: sized, reminded: reminders?.length ?? 0, autoApproved: expired?.length ?? 0, driveSynced: synced, reportsSynced: reports, gallerySynced: gallery });
 }

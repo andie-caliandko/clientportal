@@ -8,7 +8,9 @@ export type GalleryItem = {
   favorite: boolean;
   /** Small preview for the grid (falls back to the full file). */
   thumb: string | null;
-  /** The full file, for the big view. */
+  /** A big, sharp version for the full-screen view (made on the server; null until then, or for videos). */
+  large: string | null;
+  /** The full file (the original). */
   url: string | null;
   /** The full file, saved as a download with its own name. */
   download: string | null;

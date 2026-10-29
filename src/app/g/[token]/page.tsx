@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { after } from "next/server";
 import { recordView, VIEWER_COOKIE } from "@/lib/galleryViewers";
+import { sizeGalleryItems } from "@/lib/galleryPreviews";
 import { EmailGate } from "./EmailGate";
 import { GalleryView } from "@/app/portal/GalleryView";
 import { Logo } from "@/lib/brand";
@@ -13,6 +14,7 @@ import { shootDates } from "@/lib/shoots";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 // Private links: keep them out of search engines.
 export const metadata: Metadata = { title: "Content shoot gallery", robots: { index: false, follow: false } };
 
@@ -59,6 +61,7 @@ export default async function SharedGalleryPage({ params }: { params: Promise<{ 
     );
   }
   after(async () => { try { await recordView(shoot, email); } catch (err) { console.error("Gallery view", err); } });
+  after(async () => { try { await sizeGalleryItems({ shootId: shoot.id, limit: 60 }); } catch (err) { console.error("Gallery previews", err); } });
   const [items, covers, previews, { data: share }] = await Promise.all([
     loadGallery(shoot.id),
     galleryCovers([shoot], { full: true }),

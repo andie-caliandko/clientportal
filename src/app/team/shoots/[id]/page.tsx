@@ -8,6 +8,11 @@ import { PlanEditor } from "./PlanEditor";
 import { GalleryManager } from "./GalleryManager";
 import { ShootTabs } from "./ShootTabs";
 import { loadGallery } from "@/lib/gallery.server";
+import { gallerySizingPending, sizeGalleryItems } from "@/lib/galleryPreviews";
+import { after } from "next/server";
+
+// Long enough to make sharp previews for a whole shoot in the background.
+export const maxDuration = 300;
 
 /**
  * One shoot, in two tabs: Plan (private to the team until it's sent to the client) and Gallery
@@ -31,10 +36,13 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
     ? await supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).in("user_id", crewIds)
     : { data: [] as { user_id: string; display_name: string }[] };
   const crewNames = crewIds.map((cid) => (crew ?? []).find((c) => c.user_id === cid)?.display_name).filter(Boolean).join(", ");
-  const [gallery, { data: viewerRows }] = await Promise.all([
+  const [gallery, { data: viewerRows }, sizing] = await Promise.all([
     loadGallery(shoot.id),
     supabase.from("gallery_viewers").select("email, first_viewed_at, last_viewed_at, visits").eq("shoot_id", id).order("last_viewed_at", { ascending: false }),
+    gallerySizingPending(id).catch(() => 0),
   ]);
+  // Older galleries (and any upload whose previews didn't finish) get theirs made now.
+  if (sizing) after(async () => { try { await sizeGalleryItems({ shootId: id, limit: 400 }); } catch (err) { console.error("Gallery previews", err); } });
   const plan = cleanPlan((draft ?? shared)?.content);
   const signed = waiverRows?.length
     ? (await supabase.storage.from("waivers").createSignedUrls(waiverRows.map((w) => w.file_path), 60 * 60)).data ?? []
@@ -88,6 +96,7 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
             shareToken={shoot.gallery_share_token}
             viewers={(viewerRows ?? []).map((r) => ({ email: r.email, first: r.first_viewed_at, last: r.last_viewed_at, visits: r.visits }))}
             timeZone={agency.timezone}
+            sizing={sizing}
           />
         )}
       />
