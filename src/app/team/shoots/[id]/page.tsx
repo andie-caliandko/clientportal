@@ -24,7 +24,7 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
   const { tab } = await searchParams;
   const supabase = await createClient();
   const { data: shoot } = await supabase.from("content_shoots")
-    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, gallery_share_token, gallery_share_slug, clients(name)").eq("id", id).maybeSingle();
+    .select("id, client_id, shoot_date, end_date, start_time, location, details, status, crew, photographer, drive_folder_id, gallery_sent_at, gallery_cover_id, gallery_share_token, clients(name)").eq("id", id).maybeSingle();
   if (!shoot) notFound();
   const [{ data: draft }, { data: shared }, { data: waiverRows }] = await Promise.all([
     supabase.from("shoot_plans").select("content, updated_at").eq("shoot_id", id).maybeSingle(),
@@ -36,10 +36,12 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
     ? await supabase.from("agency_members").select("user_id, display_name").eq("agency_id", agency.id).in("user_id", crewIds)
     : { data: [] as { user_id: string; display_name: string }[] };
   const crewNames = crewIds.map((cid) => (crew ?? []).find((c) => c.user_id === cid)?.display_name).filter(Boolean).join(", ");
-  const [gallery, { data: viewerRows }, sizing] = await Promise.all([
+  const [gallery, { data: viewerRows }, sizing, { data: named }] = await Promise.all([
     loadGallery(shoot.id),
     supabase.from("gallery_viewers").select("email, first_viewed_at, last_viewed_at, visits").eq("shoot_id", id).order("last_viewed_at", { ascending: false }),
     gallerySizingPending(id).catch(() => 0),
+    // Asked for on its own, so the page still opens if the column isn't there yet (migration 0048).
+    supabase.from("content_shoots").select("gallery_share_slug").eq("id", id).maybeSingle(),
   ]);
   // Older galleries (and any upload whose previews didn't finish) get theirs made now.
   if (sizing) after(async () => { try { await sizeGalleryItems({ shootId: id, limit: 400 }); } catch (err) { console.error("Gallery previews", err); } });
@@ -93,8 +95,8 @@ export default async function ShootPlanPage({ params, searchParams }: { params: 
             coverId={shoot.gallery_cover_id}
             sentAt={shoot.gallery_sent_at ? new Date(shoot.gallery_sent_at).toLocaleDateString("en-US", { timeZone: agency.timezone, month: "short", day: "numeric" }) : null}
             previewHref={`/preview/${shoot.client_id}/shoots?gallery=${shoot.id}`}
-            shareToken={shoot.gallery_share_slug ?? shoot.gallery_share_token}
-            namedLink={!!shoot.gallery_share_slug}
+            shareToken={named?.gallery_share_slug ?? shoot.gallery_share_token}
+            namedLink={!!named?.gallery_share_slug}
             viewers={(viewerRows ?? []).map((r) => ({ email: r.email, first: r.first_viewed_at, last: r.last_viewed_at, visits: r.visits }))}
             timeZone={agency.timezone}
             sizing={sizing}

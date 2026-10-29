@@ -1,5 +1,4 @@
 import "server-only";
-import sharp from "sharp";
 import { createAdminClient } from "./supabase/server";
 
 /** Grid previews: sharp on retina screens at the gallery's ~360px columns. */
@@ -22,6 +21,9 @@ export async function sizeGalleryItems(filter: { shootId?: string; itemIds?: str
   if (filter.shootId) q = q.eq("shoot_id", filter.shootId);
   if (filter.itemIds) q = q.in("id", filter.itemIds);
   const { data: rows } = await q;
+  if (!rows?.length) return 0;
+  // Loaded only when there's work, so pages that import this never depend on the image library.
+  const { default: sharp } = await import("sharp");
   const bucket = admin.storage.from("galleries");
   let done = 0;
   const one = async (row: NonNullable<typeof rows>[number]) => {
