@@ -131,7 +131,7 @@ export function GalleryView({ title, sub, cover, items: initial, canFavorite, zi
 const bigOf = (i: Pick<GalleryItem, "url" | "large" | "mime">) => i.large ?? (/hei[cf]/i.test(i.mime ?? "") ? null : i.url);
 
 /** Starts loading a photo's big version (on hover or touch), so it's ready when the photo is opened. */
-const warm = (i: Pick<GalleryItem, "url" | "large" | "mime" | "name">) => {
+export const warm = (i: Pick<GalleryItem, "url" | "large" | "mime" | "name">) => {
   const big = isVideo({ mime: i.mime, name: i.name }) ? null : bigOf(i);
   if (big) new Image().src = big;
 };
@@ -151,7 +151,8 @@ function Photo({ src, alt, className }: { src: string | null; alt: string; class
   );
 }
 
-function Viewer({ items, at, setAt, onHeart }: { items: GalleryItem[]; at: number; setAt: (n: number | null) => void; onHeart: ((id: string) => void) | null }) {
+/** Full-screen photo viewer; the team's gallery tab uses it too. */
+export function Viewer({ items, at, setAt, onHeart }: { items: GalleryItem[]; at: number; setAt: (n: number | null) => void; onHeart: ((id: string) => void) | null }) {
   const item = items[at];
   const swipe = useRef<number | null>(null);
   const go = useCallback((d: number) => setAt((at + d + items.length) % items.length), [at, items.length, setAt]);

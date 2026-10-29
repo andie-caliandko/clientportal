@@ -1093,6 +1093,8 @@ a.shoot-ev { display: block; }
 .gallery-admin li { position: relative; border-radius: 12px; overflow: hidden; background: var(--soft); display: grid; }
 .gallery-admin li.cover { outline: 3px solid var(--primary); outline-offset: 1px; }
 .gallery-admin img, .gallery-admin video { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.gallery-admin-open { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.gallery-admin-open:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 .gallery-admin .gallery-play { width: 34px; height: 34px; font-size: .8rem; top: 40%; }
 .gallery-fav { position: absolute; top: 6px; right: 8px; color: #B3261E; background: rgb(255 255 255 / .9); border-radius: 999px; padding: 0 7px; font-size: .9rem; }
 .gallery-admin-tools { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 6px 8px; background: var(--surface); font-size: .8rem; }

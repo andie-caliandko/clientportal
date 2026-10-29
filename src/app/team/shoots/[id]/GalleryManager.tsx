@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
+import { Viewer, warm } from "@/app/portal/GalleryView";
 import { uploadResumable } from "@/lib/resumableUpload";
 import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
 
@@ -75,6 +76,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
   const [errors, setErrors] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [confirm, setConfirm] = useState(false);
+  const [open, setOpen] = useState<number | null>(null);
   const [pending, start] = useTransition();
   const favs = items.filter((i) => i.favorite).length;
 
@@ -155,10 +157,13 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
       {sizing > 0 && <p className="note" role="status">Making sharp previews for {sizing} photo{sizing === 1 ? "" : "s"}. They swap in on their own over the next few minutes.</p>}
       {items.length > 0 && (
         <ul className="gallery-admin">
-          {items.map((i) => (
+          {items.map((i, k) => (
             <li key={i.id} className={i.id === coverId ? "cover" : ""}>
-              {i.thumb && !(isVideo(i) && i.thumb === i.url) ? <img src={i.thumb} alt="" loading="lazy" /> : isVideo(i) ? <video src={`${i.url}#t=0.5`} preload="metadata" muted /> : <span className="gallery-file">{i.name}</span>}
-              {isVideo(i) && <span className="gallery-play" aria-hidden="true">▶</span>}
+              <button type="button" className="gallery-admin-open" aria-label={`Open ${i.name}`} onClick={() => setOpen(k)}
+                onPointerEnter={() => warm(i)} onPointerDown={() => warm(i)} onFocus={() => warm(i)}>
+                {i.thumb && !(isVideo(i) && i.thumb === i.url) ? <img src={i.thumb} alt="" loading="lazy" /> : isVideo(i) ? <video src={`${i.url}#t=0.5`} preload="metadata" muted /> : <span className="gallery-file">{i.name}</span>}
+                {isVideo(i) && <span className="gallery-play" aria-hidden="true">▶</span>}
+              </button>
               {i.favorite && <span className="gallery-fav" title="Client favorite">♥</span>}
               <span className="gallery-admin-tools">
                 {i.id === coverId ? <span className="pill ok">Cover</span> : (
@@ -170,6 +175,8 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
           ))}
         </ul>
       )}
+      {/* The same full-screen view the client gets (favorites stay the client's). */}
+      {open !== null && items[open] && <Viewer items={items} at={open} setAt={setOpen} onHeart={null} />}
     </div>
   );
 }
