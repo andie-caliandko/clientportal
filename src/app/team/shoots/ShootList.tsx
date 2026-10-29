@@ -7,6 +7,8 @@ export type ShootItem = ShootRow & {
   plan: "none" | "draft" | "sent";
   galleryCount: number;
   gallery_sent_at?: string | null;
+  /** When the gallery reached the client (portal or email): the shoot is complete. */
+  gallery_delivered_at?: string | null;
 };
 
 /** Shoots as date cards: when, where, how often, and how planning is going. */
@@ -34,11 +36,17 @@ export function ShootList({ shoots, canEdit, showClient, timeZone, team, past = 
               {s.repeat && <span className="pill info">{shootRepeatLabel(s.repeat)}</span>}
               {s.tasksTotal > 0 && <span className={`pill ${s.tasksDone === s.tasksTotal ? "ok" : "warn"}`}>Planning {s.tasksDone} of {s.tasksTotal}</span>}
               {!past && s.plan !== "none" && <span className={`pill ${s.plan === "sent" ? "ok" : ""}`}>{s.plan === "sent" ? "Plan sent" : "Plan in draft"}</span>}
-              {(past || s.galleryCount > 0) && (
-                <span className={`pill ${s.gallery_sent_at ? "ok" : s.galleryCount ? "" : "warn"}`}>
-                  {s.gallery_sent_at ? "Gallery sent" : s.galleryCount ? `${s.galleryCount} in gallery, not sent` : "No gallery yet"}
-                </span>
-              )}
+              {(past || s.galleryCount > 0) && (() => {
+                const sent = s.gallery_delivered_at || s.gallery_sent_at;
+                return (
+                  <>
+                    <span className={`pill ${sent ? "ok" : s.galleryCount ? "" : "warn"}`}>
+                      {sent ? "Gallery sent" : s.galleryCount ? `${s.galleryCount} in gallery, not sent` : "No gallery yet"}
+                    </span>
+                    {sent && <span className="pill ok">Complete</span>}
+                  </>
+                );
+              })()}
               {!past && s.nextTask && <span className="note">Next: {s.nextTask.title.split(" · ")[0]}, {new Date(s.nextTask.due).toLocaleDateString("en-US", { timeZone, month: "short", day: "numeric" })}</span>}
             </span>
           </span>

@@ -19,12 +19,15 @@ export async function loadShoots(supabase: SupabaseClient, from: string, clientI
     ])
     : [{ data: [] as { shoot_id: string; title: string; status: string; due_at: string }[] }, none, none];
   const { data: galleryRows } = ids.length ? await supabase.from("shoot_gallery_items").select("shoot_id").in("shoot_id", ids) : none;
+  // Asked for on its own so the list still loads before migration 0049 is run.
+  const { data: delivered } = ids.length ? await supabase.from("content_shoots").select("id, gallery_delivered_at").in("id", ids).not("gallery_delivered_at", "is", null) : { data: [] };
   const has = (list: { shoot_id: string }[] | null, id: string) => (list ?? []).some((x) => x.shoot_id === id);
   return rows.map(({ clients, ...r }) => {
     const mine = (tasks ?? []).filter((t) => t.shoot_id === r.id);
     const next = mine.find((t) => t.status !== "done");
     return { ...r, clientName: clients.name, managerId: clients.account_manager_id, tasksTotal: mine.length, tasksDone: mine.filter((t) => t.status === "done").length, nextTask: next ? { title: next.title, due: next.due_at } : null,
       plan: has(shares, r.id) ? "sent" : has(drafts, r.id) ? "draft" : "none",
-      galleryCount: (galleryRows ?? []).filter((g) => g.shoot_id === r.id).length };
+      galleryCount: (galleryRows ?? []).filter((g) => g.shoot_id === r.id).length,
+      gallery_delivered_at: (delivered ?? []).find((d) => d.id === r.id)?.gallery_delivered_at ?? null };
   });
 }

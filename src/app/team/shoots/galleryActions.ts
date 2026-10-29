@@ -17,6 +17,19 @@ async function shootFor(shootId: string) {
   return data;
 }
 
+/**
+ * The gallery reached the client: mark the shoot delivered (Gallery sent · Complete) and check off
+ * its remaining tasks (uploading and organizing the photos, and anything left from planning).
+ */
+async function markDelivered(shootId: string) {
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { error } = await admin.from("content_shoots").update({ gallery_delivered_at: now }).eq("id", shootId).is("gallery_delivered_at", null);
+  if (error) console.error("Gallery delivered (has migration 0049 been run?)", error.message);
+  await admin.from("tasks").update({ status: "done", completed_at: now }).eq("shoot_id", shootId).neq("status", "done");
+  revalidatePath("/team", "layout");
+}
+
 function refresh(shootId: string) {
   revalidatePath(`/team/shoots/${shootId}`);
   revalidatePath("/portal", "layout");
@@ -79,6 +92,7 @@ export async function sendGallery(shootId: string): Promise<Result> {
   if (!count) return { error: "Add photos or videos before sending." };
   const again = !!shoot.gallery_sent_at;
   await createAdminClient().from("content_shoots").update({ gallery_sent_at: new Date().toISOString() }).eq("id", shootId);
+  await markDelivered(shootId);
   const when = new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric" });
   const link = `/portal/shoots?gallery=${shootId}`;
   await notifyClient(shoot.client_id, { kind: "task", title: again ? "Your shoot gallery was updated" : "Your shoot gallery is ready", body: `Content shoot · ${when}`, link });
@@ -134,6 +148,16 @@ export async function stopGalleryLink(shootId: string): Promise<Result> {
   return { ok: "Link turned off." };
 }
 
+/** Every email address on file for the client: saved contact, Dubsado email, and everyone on their portal. */
+async function clientEmails(clientId: string) {
+  const admin = createAdminClient();
+  const [{ data: client }, { data: users }] = await Promise.all([
+    admin.from("clients").select("contact_email, dubsado_email").eq("id", clientId).maybeSingle(),
+    admin.from("client_users").select("email").eq("client_id", clientId),
+  ]);
+  return [client?.contact_email, client?.dubsado_email, ...(users ?? []).map((u) => u.email)].filter((e): e is string => !!e).map((e) => e.trim().toLowerCase());
+}
+
 /** Who the gallery email goes to by default: the client's saved contact, else everyone on their portal. */
 export async function galleryEmailRecipients(shootId: string): Promise<string[]> {
   await requireTeam();
@@ -173,6 +197,8 @@ export async function emailGalleryLink(shootId: string, to: string, note: string
   if (results.every((r) => r === undefined)) return { error: "Email isn't set up on this site, so nothing was sent. Copy the link instead." };
   const sent = emails.filter((_, i) => results[i] === true), failed = emails.filter((_, i) => results[i] !== true);
   if (!sent.length) return { error: "The email didn't send. Try again in a minute." };
+  // Counts as delivered once it's gone to the client themselves (not only to, say, a teammate).
+  if ((await clientEmails(shoot.client_id)).some((e) => sent.includes(e))) await markDelivered(shootId);
   if (failed.length) return { error: `Sent to ${sent.join(", ")}, but not to ${failed.join(", ")}. Try those again.` };
   return { ok: `Sent separately to ${sent.join(", ")}.` };
 }

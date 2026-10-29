@@ -58,7 +58,7 @@ async function preview(src: { file: Blob; video: boolean }): Promise<{ blob: Blo
 }
 
 /** Upload photos and videos, pick a cover, then send the gallery to the client's portal. */
-export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, namedLink, viewers, timeZone, sizing }: {
+export function GalleryManager({ shootId, clientId, agencyId, items, coverId, sentAt, previewHref, shareToken, namedLink, viewers, timeZone, sizing, deliveredAt }: {
   shootId: string; clientId: string; agencyId: string; items: GalleryItem[]; coverId: string | null; sentAt: string | null; previewHref: string;
   /** The gallery's no-sign-in share link, once one has been made. */
   shareToken: string | null;
@@ -69,6 +69,8 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
   timeZone: string;
   /** Photos still waiting for their server-made previews. */
   sizing: number;
+  /** When the gallery reached the client (portal or email). */
+  deliveredAt: string | null;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -124,9 +126,9 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
     <div className="panel">
       <div className="sec-head">
         <div>
-          <h2>Gallery</h2>
+          <h2>Gallery {deliveredAt && <><span className="pill ok">Gallery sent</span> <span className="pill ok">Complete</span></>}</h2>
           <p className="note">{items.length ? galleryCount(items) : "No photos yet"}{favs ? ` · ${favs} client favorite${favs === 1 ? "" : "s"}` : ""}
-            {sentAt ? ` · In their portal since ${sentAt}` : items.length ? " · Not sent yet" : ""}</p>
+            {sentAt ? ` · In their portal since ${sentAt}` : deliveredAt ? ` · Emailed ${deliveredAt}` : items.length ? " · Not sent yet" : ""}</p>
         </div>
         <span className="row" style={{ gap: 8, alignItems: "center" }}>
           {items.length > 0 && <a className="btn sm line" href={previewHref} target="_blank" rel="noreferrer">Preview as client</a>}
