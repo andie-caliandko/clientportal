@@ -202,3 +202,12 @@ export async function emailGalleryLink(shootId: string, to: string, note: string
   if (failed.length) return { error: `Sent to ${sent.join(", ")}, but not to ${failed.join(", ")}. Try those again.` };
   return { ok: `Sent separately to ${sent.join(", ")}.` };
 }
+
+/** For a gallery that reached the client some other way (a texted link, an earlier email): mark it sent and complete. */
+export async function markGallerySent(shootId: string): Promise<Result> {
+  await requireTeam();
+  if (!(await shootFor(shootId))) return { error: "That shoot wasn't found." };
+  await markDelivered(shootId);
+  refresh(shootId);
+  return { ok: "Marked as sent and complete." };
+}

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { Viewer, warm } from "@/app/portal/GalleryView";
 import { Modal } from "@/app/Modal";
 import { uploadResumable } from "@/lib/resumableUpload";
-import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink, emailGalleryLink, galleryEmailRecipients } from "../galleryActions";
+import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink, emailGalleryLink, galleryEmailRecipients, markGallerySent } from "../galleryActions";
 
 // Previews are sharp on big phone and laptop screens (a grid tile is ~360px wide, twice that on retina)
 // while staying a fraction of the original's size.
@@ -132,6 +132,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
         </div>
         <span className="row" style={{ gap: 8, alignItems: "center" }}>
           {items.length > 0 && <a className="btn sm line" href={previewHref} target="_blank" rel="noreferrer">Preview as client</a>}
+          {!deliveredAt && items.length > 0 && <button type="button" className="linkbtn note" disabled={pending} onClick={() => act(() => markGallerySent(shootId))}>Mark as sent</button>}
           {sentAt && <button type="button" className="linkbtn note" disabled={pending} onClick={() => act(() => hideGallery(shootId))}>Hide from client</button>}
           {confirm ? (
             <>
