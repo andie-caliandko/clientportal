@@ -264,7 +264,7 @@ function EmailGallery({ shootId, onClose, onSent }: { shootId: string; onClose: 
         <div className="field">
           <label htmlFor="gallery-email-to">To</label>
           <input id="gallery-email-to" className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="client@example.com" autoComplete="off" />
-          <span className="note">Separate more than one email with commas.</span>
+          <span className="note">Separate more than one email with commas. Each person gets their own email.</span>
         </div>
         <div className="field">
           <label htmlFor="gallery-email-note">Message (optional)</label>

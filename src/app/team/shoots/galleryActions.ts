@@ -148,7 +148,7 @@ export async function galleryEmailRecipients(shootId: string): Promise<string[]>
 
 /**
  * Emails the gallery's share link (made now if there isn't one), for clients who aren't in the portal.
- * Replies go to whoever on the team sent it.
+ * Each address gets its own email (never CC'd together). Replies go to whoever on the team sent it.
  */
 export async function emailGalleryLink(shootId: string, to: string, note: string): Promise<Result> {
   const v = await requireTeam();
@@ -168,8 +168,11 @@ export async function emailGalleryLink(shootId: string, to: string, note: string
     "Open the gallery and enter your email to view and download them.",
     url,
   ].join("\n\n");
-  const sent = await sendEmail(emails, "Your content shoot gallery is ready", body, { button: "View your gallery", replyTo: v.member.email });
-  if (sent === false) return { error: "The email didn't send. Try again in a minute." };
-  if (sent === undefined) return { error: "Email isn't set up on this site, so nothing was sent. Copy the link instead." };
-  return { ok: `Sent to ${emails.join(", ")}.` };
+  // One email per person, so nobody sees who else got it.
+  const results = await Promise.all(emails.map((e) => sendEmail([e], "Your content shoot gallery is ready", body, { button: "View your gallery", replyTo: v.member.email })));
+  if (results.every((r) => r === undefined)) return { error: "Email isn't set up on this site, so nothing was sent. Copy the link instead." };
+  const sent = emails.filter((_, i) => results[i] === true), failed = emails.filter((_, i) => results[i] !== true);
+  if (!sent.length) return { error: "The email didn't send. Try again in a minute." };
+  if (failed.length) return { error: `Sent to ${sent.join(", ")}, but not to ${failed.join(", ")}. Try those again.` };
+  return { ok: `Sent separately to ${sent.join(", ")}.` };
 }
