@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { galleryCount, isVideo, type GalleryItem } from "@/lib/gallery";
 import { createClient } from "@/lib/supabase/browser";
 import { Viewer, warm } from "@/app/portal/GalleryView";
+import { Modal } from "@/app/Modal";
 import { uploadResumable } from "@/lib/resumableUpload";
-import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink } from "../galleryActions";
+import { addGalleryItem, hideGallery, removeGalleryItem, sendGallery, setGalleryCover, shareGalleryLink, stopGalleryLink, emailGalleryLink, galleryEmailRecipients } from "../galleryActions";
 
 // Previews are sharp on big phone and laptop screens (a grid tile is ~360px wide, twice that on retina)
 // while staying a fraction of the original's size.
@@ -136,7 +137,7 @@ export function GalleryManager({ shootId, clientId, agencyId, items, coverId, se
               <button type="button" className="linkbtn note" onClick={() => setConfirm(false)}>Not yet</button>
             </>
           ) : (
-            <button type="button" className="btn sm" disabled={pending || !items.length || !!progress} onClick={() => setConfirm(true)}>{sentAt ? "Notify client again" : "Send gallery to client"}</button>
+            <button type="button" className="btn sm" disabled={pending || !items.length || !!progress} onClick={() => setConfirm(true)}>{sentAt ? "Notify client again" : "Add to client's portal"}</button>
           )}
         </span>
       </div>
@@ -204,6 +205,7 @@ function ShareLink({ shootId, token, named, viewers, timeZone }: { shootId: stri
     router.refresh();
   });
   const stop = () => start(async () => { const r = await stopGalleryLink(shootId); setNote(r.error ?? r.ok ?? null); router.refresh(); });
+  const [emailing, setEmailing] = useState(false);
   return (
     <div className="share-link">
       <div>
@@ -221,7 +223,12 @@ function ShareLink({ shootId, token, named, viewers, timeZone }: { shootId: stri
       ) : (
         <button type="button" className="btn sm line" disabled={pending} onClick={make}>{pending ? "Making link…" : "Get share link"}</button>
       )}
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <button type="button" className="btn sm" disabled={pending} onClick={() => setEmailing(true)}>Email gallery to client</button>
+        <span className="note">Sends the link in an email, for clients who aren&apos;t in the portal.</span>
+      </div>
       {note && <p className="note" role="status">{note}</p>}
+      {emailing && <EmailGallery shootId={shootId} onClose={() => setEmailing(false)} onSent={(m) => { setNote(m); setEmailing(false); router.refresh(); }} />}
       {viewers.length > 0 && (
         <details className="share-viewers">
           <summary>Viewed by {viewers.length} {viewers.length === 1 ? "person" : "people"}</summary>
@@ -236,6 +243,42 @@ function ShareLink({ shootId, token, named, viewers, timeZone }: { shootId: stri
         </details>
       )}
     </div>
+  );
+}
+
+/** Write and send the gallery email: who it goes to (the client's saved contact to start) and an optional note. */
+function EmailGallery({ shootId, onClose, onSent }: { shootId: string; onClose: () => void; onSent: (msg: string) => void }) {
+  const [to, setTo] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  useEffect(() => { galleryEmailRecipients(shootId).then((list) => setTo((cur) => cur || list.join(", "))); }, [shootId]);
+  const send = () => start(async () => {
+    const r = await emailGalleryLink(shootId, to, message);
+    if (r.error) setError(r.error);
+    else onSent(r.ok ?? "Sent.");
+  });
+  return (
+    <Modal title="Email gallery to client" onClose={onClose}>
+      <form className="stack" style={{ display: "grid", gap: 14 }} onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <div className="field">
+          <label htmlFor="gallery-email-to">To</label>
+          <input id="gallery-email-to" className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="client@example.com" autoComplete="off" />
+          <span className="note">Separate more than one email with commas.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="gallery-email-note">Message (optional)</label>
+          <textarea id="gallery-email-note" className="input" rows={4} maxLength={2000} value={message} onChange={(e) => setMessage(e.target.value)}
+            placeholder="Your photos and videos from your content shoot are ready!" />
+          <span className="note">The email adds how to open the gallery and a View your gallery button. Replies come to you.</span>
+        </div>
+        {error && <p className="error">{error}</p>}
+        <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+          <button type="button" className="linkbtn note" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={pending || !to.trim()}>{pending ? "Sending…" : "Send email"}</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

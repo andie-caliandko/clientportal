@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { syncGalleryToDrive, trashDriveFile } from "@/lib/drive";
 import { sizeGalleryItems } from "@/lib/galleryPreviews";
 import { notifyClient } from "@/lib/notifications";
-import { emailClient } from "@/lib/notify";
+import { emailClient, sendEmail } from "@/lib/notify";
 import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -132,4 +132,44 @@ export async function stopGalleryLink(shootId: string): Promise<Result> {
   await createAdminClient().from("content_shoots").update({ gallery_share_token: null, gallery_share_slug: null }).eq("id", shootId);
   refresh(shootId);
   return { ok: "Link turned off." };
+}
+
+/** Who the gallery email goes to by default: the client's saved contact, else everyone on their portal. */
+export async function galleryEmailRecipients(shootId: string): Promise<string[]> {
+  await requireTeam();
+  const shoot = await shootFor(shootId);
+  if (!shoot) return [];
+  const admin = createAdminClient();
+  const { data: client } = await admin.from("clients").select("contact_email").eq("id", shoot.client_id).maybeSingle();
+  if (client?.contact_email) return [client.contact_email];
+  const { data: users } = await admin.from("client_users").select("email").eq("client_id", shoot.client_id);
+  return (users ?? []).map((u) => u.email);
+}
+
+/**
+ * Emails the gallery's share link (made now if there isn't one), for clients who aren't in the portal.
+ * Replies go to whoever on the team sent it.
+ */
+export async function emailGalleryLink(shootId: string, to: string, note: string): Promise<Result> {
+  const v = await requireTeam();
+  const shoot = await shootFor(shootId);
+  if (!shoot) return { error: "That shoot wasn't found." };
+  const emails = [...new Set(to.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length) return { error: "Add an email address." };
+  if (emails.length > 10) return { error: "Send to 10 people or fewer at a time." };
+  const bad = emails.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e));
+  if (bad) return { error: `"${bad}" isn't a valid email address.` };
+  const link = await shareGalleryLink(shootId);
+  if (!link.token) return { error: link.error ?? "The link couldn't be made." };
+  const when = new Date(`${shoot.shoot_date}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric" });
+  const url = `${process.env.NEXT_PUBLIC_SITE_URL}/g/${link.token}`;
+  const body = [
+    note.trim().slice(0, 2000) || `Your photos and videos from your ${when} content shoot are ready!`,
+    "Open the gallery and enter your email to view and download them.",
+    url,
+  ].join("\n\n");
+  const sent = await sendEmail(emails, "Your content shoot gallery is ready", body, { button: "View your gallery", replyTo: v.member.email });
+  if (sent === false) return { error: "The email didn't send. Try again in a minute." };
+  if (sent === undefined) return { error: "Email isn't set up on this site, so nothing was sent. Copy the link instead." };
+  return { ok: `Sent to ${emails.join(", ")}.` };
 }
