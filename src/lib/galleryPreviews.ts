@@ -1,8 +1,8 @@
 import "server-only";
 import { createAdminClient } from "./supabase/server";
 
-/** Grid previews: sharp on retina screens at the gallery's ~360px columns. */
-const THUMB = 1200;
+/** Grid previews: crisp on retina screens even when the grid shows two wide columns. */
+const THUMB = 1600;
 /** The full-screen view: crisp on a big monitor at a fraction of a camera original's size. */
 const LARGE = 2560;
 const STALE_MS = 10 * 60 * 1000;
@@ -34,10 +34,13 @@ export async function sizeGalleryItems(filter: { shootId?: string; itemIds?: str
       const { data: file, error } = await bucket.download(row.file_path);
       if (error || !file) throw error ?? new Error("no file");
       const upright = sharp(Buffer.from(await file.arrayBuffer()), { failOn: "none" }).rotate();
-      const fit = (size: number, quality: number) => upright.clone()
+      // A light sharpen after shrinking, as photo editors do when exporting for screens; without it
+      // a downsized photo looks slightly soft.
+      const fit = (size: number, quality: number, sigma: number) => upright.clone()
         .resize({ width: size, height: size, fit: "inside", withoutEnlargement: true, kernel: "lanczos3" })
+        .sharpen({ sigma })
         .jpeg({ quality, mozjpeg: true, chromaSubsampling: "4:4:4" }).toBuffer({ resolveWithObject: true });
-      const [thumb, large] = await Promise.all([fit(THUMB, 80), fit(LARGE, 84)]);
+      const [thumb, large] = await Promise.all([fit(THUMB, 84, 0.6), fit(LARGE, 86, 0.5)]);
       const base = row.file_path.replace(/\.[^./]*$/, "");
       const thumbPath = `${base}-grid.jpg`, largePath = `${base}-large.jpg`;
       for (const [path, out] of [[thumbPath, thumb], [largePath, large]] as const) {

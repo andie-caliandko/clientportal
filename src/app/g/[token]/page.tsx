@@ -60,10 +60,9 @@ export default async function SharedGalleryPage({ params }: { params: Promise<{ 
   }
   after(async () => { try { await recordView(shoot, email); } catch (err) { console.error("Gallery view", err); } });
   after(async () => { try { await sizeGalleryItems({ shootId: shoot.id, limit: 60 }); } catch (err) { console.error("Gallery previews", err); } });
-  const [items, covers, previews, { data: share }] = await Promise.all([
+  const [items, covers, { data: share }] = await Promise.all([
     loadGallery(shoot.id),
     galleryCovers([shoot], { full: true }),
-    galleryCovers([shoot]),
     admin.from("shoot_plan_shares").select("content").eq("shoot_id", shoot.id).maybeSingle(),
   ]);
   const title = cleanPlan(share?.content).title || "Content Shoot";
@@ -76,7 +75,6 @@ export default async function SharedGalleryPage({ params }: { params: Promise<{ 
         title={title}
         sub={[client?.name, date, galleryCount(items)].filter(Boolean).join(" · ")}
         cover={covers.get(shoot.id) ?? null}
-        coverPreview={previews.get(shoot.id) ?? null}
         items={items}
         canFavorite={false}
         zipName={`${client?.name ?? "Gallery"} ${shoot.shoot_date}`}
