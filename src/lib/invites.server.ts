@@ -14,6 +14,24 @@ async function signInLink(email: string) {
   return reset.data?.properties?.action_link ?? null;
 }
 
+/**
+ * Email someone who already signed up their sign-in page and a one-time link to set a new
+ * password, for when they've lost the link or forgotten their password. Clients and teammates alike.
+ */
+export async function sendLoginLink(person: { email: string; name: string }, place: { what: string; short: string }) {
+  const link = await signInLink(person.email);
+  if (!link) return false;
+  const first = person.name.trim().split(" ")[0] || person.name;
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  const sent = await sendEmail(
+    [person.email],
+    `Your ${place.short} ${place.what} sign-in link`,
+    `Hi ${first},\n\nHere's how to get into your ${place.what} with ${place.short}.\n\nSign in any time at ${site}/login with this email address and your password.\n\nNeed a new password? Use the button below to set one and sign in. It works once; after that, use "Forgot password" on the sign-in page.\n${link}`,
+    { button: "Set password and sign in" },
+  );
+  return sent !== false;
+}
+
 /** Email someone a fresh portal invite. `final` is the last automatic one. */
 export async function sendInviteReminder(clientUserId: { client_id: string; user_id: string }, opts: { final?: boolean; manual?: boolean } = {}) {
   const admin = createAdminClient();

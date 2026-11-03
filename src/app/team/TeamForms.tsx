@@ -18,6 +18,8 @@ import {
   createClientAccount,
   resendQuestionnaire,
   resendClientInvite,
+  sendClientLoginLink,
+  sendTeammateLoginLink,
   setDriveShared,
   deleteClient,
   editCalendar,
@@ -1070,6 +1072,22 @@ export function ResendInviteButton({ clientId, userId }: { clientId: string; use
     <button type="button" className="btn sm line" disabled={pending}
       onClick={() => startTransition(async () => { const r = await resendClientInvite(clientId, userId); setMsg(r.ok ?? r.error ?? null); })}>
       {pending ? "Sending…" : "Resend invite"}
+    </button>
+  );
+}
+
+/** Email a fresh login link (sign-in page plus a set-a-new-password link) to a client contact or a teammate. */
+export function SendLoginLinkButton({ clientId, userId }: { clientId?: string; userId: string }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  if (msg) return <span className="note">{msg}</span>;
+  return (
+    <button type="button" className="btn sm line" disabled={pending}
+      onClick={() => startTransition(async () => {
+        const r = clientId ? await sendClientLoginLink(clientId, userId) : await sendTeammateLoginLink(userId);
+        setMsg(r.ok ?? r.error ?? null);
+      })}>
+      {pending ? "Sending…" : "Send login link"}
     </button>
   );
 }

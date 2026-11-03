@@ -1254,6 +1254,31 @@ export async function resendClientInvite(clientId: string, userId: string): Prom
   return ok ? { ok: "Invite sent again." } : { error: "That invite couldn't be sent." };
 }
 
+/** Email a client contact who's already joined their sign-in page and a set-a-new-password link. */
+export async function sendClientLoginLink(clientId: string, userId: string): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const { data: cu } = await supabase.from("client_users").select("email, display_name").eq("client_id", clientId).eq("user_id", userId).maybeSingle();
+  if (!cu) return { error: "That person isn't on this portal." };
+  const { sendLoginLink } = await import("@/lib/invites.server");
+  const ok = await sendLoginLink({ email: cu.email, name: cu.display_name }, { what: "portal", short: v.agency.brand?.shortName ?? v.agency.name });
+  return ok ? { ok: `Login link sent to ${cu.email}.` } : { error: "That email couldn't be sent." };
+}
+
+/** Admins: email a teammate their sign-in page and a set-a-new-password link (or a fresh invite if they never joined). */
+export async function sendTeammateLoginLink(userId: string): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role !== "admin") return { error: "Only admins can send teammates login links." };
+  const { data: m } = await createAdminClient().from("agency_members").select("email, display_name").eq("agency_id", v.agency.id).eq("user_id", userId).maybeSingle();
+  if (!m) return { error: "That teammate wasn't found." };
+  const { sendLoginLink } = await import("@/lib/invites.server");
+  const ok = await sendLoginLink({ email: m.email, name: m.display_name }, { what: "team workspace", short: v.agency.brand?.shortName ?? v.agency.name });
+  return ok ? { ok: `Login link sent to ${m.email}.` } : { error: "That email couldn't be sent." };
+}
+
 /** Share a client's Google Drive folder with the people on their portal (or stop sharing). */
 export async function setDriveShared(clientId: string, on: boolean): Promise<Result> {
   const v = await requireTeam();
