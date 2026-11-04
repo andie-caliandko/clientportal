@@ -2,7 +2,7 @@ import "server-only";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { pdfSafe, wrap } from "./answersPdf";
 import {
-  CONTENT_ROWS, DEFAULT_HABIT_ROWS, DEFAULT_LEAD_ROWS, FUNNEL_ROWS, MAGNET, fmtMoney, fmtNum, fmtPct, leadKey, monthName, yearSummary,
+  DEFAULT_LEAD_ROWS, FUNNEL_ROWS, MAGNET, fmtMoney, fmtNum, fmtPct, leadKey, monthName, yearSummary,
   type Daily, type MonthData, type MonthSummary,
 } from "./ceoTracker";
 import { pdfBrand, type PdfBrand } from "./pdfBrand";
@@ -81,46 +81,33 @@ function monthPages(doc: PDFDocument, b: PdfBrand, agency: string, m: Month) {
   pairs([["Goal monthly revenue", fmtMoney(s.goal)], ["Starting monthly revenue", fmtMoney(s.starting)], ["New revenue needed", fmtMoney(s.newNeeded)],
     ["Projected (retainers)", fmtMoney(s.projected)], ["Actual ending revenue", fmtMoney(s.ending)], ["Profit margin", fmtPct(s.margin)]]);
 
-  heading("Scorecard");
-  pairs([
-    ["Happiness", fmtNum(d.happiness ?? null)], ["Routine consistency", fmtPct(d.routine ?? null)], ["CEO identity rating", fmtNum(d.identity ?? null)], ["Social media posts", fmtNum(s.posts, 0)],
-    ["Inbound leads", fmtNum(s.inboundLeads, 0)], ["Leads per post", fmtNum(s.leadsPerPost)], ["Total touch points", fmtNum(s.touchPoints, 0)], ["Disco calls had (outbound)", fmtNum(s.callsHad, 0)],
-    ["Touch points per booked call", fmtNum(s.touchPerCall)], ["Disco calls had (inbound)", fmtNum(s.inboundCalls, 0)], ["Disco calls per post", fmtNum(s.callsPerPost)], ["Disco calls offered", fmtNum(s.callsOffered, 0)],
-    ["Show rate", fmtPct(s.showRate)], ["New clients", fmtNum(s.signed, 0)], ["Close rate", fmtPct(s.closeRate)], ["Clients", fmtNum(s.clients, 0)],
-    ["Clients upgraded", fmtNum(s.upgraded, 0)], ["Cancellations", fmtNum(s.cancellations, 0)], ["Churn", fmtPct(s.churn)], ["Team members", fmtNum(s.teamMembers, 0)],
-    ["Revenue per team member", fmtMoney(s.revenuePerMember)], ["Total spent on pay", fmtMoney(s.salary)],
-  ]);
-
-  heading("Money");
-  pairs([["Income", fmtMoney(s.incomeTotal)], ["Team and contractor pay", fmtMoney(s.salary)], ["OPEX", fmtMoney(s.opex)], ["Profit", fmtMoney(s.profit)],
-    [`Taxes (${fmtPct(s.taxRate)})`, fmtMoney(s.taxes)], [`Reinvest (${fmtPct(s.reinvestRate)})`, fmtMoney(s.reinvest)], ["Owner's take-home", fmtMoney(s.takeHome)]]);
-  const payees = d.payees ?? [];
-  if (d.income?.length) {
+  heading("What you can pay yourself");
+  pairs([["Income", fmtMoney(s.incomeTotal)], ["Paid so far", fmtMoney(s.paid)], ["Team pay", fmtMoney(s.salary)], ["Expenses (OPEX)", fmtMoney(s.opex)],
+    ["Profit", fmtMoney(s.profit)], [`Taxes to set aside (${fmtPct(s.taxRate)})`, fmtMoney(s.taxes)], [`Reinvest (${fmtPct(s.reinvestRate)})`, fmtMoney(s.reinvest)], ["You can pay yourself", fmtMoney(s.takeHome)]]);
+  if (s.income.length) {
     w.y -= 6;
-    const head = ["Client", "Retainer", ...payees, "Left after pay"];
-    const first = w.width * 0.3, rest = (w.width - first) / (head.length - 1);
-    table(head, [
-      ...d.income.map((r) => {
-        const pay = Object.values(r.costs ?? {}).reduce((a, x) => a + (x || 0), 0);
-        return [r.label || "—", fmtMoney(r.retainer), ...payees.map((p) => fmtMoney(r.costs?.[p] ?? 0)), fmtMoney(r.retainer - pay)];
-      }),
-      ["Total", fmtMoney(s.incomeTotal), ...payees.map((p) => fmtMoney(s.payTotals[p] ?? 0)), fmtMoney(s.incomeTotal - s.salary)],
-    ], [first, ...head.slice(1).map(() => rest)]);
+    table(["Income", "Status", "Amount"], [
+      ...s.income.map((r) => [r.label || "—", r.status === "paid" ? "Paid" : r.status === "added" ? "Added" : "Not paid yet", fmtMoney(r.amount)]),
+      ["Total", "", fmtMoney(s.incomeTotal)],
+    ], [w.width * 0.55, w.width * 0.2, w.width * 0.25]);
   }
-  if (d.expenses?.length) {
-    w.y -= 6;
-    table(["Expense", "Cost"], [...d.expenses.map((e) => [e.label || "—", fmtMoney(e.amount)]), ["Total", fmtMoney(s.opex)]], [w.width * 0.7, w.width * 0.3]);
-  }
+  if (d.team?.length) table(["Team pay", "Amount"], [...d.team.map((t) => [t.label || "—", fmtMoney(t.amount)]), ["Total", fmtMoney(s.salary)]], [w.width * 0.7, w.width * 0.3]);
+  if (d.expenses?.length) table(["Expense", "Cost"], [...d.expenses.map((e) => [e.label || "—", fmtMoney(e.amount)]), ["Total", fmtMoney(s.opex)]], [w.width * 0.7, w.width * 0.3]);
   table(["Goal budget", "Goal", "Of income"], s.budget.map((x) => [x.label, fmtPct(x.pct), fmtMoney(x.amount)]), [w.width * 0.5, w.width * 0.25, w.width * 0.25]);
 
-  heading("Lead generation and habits");
+  heading("Scorecard");
+  pairs([
+    ["Happiness", fmtNum(d.happiness ?? null)], ["Routine consistency", fmtPct(d.routine ?? null)], ["CEO identity rating", fmtNum(d.identity ?? null)], ["Inbound leads", fmtNum(s.inboundLeads, 0)],
+    ["Total touch points", fmtNum(s.touchPoints, 0)], ["Disco calls had (outbound)", fmtNum(s.callsHad, 0)], ["Touch points per booked call", fmtNum(s.touchPerCall)], ["Disco calls had (inbound)", fmtNum(s.inboundCalls, 0)],
+    ["Disco calls offered", fmtNum(s.callsOffered, 0)], ["Show rate", fmtPct(s.showRate)], ["New clients", fmtNum(s.signed, 0)], ["Close rate", fmtPct(s.closeRate)],
+    ["Clients", fmtNum(s.clients, 0)], ["Clients upgraded", fmtNum(s.upgraded, 0)], ["Cancellations", fmtNum(s.cancellations, 0)], ["Churn", fmtPct(s.churn)],
+    ["Team members", fmtNum(s.teamMembers, 0)], ["Revenue per team member", fmtMoney(s.revenuePerMember)],
+  ]);
+
+  heading("Lead generation");
   const leadRows = d.leadRows ?? DEFAULT_LEAD_ROWS;
   const total = (k: string) => Object.values(m.daily[k] ?? {}).reduce((a, x) => a + x, 0);
-  pairs([
-    ...leadRows.map((r) => [r, fmtNum(total(leadKey(r)), 0)] as [string, string]),
-    ...[...CONTENT_ROWS, ...FUNNEL_ROWS].map((r) => [r.label, fmtNum(total(r.key), 0)] as [string, string]),
-    ...(d.habitRows ?? DEFAULT_HABIT_ROWS).map((h) => [`${h} (days)`, String(s.habits.find((x) => x.label === h)?.days ?? 0)] as [string, string]),
-  ]);
+  pairs([...leadRows.map((r) => [r, fmtNum(total(leadKey(r)), 0)] as [string, string]), ...FUNNEL_ROWS.map((r) => [r.label, fmtNum(total(r.key), 0)] as [string, string])]);
 
   if (d.magnet && Object.keys(d.magnet).length) {
     heading("MAGNET framework");
@@ -138,18 +125,9 @@ function monthPages(doc: PDFDocument, b: PdfBrand, agency: string, m: Month) {
     }
   }
 
-  const goals = (["good", "better", "best"] as const).filter((k) => Object.values(d.goals?.[k] ?? {}).some((x) => x?.trim()));
-  if (goals.length || d.reflection?.trim()) {
-    heading("Goals and reflections");
-    for (const k of goals) {
-      const g = d.goals![k]!;
-      para(k[0].toUpperCase() + k.slice(1), b.label, 10);
-      if (g.action?.trim()) para(`Action steps: ${g.action}`, b.body, 9.5);
-      if (g.obstacle?.trim()) para(`Obstacles: ${g.obstacle}`, b.body, 9.5);
-      if (g.steps?.trim()) para(`Steps to overcome: ${g.steps}`, b.body, 9.5);
-      w.y -= 6;
-    }
-    if (d.reflection?.trim()) { para("Personal reflections", b.label, 10); para(d.reflection, b.body, 9.5); }
+  if (d.reflection?.trim()) {
+    heading("Personal reflections");
+    para(d.reflection, b.body, 9.5);
   }
 }
 
@@ -168,11 +146,11 @@ function overviewPage(doc: PDFDocument, b: PdfBrand, agency: string, months: Mon
   table(["", ...cols, "Total"], [
     row("Goal revenue", (m) => fmtMoney(m.s.goal || null), ""),
     row("Starting revenue", (m) => fmtMoney(m.s.starting || null), ""),
+    row("Projected revenue", (m) => fmtMoney(m.s.projected || null), fmtMoney(y.income)),
     row("Ending revenue", (m) => fmtMoney(m.s.ending || null), fmtMoney(y.revenue)),
     row("Profit", (m) => (m.s.incomeTotal ? fmtMoney(m.s.profit) : "—"), fmtMoney(y.profit)),
     row("Profit margin", (m) => fmtPct(m.s.margin), fmtPct(y.margin)),
     row("Happiness", (m) => fmtNum(m.data.happiness ?? null), fmtNum(y.happiness)),
-    row("Posts", (m) => fmtNum(m.s.posts, 0), fmtNum(y.posts, 0)),
     row("Inbound leads", (m) => fmtNum(m.s.inboundLeads, 0), fmtNum(y.inboundLeads, 0)),
     row("Touch points", (m) => fmtNum(m.s.touchPoints, 0), fmtNum(y.touchPoints, 0)),
     row("Disco calls offered", (m) => fmtNum(m.s.callsOffered, 0), fmtNum(y.callsOffered, 0)),
@@ -182,8 +160,10 @@ function overviewPage(doc: PDFDocument, b: PdfBrand, agency: string, months: Mon
     row("Close rate", (m) => fmtPct(m.s.closeRate), fmtPct(y.closeRate)),
     row("Clients", (m) => fmtNum(m.s.clients, 0), fmtNum(y.clientsServed, 0)),
     row("Cancellations", (m) => fmtNum(m.s.cancellations, 0), fmtNum(y.cancellations, 0)),
-    row("Pay", (m) => fmtMoney(m.s.salary || null), fmtMoney(y.salary)),
+    row("Team pay", (m) => fmtMoney(m.s.salary || null), fmtMoney(y.salary)),
     row("OPEX", (m) => fmtMoney(m.s.opex || null), fmtMoney(y.opex)),
+    row("Taxes to set aside", (m) => fmtMoney(m.s.taxes || null), fmtMoney(y.taxes)),
+    row("You could pay yourself", (m) => (m.s.incomeTotal ? fmtMoney(m.s.takeHome) : "—"), fmtMoney(y.takeHome)),
   ], [first, ...months.map(() => rest), rest], months.length > 8 ? 7.5 : 8.5);
 }
 

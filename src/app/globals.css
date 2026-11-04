@@ -1186,7 +1186,6 @@ a.shoot-ev { display: block; }
 .trk-grid td.kn { padding: 0 10px; }
 .trk-cell { width: 30px; height: 28px; border: 1px solid transparent; border-radius: 6px; text-align: center; background: var(--bg); font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--head); padding: 0; }
 .trk-cell:focus { outline: none; border-color: var(--head); }
-.trk-grid.habits input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
 .trk-grid td[colspan] { text-align: left; padding: 8px 10px; }
 .trk-rowname { display: inline-flex; align-items: center; gap: 6px; }
 .trk-x { border: 0; background: transparent; color: var(--ink-2); font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
@@ -1194,17 +1193,8 @@ a.shoot-ev { display: block; }
 .trk-add { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .trk-add .input { padding: .45em .8em; font-size: .9rem; width: min(340px, 100%); }
 .trk-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-.trk-goal { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
-.trk-goal h3 { font-size: 1.1rem; }
 .trk .panel textarea.input { min-height: 80px; font-size: .95rem; }
-.trk-income .input, .trk-expenses .input, .trk-plan .input, .trk-leads .input { padding: .35em .6em; font-size: .9rem; border-radius: 10px; }
-.trk-income td, .trk-income th { white-space: nowrap; }
-.trk-income td:first-child .input { min-width: 180px; }
-.trk-income .trk-num { min-width: 110px; }
-.trk-income tfoot th, .trk-income tfoot td, .trk-plan tfoot th, .trk-plan tfoot td { font-weight: 600; color: var(--head); }
-.trk-adds { align-items: center; justify-content: space-between; }
-.trk-expenses { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.trk-expenses li { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; }
+.trk-plan tfoot th, .trk-plan tfoot td { font-weight: 600; color: var(--head); }
 .trk-total { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px; margin: 0; }
 .trk-total b { font-variant-numeric: tabular-nums; color: var(--head); }
 .trk-yearstats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1262,12 +1252,20 @@ a.shoot-ev { display: block; }
   .trk-pick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .trk-bars { gap: 3px; }
   .trk-bar-val { display: none; }
-  .trk-expenses li { grid-template-columns: 1fr 100px auto; }
 }
 .trk table tbody th[scope="row"], .trk table tfoot th { font-family: inherit; font-size: .88rem; letter-spacing: normal; text-transform: none; color: var(--ink); background: var(--surface); font-weight: 500; }
 .trk table tfoot th { font-weight: 600; color: var(--head); }
 .trk-plan td, .trk-income td, .trk-leads td { padding: 6px 8px; }
 .trk-plan .calc th[scope="row"] { background: var(--soft); }
-.trk-goals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.trk-goals .trk-goal { border-top: 0; padding-top: 0; }
-@media (max-width: 900px) { .trk-goals { grid-template-columns: 1fr; } }
+.trk-plan .input, .trk-leads .input, .trk-lines .input { padding: .35em .6em; font-size: .9rem; border-radius: 10px; }
+.trk-pay { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; }
+.trk-payme { background: var(--soft); }
+.trk-payme .trk-big { font-family: var(--serif); font-size: 3.4rem; line-height: 1; color: var(--head); margin: 0; font-variant-numeric: tabular-nums; }
+.trk-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.trk-lines li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.trk-lines li.edit { grid-template-columns: 1fr 140px auto; border-bottom: 0; padding: 2px 0; }
+.trk-lines .trk-line-name a { color: inherit; text-decoration: none; }
+.trk-lines .trk-line-name a:hover { text-decoration: underline; }
+.trk-lines b.kn { min-width: 90px; text-align: right; color: var(--head); }
+@media (max-width: 900px) { .trk-pay { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .trk-lines li.edit { grid-template-columns: 1fr 110px auto; } }

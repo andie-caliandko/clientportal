@@ -3,7 +3,7 @@
 import { fmtMoney, fmtNum, growthPlan, horizonPlan, lifePlan, yearGoalPlan, type LifeGoal, type Milestone, type VisionData, type VisionHorizon, type YearGoal } from "@/lib/ceoTracker";
 import { Num, SaveNote, Text, newId, useSheet } from "./TrackerBits";
 
-type Rates = { closeRate: number | null; showRate: number | null; retainer: number | null; touchPerCall: number | null; callsPerPost: number | null; year: string };
+type Rates = { closeRate: number | null; showRate: number | null; retainer: number | null; touchPerCall: number | null; year: string };
 
 export function VisionView({ initial, rates }: { initial: VisionData; rates: Rates }) {
   const { data: v, save, state } = useSheet<VisionData>("vision", initial);
@@ -138,7 +138,7 @@ export function VisionView({ initial, rates }: { initial: VisionData; rates: Rat
       </section>
 
       <section className="panel">
-        <div className="trk-head"><h2>Next year&apos;s goals</h2><p className="note">A yearly revenue goal, worked back to what it takes. Outreach and posts use your {rates.year} rates ({fmtNum(rates.touchPerCall)} touch points per booked call, {fmtNum(rates.callsPerPost)} calls per post).</p></div>
+        <div className="trk-head"><h2>Next year&apos;s goals</h2><p className="note">A yearly revenue goal, worked back to what it takes. Outreach uses your {rates.year} rate of {fmtNum(rates.touchPerCall)} touch points per booked call.</p></div>
         <div className="tablewrap">
           <table className="trk-plan">
             <thead><tr><th scope="col">Metric</th>{Y.map((y) => <th key={y.k} scope="col">{y.label}</th>)}</tr></thead>
@@ -154,7 +154,6 @@ export function VisionView({ initial, rates }: { initial: VisionData; rates: Rat
                 { label: "Sales calls to book", f: (p: ReturnType<typeof yearGoalPlan>) => fmtNum(p.booked) },
                 { label: "Live calls", f: (p: ReturnType<typeof yearGoalPlan>) => fmtNum(p.live) },
                 { label: "Outreach", f: (p: ReturnType<typeof yearGoalPlan>) => fmtNum(p.outreach, 0) },
-                { label: "Posts", f: (p: ReturnType<typeof yearGoalPlan>) => fmtNum(p.posts, 0) },
               ].map((r) => (
                 <PlanRow key={r.label} label={r.label} calc>{Y.map((y) => <td key={y.k} className="kn">{r.f(yearGoalPlan(withRates(yearGoals[y.k], rates), rates))}</td>)}</PlanRow>
               ))}

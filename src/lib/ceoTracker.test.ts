@@ -1,43 +1,48 @@
 import { describe, expect, it, vi } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { cleanPatch, growthPlan, horizonPlan, lifePlan, monthSummary, yearSummary, type MonthData } from "./ceoTracker";
+import { cleanPatch, growthPlan, horizonPlan, lifePlan, monthSummary, yearSummary, type IncomeRow, type MonthData } from "./ceoTracker";
 
 vi.mock("server-only", () => ({}));
 
 // Numbers shaped like a month from the owner's spreadsheet, so the math matches it.
 const month: MonthData = {
   goal: 20000, starting: 15000, ending: 18000, clients: 10, cancellations: 1, teamMembers: 2,
-  inboundLeads: 4, inboundCalls: 2, payees: ["Designer", "Editor"],
-  income: [
-    { id: "a", label: "Client A", retainer: 4245, costs: { Designer: 3500, Editor: 450 } },
-    { id: "b", label: "Client B", retainer: 500, costs: { Editor: 150 } },
-  ],
+  inboundLeads: 4, inboundCalls: 2,
+  extraIncome: [{ id: "p", label: "One-time project", amount: 500 }],
+  team: [{ id: "t1", label: "Designer", amount: 3500 }, { id: "t2", label: "Editor", amount: 600 }],
   expenses: [{ id: "x", label: "Software", amount: 300 }],
   leadRows: ["Upwork", "DMs"],
 };
+const clients: IncomeRow[] = [
+  { id: "a", label: "Client A", clientId: "a", amount: 4245, status: "paid" },
+  { id: "b", label: "Client B", clientId: "b", amount: 0, status: "projected" },
+];
 const daily = {
-  "lead:Upwork": { 1: 30, 2: 5 }, "lead:DMs": { 3: 36 }, posts: { 1: 2, 9: 2 },
+  "lead:Upwork": { 1: 30, 2: 5 }, "lead:DMs": { 3: 36 },
   calls_offered: { 5: 2 }, calls_had: { 6: 2 }, signed: { 7: 1 },
 };
 
 describe("CEO tracker month", () => {
-  const s = monthSummary(month, daily);
-  it("works out revenue, pay, expenses and profit like the spreadsheet", () => {
+  const s = monthSummary(month, daily, clients);
+  it("adds CEO dashboard clients and added payments, then works out what you can pay yourself", () => {
     expect(s.newNeeded).toBe(5000);
     expect(s.incomeTotal).toBe(4745);
+    expect(s.paid).toBe(4745);
     expect(s.salary).toBe(4100);
-    expect(s.payTotals).toEqual({ Designer: 3500, Editor: 600 });
     expect(s.opex).toBe(300);
     expect(s.profit).toBe(345);
     expect(s.taxes).toBeCloseTo(51.75);
     expect(s.reinvest).toBeCloseTo((345 - 51.75) * 0.3);
     expect(s.takeHome).toBeCloseTo(345 - 51.75 - (345 - 51.75) * 0.3);
   });
+  it("counts projected income separately from what's been paid", () => {
+    const p = monthSummary({}, {}, [{ id: "c", label: "C", amount: 1000, status: "projected" }, { id: "d", label: "D", amount: 500, status: "paid" }]);
+    expect(p.projected).toBe(1500);
+    expect(p.paid).toBe(500);
+  });
   it("adds up the daily tracker and the funnel", () => {
     expect(s.touchPoints).toBe(71);
     expect(s.touchPerCall).toBe(35.5);
-    expect(s.posts).toBe(4);
-    expect(s.leadsPerPost).toBe(1);
     expect(s.showRate).toBe(1);
     expect(s.closeRate).toBe(0.5);
     expect(s.churn).toBe(0.1);
@@ -45,14 +50,15 @@ describe("CEO tracker month", () => {
   });
   it("shows a dash instead of dividing by zero", () => {
     const empty = monthSummary({}, {});
-    expect(empty.leadsPerPost).toBeNull();
+    expect(empty.touchPerCall).toBeNull();
     expect(empty.margin).toBeNull();
     expect(empty.taxes).toBe(0);
   });
   it("adds months into a year", () => {
     const y = yearSummary([{ data: month, s }, { data: {}, s: monthSummary({ ending: 2000 }, {}) }]);
     expect(y.revenue).toBe(20000);
-    expect(y.posts).toBe(4);
+    expect(y.touchPoints).toBe(71);
+    expect(y.takeHome).toBeCloseTo(s.takeHome);
   });
 });
 
@@ -88,7 +94,7 @@ describe("saving", () => {
 describe("CEO tracker PDF", () => {
   it("makes one PDF from several months, with a summary page", async () => {
     const { ceoTrackerPdf } = await import("./ceoTrackerPdf");
-    const m = (key: string) => ({ month: key, data: { ...month, reflection: "A good month.", magnet: { Health: "green" as const } }, daily, s: monthSummary(month, daily) });
+    const m = (key: string) => ({ month: key, data: { ...month, reflection: "A good month.", magnet: { Health: "green" as const } }, daily, s: monthSummary(month, daily, clients) });
     const bytes = await ceoTrackerPdf({ agency: "Test Agency", months: [m("2026-01"), m("2026-02")], overview: true });
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThanOrEqual(3);

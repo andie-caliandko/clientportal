@@ -10,7 +10,7 @@ const ROWS: { group: string; rows: { label: string; m: (x: M) => number | null |
   { group: "Revenue", rows: [
     { label: "Goal monthly revenue", m: (x) => x.s.goal || null, y: () => null, fmt: fmtMoney },
     { label: "Starting monthly revenue", m: (x) => x.s.starting || null, y: () => null, fmt: fmtMoney },
-    { label: "Projected (retainers)", m: (x) => x.s.projected || null, y: () => null, fmt: fmtMoney },
+    { label: "Projected (CEO dashboard)", m: (x) => x.s.projected || null, y: (y) => y.income, fmt: fmtMoney },
     { label: "Actual ending revenue", m: (x) => x.s.ending || null, y: (y) => y.revenue, fmt: fmtMoney },
     { label: "Profit margin", m: (x) => x.s.margin, y: (y) => y.margin, fmt: fmtPct },
   ] },
@@ -19,17 +19,12 @@ const ROWS: { group: string; rows: { label: string; m: (x: M) => number | null |
     { label: "Routine consistency", m: (x) => x.data.routine, y: (y) => y.routine, fmt: fmtPct },
     { label: "CEO identity rating", m: (x) => x.data.identity, y: (y) => y.identity, fmt: (n) => fmtNum(n) },
   ] },
-  { group: "Authority", rows: [
-    { label: "Social media posts", m: (x) => x.s.posts, y: (y) => y.posts, fmt: whole },
-    { label: "Inbound leads", m: (x) => x.s.inboundLeads, y: (y) => y.inboundLeads, fmt: whole },
-    { label: "Leads per post", m: (x) => x.s.leadsPerPost, y: (y) => y.leadsPerPost, fmt: (n) => fmtNum(n) },
-  ] },
   { group: "Lead gen", rows: [
+    { label: "Inbound leads", m: (x) => x.s.inboundLeads, y: (y) => y.inboundLeads, fmt: whole },
     { label: "Touch points", m: (x) => x.s.touchPoints, y: (y) => y.touchPoints, fmt: whole },
     { label: "Disco calls had from outbound", m: (x) => x.s.callsHad, y: (y) => y.callsHad, fmt: whole },
     { label: "Touch points per booked call", m: (x) => x.s.touchPerCall, y: (y) => y.touchPerCall, fmt: (n) => fmtNum(n) },
     { label: "Disco calls had from inbound", m: (x) => x.s.inboundCalls, y: (y) => y.inboundCalls, fmt: whole },
-    { label: "Disco calls had per post", m: (x) => x.s.callsPerPost, y: (y) => y.callsPerPost, fmt: (n) => fmtNum(n) },
   ] },
   { group: "Delivery", rows: [
     { label: "Clients", m: (x) => x.data.clients, y: (y) => y.clientsServed, fmt: whole },
@@ -44,24 +39,24 @@ const ROWS: { group: string; rows: { label: string; m: (x: M) => number | null |
     { label: "New clients", m: (x) => x.s.signed, y: (y) => y.signed, fmt: whole },
     { label: "Close rate", m: (x) => x.s.closeRate, y: (y) => y.closeRate, fmt: fmtPct },
   ] },
-  { group: "Budget", rows: [
-    { label: "Team and contractor pay", m: (x) => x.s.salary || null, y: (y) => y.salary, fmt: fmtMoney },
+  { group: "Pay", rows: [
+    { label: "Team pay", m: (x) => x.s.salary || null, y: (y) => y.salary, fmt: fmtMoney },
     { label: "OPEX", m: (x) => x.s.opex || null, y: (y) => y.opex, fmt: fmtMoney },
-    { label: "Saved for taxes", m: (x) => x.s.taxes || null, y: (y) => y.taxes, fmt: fmtMoney },
     { label: "Profit", m: (x) => (x.s.incomeTotal ? x.s.profit : null), y: (y) => y.profit, fmt: fmtMoney },
+    { label: "Taxes to set aside", m: (x) => x.s.taxes || null, y: (y) => y.taxes, fmt: fmtMoney },
+    { label: "You could pay yourself", m: (x) => (x.s.incomeTotal ? x.s.takeHome : null), y: (y) => y.takeHome, fmt: fmtMoney },
   ] },
 ];
 
 export function YearView({ year, months, today }: { year: string; months: M[]; today: string }) {
   const y = yearSummary(months);
   const peak = Math.max(1, ...months.map((m) => Math.max(m.s.ending, m.s.goal)));
-  const habits = [...new Set(months.flatMap((m) => m.s.habits.map((h) => h.label)))];
   return (
     <div className="trk">
       <section className="stats trk-yearstats">
         <div className="stat"><b>{fmtMoney(y.revenue)}</b><span>Revenue in {year}</span></div>
         <div className="stat"><b>{fmtMoney(y.profit)}</b><span>Profit</span></div>
-        <div className="stat"><b>{fmtPct(y.margin)}</b><span>Profit margin</span></div>
+        <div className="stat"><b>{fmtMoney(y.takeHome)}</b><span>You could pay yourself</span></div>
         <div className="stat"><b>{fmtPct(y.closeRate)}</b><span>Close rate</span></div>
       </section>
 
@@ -101,13 +96,6 @@ export function YearView({ year, months, today }: { year: string; months: M[]; t
                   </tr>
                 )),
               ])}
-              {habits.length > 0 && <tr className="trk-sub"><th colSpan={months.length + 2} scope="colgroup">Habits (days)</th></tr>}
-              {habits.map((h) => {
-                const per = months.map((m) => m.s.habits.find((x) => x.label === h)?.days ?? 0);
-                return (
-                  <tr key={h}><th scope="row">{h}</th>{per.map((n, i) => <td key={months[i].month} className="kn">{n || ""}</td>)}<td className="kn"><b>{per.reduce((a, b) => a + b, 0)}</b></td></tr>
-                );
-              })}
             </tbody>
           </table>
         </div>

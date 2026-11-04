@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isOwner } from "@/lib/ceo";
 import { monthName, yearSummary } from "@/lib/ceoTracker";
-import { loadMonth, loadMonths, loadVision, portalIncome } from "@/lib/ceoTracker.server";
+import { loadMonth, loadMonths, loadVision } from "@/lib/ceoTracker.server";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { ExportPdf } from "./ExportPdf";
@@ -41,19 +41,20 @@ export default async function CeoTracker({ searchParams }: { searchParams: Promi
 
   let body: React.ReactNode;
   if (view === "month") {
-    const [m, portal] = await Promise.all([loadMonth(agency.id, month), portalIncome(month)]);
-    body = <MonthView key={month} month={month} initial={m.data} initialDaily={m.daily} days={m.days} lastExpenses={m.lastExpenses} lastIncome={m.lastIncome} portal={portal} />;
+    const m = await loadMonth(agency.id, month);
+    body = <MonthView key={month} month={month} initial={m.data} initialDaily={m.daily} days={m.days} income={m.income} today={today} />;
   } else if (view === "year") {
     body = <YearView year={year} months={await loadMonths(agency.id, `${year}-01`, `${year}-12`)} today={today} />;
   } else if (view === "leads") {
     const { data } = await (await createClient()).from("ceo_leads").select("*").eq("agency_id", agency.id).order("created_at", { ascending: false });
     body = <LeadsView initial={(data ?? []) as Lead[]} today={today} />;
   } else {
-    const [vision, months, portal] = await Promise.all([loadVision(agency.id), loadMonths(agency.id, `${thisYear}-01`, today.slice(0, 7)), portalIncome(today.slice(0, 7))]);
+    const [vision, months] = await Promise.all([loadVision(agency.id), loadMonths(agency.id, `${thisYear}-01`, today.slice(0, 7))]);
     const y = yearSummary(months);
+    const retainers = (months.at(-1)?.income ?? []).filter((r) => r.clientId);
     body = <VisionView initial={vision} rates={{
-      year: thisYear, closeRate: y.closeRate, showRate: y.showRate, touchPerCall: y.touchPerCall, callsPerPost: y.callsPerPost,
-      retainer: portal.clients ? portal.total / portal.clients : null,
+      year: thisYear, closeRate: y.closeRate, showRate: y.showRate, touchPerCall: y.touchPerCall,
+      retainer: retainers.length ? retainers.reduce((n, r) => n + r.amount, 0) / retainers.length : null,
     }} />;
   }
 

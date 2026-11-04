@@ -1,11 +1,16 @@
 import "server-only";
-import { startedBy } from "./ceo";
-import { monthSummary, type Daily, type MonthData, type VisionData } from "./ceoTracker";
+import { monthKeyDate, startedBy } from "./ceo";
+import { monthSummary, type Daily, type IncomeRow, type MonthData, type VisionData } from "./ceoTracker";
 import { createClient } from "./supabase/server";
 
 const lastDay = (month: string) => {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+export const nextMonth = (m: string) => {
+  const [y, mo] = m.split("-").map(Number);
+  return new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7);
 };
 
 /** Daily rows for a range of days, grouped by month: month → row → day → value. */
@@ -22,65 +27,83 @@ async function dailyBetween(agencyId: string, from: string, to: string) {
   return out;
 }
 
-/** Every saved month from `from` to `to` ("2026-01" … "2026-12"), with its numbers worked out. */
-export async function loadMonths(agencyId: string, from: string, to: string) {
-  const supabase = await createClient();
-  const [{ data: sheets }, daily] = await Promise.all([
-    supabase.from("ceo_sheets").select("key, data").eq("agency_id", agencyId).gte("key", from).lte("key", to).neq("key", "vision"),
-    dailyBetween(agencyId, `${from}-01`, `${to}-${lastDay(to)}`),
-  ]);
-  const byKey = new Map((sheets ?? []).filter((s) => /^\d{4}-\d{2}$/.test(s.key)).map((s) => [s.key, s.data as MonthData]));
-  const months: { month: string; data: MonthData; daily: Daily }[] = [];
-  for (let m = from; m <= to; m = nextMonth(m)) months.push({ month: m, data: byKey.get(m) ?? {}, daily: daily.get(m) ?? {} });
-  return months.map((m) => ({ ...m, saved: byKey.has(m.month), s: monthSummary(m.data, m.daily) }));
-}
-
-export const nextMonth = (m: string) => {
-  const [y, mo] = m.split("-").map(Number);
-  return new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7);
-};
-
 /**
- * One month to edit. Lists that usually stay the same (lead sources, habits, who gets paid,
- * the budget split) carry over from the latest earlier month until they're changed.
+ * Income for each month, from the CEO dashboard: every client on a monthly retainer by then
+ * (paid, or still to pay), plus any other payment logged that month and revenue imported there.
  */
-export async function loadMonth(agencyId: string, month: string) {
+async function portalIncomeFor(months: string[]) {
   const supabase = await createClient();
-  const [{ data: row }, { data: earlier }, daily] = await Promise.all([
-    supabase.from("ceo_sheets").select("data").eq("agency_id", agencyId).eq("key", month).maybeSingle(),
-    supabase.from("ceo_sheets").select("key, data").eq("agency_id", agencyId).lt("key", month).gte("key", "2000-01").order("key", { ascending: false }).limit(12),
-    dailyBetween(agencyId, `${month}-01`, `${month}-${lastDay(month)}`),
-  ]);
-  const data = { ...((row?.data ?? {}) as MonthData) };
-  const prev = (earlier ?? []).filter((e) => /^\d{4}-\d{2}$/.test(e.key)).map((e) => e.data as MonthData);
-  for (const k of ["leadRows", "habitRows", "payees", "budget", "taxRate", "reinvestRate"] as const) {
-    if (data[k] === undefined) {
-      const found = prev.find((p) => p[k] !== undefined)?.[k];
-      if (found !== undefined) (data as Record<string, unknown>)[k] = found;
-    }
-  }
-  const lastExpenses = prev.find((p) => p.expenses?.length)?.expenses ?? [];
-  const lastIncome = prev.find((p) => p.income?.length)?.income ?? [];
-  return { data, daily: daily.get(month) ?? {}, lastExpenses, lastIncome, days: lastDay(month) };
-}
-
-/** What the portal knows for a month: each client's retainer (to start the income table) and the total. */
-export async function portalIncome(month: string) {
-  const supabase = await createClient();
-  const [{ data: clients }, { data: billing }, { data: contracts }] = await Promise.all([
-    supabase.from("clients").select("id, name, start_date, archived_at").is("archived_at", null).order("name"),
+  const [{ data: clients }, { data: billing }, { data: contracts }, { data: invoices }, { data: imported }] = await Promise.all([
+    supabase.from("clients").select("id, name, start_date, archived_at").order("name"),
     supabase.from("client_billing").select("client_id, monthly_fee"),
     supabase.from("client_contracts").select("client_id, kind, start_date").order("start_date", { ascending: false }),
+    supabase.from("client_invoices").select("client_id, month, amount, status"),
+    supabase.from("revenue_entries").select("id, paid_on, amount, client_name"),
   ]);
   const fee = new Map((billing ?? []).map((b) => [b.client_id, Number(b.monthly_fee)]));
-  const rows = (clients ?? []).flatMap((c) => {
-    const terms = (contracts ?? []).filter((k) => k.client_id === c.id);
-    if (terms[0]?.kind === "project") return [];
-    const start = terms.map((k) => k.start_date as string).sort()[0] ?? c.start_date ?? null;
-    const f = fee.get(c.id) ?? 0;
-    return startedBy(start, month) && f > 0 ? [{ clientId: c.id as string, label: c.name as string, retainer: f }] : [];
+  const name = new Map((clients ?? []).map((c) => [c.id, c.name as string]));
+  const isProject = (id: string) => (contracts ?? []).find((k) => k.client_id === id)?.kind === "project";
+  const startOf = (c: { id: string; start_date: string | null }) =>
+    (contracts ?? []).filter((k) => k.client_id === c.id).map((k) => k.start_date as string).sort()[0] ?? c.start_date ?? null;
+  const out = new Map<string, IncomeRow[]>();
+  for (const month of months) {
+    const paid = (invoices ?? []).filter((i) => i.month === monthKeyDate(month) && i.status === "paid");
+    const rows: IncomeRow[] = [];
+    for (const c of clients ?? []) {
+      const f = fee.get(c.id) ?? 0;
+      const inv = paid.find((i) => i.client_id === c.id);
+      const monthly = !isProject(c.id) && f > 0 && !c.archived_at && startedBy(startOf(c), month);
+      if (inv) rows.push({ id: `c-${c.id}`, clientId: c.id, label: c.name, status: "paid", amount: Number(inv.amount ?? (isProject(c.id) ? 0 : f)) });
+      else if (monthly) rows.push({ id: `c-${c.id}`, clientId: c.id, label: c.name, status: "projected", amount: f });
+    }
+    // A paid invoice for a client no longer listed (say, archived) still counts.
+    for (const i of paid) if (!rows.some((r) => r.clientId === i.client_id)) rows.push({ id: `c-${i.client_id}`, clientId: i.client_id, label: name.get(i.client_id) ?? "Client", status: "paid", amount: Number(i.amount ?? 0) });
+    for (const r of (imported ?? []).filter((x) => String(x.paid_on).startsWith(month))) {
+      rows.push({ id: `r-${r.id}`, label: r.client_name || "Imported revenue", status: "paid", amount: Number(r.amount) });
+    }
+    out.set(month, rows.filter((r) => r.amount));
+  }
+  return out;
+}
+
+const CARRY = ["leadRows", "team", "expenses", "budget", "taxRate", "reinvestRate"] as const;
+/** What usually stays the same month to month (team pay, expenses, lead sources, the budget) carries over until it's changed. */
+function carry(data: MonthData, earlier: MonthData[]) {
+  const out = { ...data };
+  for (const k of CARRY) {
+    if (out[k] === undefined) {
+      const found = earlier.find((p) => p[k] !== undefined)?.[k];
+      if (found !== undefined) (out as Record<string, unknown>)[k] = found;
+    }
+  }
+  return out;
+}
+
+/** Every month from `from` to `to` ("2026-01" … "2026-12"), with its numbers worked out. */
+export async function loadMonths(agencyId: string, from: string, to: string) {
+  const supabase = await createClient();
+  const list: string[] = [];
+  for (let m = from; m <= to; m = nextMonth(m)) list.push(m);
+  const [{ data: sheets }, daily, income] = await Promise.all([
+    supabase.from("ceo_sheets").select("key, data").eq("agency_id", agencyId).lte("key", to).gte("key", "2000-01").order("key", { ascending: false }),
+    dailyBetween(agencyId, `${from}-01`, `${to}-${lastDay(to)}`),
+    portalIncomeFor(list),
+  ]);
+  const saved = (sheets ?? []).filter((s) => /^\d{4}-\d{2}$/.test(s.key));
+  const byKey = new Map(saved.map((s) => [s.key, s.data as MonthData]));
+  return list.map((month) => {
+    const data = carry(byKey.get(month) ?? {}, saved.filter((s) => s.key < month).map((s) => s.data as MonthData));
+    const d = daily.get(month) ?? {};
+    const rows = income.get(month) ?? [];
+    return { month, saved: byKey.has(month), data, daily: d, income: rows, s: monthSummary(data, d, rows) };
   });
-  return { rows, total: rows.reduce((n, r) => n + r.retainer, 0), clients: rows.length };
+}
+
+/** One month to edit, with the CEO dashboard's clients for it. */
+export async function loadMonth(agencyId: string, month: string) {
+  const [m] = await loadMonths(agencyId, month, month);
+  const [y, mo] = month.split("-").map(Number);
+  return { ...m, days: lastDay(month), year: y, monthIndex: mo };
 }
 
 export async function loadVision(agencyId: string) {
