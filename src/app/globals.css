@@ -1269,3 +1269,9 @@ a.shoot-ev { display: block; }
 .trk-lines b.kn { min-width: 90px; text-align: right; color: var(--head); }
 @media (max-width: 900px) { .trk-pay { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .trk-lines li.edit { grid-template-columns: 1fr 110px auto; } }
+/* The pay column and the income list end on the same line, with their totals at the bottom. */
+.trk-pay { align-items: stretch; }
+.trk-col { display: flex; flex-direction: column; gap: 12px; }
+.trk-col .trk-fill { flex: 1; }
+.trk-pay > .panel, .trk-col .trk-fill { display: flex; flex-direction: column; }
+.trk-pay > .panel .trk-total, .trk-col .trk-fill .trk-total { margin-top: auto; }

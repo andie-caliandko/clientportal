@@ -49,6 +49,7 @@ export function MonthView({ month, initial, initialDaily, days, income, today }:
       </section>
 
       <section className="trk-pay" aria-label="What you can pay yourself">
+        <div className="trk-col">
         <div className="panel trk-payme">
           <p className="eyebrow">What you can pay yourself</p>
           <p className="trk-big">{fmtMoney(s.takeHome)}</p>
@@ -62,6 +63,15 @@ export function MonthView({ month, initial, initialDaily, days, income, today }:
             <div><dt>Reinvest in the business (<Num kind="pct" className="mini" label="Reinvest rate" value={s.reinvestRate} onSave={(v) => save({ reinvestRate: v ?? 0.3 })} />)</dt><dd>− {fmtMoney(s.reinvest)}</dd></div>
             <div className="strong"><dt>You can pay yourself</dt><dd>{fmtMoney(s.takeHome)}</dd></div>
           </dl>
+        </div>
+        <div className="panel trk-fill">
+          <div className="trk-head"><h2>Team pay</h2><p className="note">What you paid each team member or contractor this month. It starts with last month&apos;s amounts.</p></div>
+          <ul className="trk-lines">
+            {team.map((t) => <EditLine key={t.id} line={t} what="Team member" onSave={(patch) => save({ team: team.map((e) => (e.id === t.id ? { ...e, ...patch } : e)) })} onRemove={() => save({ team: team.filter((e) => e.id !== t.id) })} />)}
+          </ul>
+          <AddRow placeholder="Add a team member or contractor" onAdd={(v) => save({ team: [...team, { id: newId(), label: v, amount: 0 }] })} />
+          <p className="trk-total"><span>Total team pay</span><b>{fmtMoney(s.salary)}</b></p>
+        </div>
         </div>
 
         <div className="panel">
@@ -82,25 +92,6 @@ export function MonthView({ month, initial, initialDaily, days, income, today }:
           {!income.length && !extra.length && <p className="note">No clients on a monthly retainer this month yet.</p>}
           <AddRow placeholder="Add a client or payment" onAdd={(v) => save({ extraIncome: [...extra, { id: newId(), label: v, amount: 0 }] })} />
           <p className="trk-total"><span>Total income</span><b>{fmtMoney(s.incomeTotal)}</b></p>
-        </div>
-      </section>
-
-      <section className="trk-two">
-        <div className="panel">
-          <div className="trk-head"><h2>Team pay</h2><p className="note">What you paid each team member or contractor this month. It starts with last month&apos;s amounts.</p></div>
-          <ul className="trk-lines">
-            {team.map((t) => <EditLine key={t.id} line={t} what="Team member" onSave={(patch) => save({ team: team.map((e) => (e.id === t.id ? { ...e, ...patch } : e)) })} onRemove={() => save({ team: team.filter((e) => e.id !== t.id) })} />)}
-          </ul>
-          <AddRow placeholder="Add a team member or contractor" onAdd={(v) => save({ team: [...team, { id: newId(), label: v, amount: 0 }] })} />
-          <p className="trk-total"><span>Total team pay</span><b>{fmtMoney(s.salary)}</b></p>
-        </div>
-        <div className="panel">
-          <div className="trk-head"><h2>Expenses</h2><p className="note">Software, subscriptions and anything else. They add up to your OPEX, and start with last month&apos;s list.</p></div>
-          <ul className="trk-lines">
-            {expenses.map((e) => <EditLine key={e.id} line={e} what="Expense" onSave={(patch) => save({ expenses: expenses.map((x) => (x.id === e.id ? { ...x, ...patch } : x)) })} onRemove={() => save({ expenses: expenses.filter((x) => x.id !== e.id) })} />)}
-          </ul>
-          <AddRow placeholder="Add an expense (like Dubsado)" onAdd={(v) => save({ expenses: [...expenses, { id: newId(), label: v, amount: 0 }] })} />
-          <p className="trk-total"><span>Total OPEX</span><b>{fmtMoney(s.opex)}</b></p>
         </div>
       </section>
 
@@ -200,6 +191,17 @@ export function MonthView({ month, initial, initialDaily, days, income, today }:
         <div className="panel">
           <h2>Personal reflections</h2>
           <Text area label="Personal reflections" value={d.reflection} onSave={(v) => save({ reflection: v })} placeholder="How did this month feel? What got in the way, and what went well?" />
+        </div>
+      </section>
+
+      <section aria-label="Expenses">
+        <div className="panel">
+          <div className="trk-head"><h2>Expenses</h2><p className="note">Software, subscriptions and anything else. They add up to your OPEX, and start with last month&apos;s list.</p></div>
+          <ul className="trk-lines">
+            {expenses.map((e) => <EditLine key={e.id} line={e} what="Expense" onSave={(patch) => save({ expenses: expenses.map((x) => (x.id === e.id ? { ...x, ...patch } : x)) })} onRemove={() => save({ expenses: expenses.filter((x) => x.id !== e.id) })} />)}
+          </ul>
+          <AddRow placeholder="Add an expense (like Dubsado)" onAdd={(v) => save({ expenses: [...expenses, { id: newId(), label: v, amount: 0 }] })} />
+          <p className="trk-total"><span>Total OPEX</span><b>{fmtMoney(s.opex)}</b></p>
         </div>
       </section>
     </div>
