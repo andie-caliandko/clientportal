@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { canSeeCeo, isOwner } from "@/lib/ceo";
+import { isOwner } from "@/lib/ceo";
 import { monthName, yearSummary } from "@/lib/ceoTracker";
 import { loadMonth, loadMonths, loadVision, portalIncome } from "@/lib/ceoTracker.server";
 import { requireTeam } from "@/lib/session";
@@ -26,10 +26,11 @@ const shiftMonth = (month: string, by: number) => {
   return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
 };
 
-/** The owner's monthly scorecard, lead tracker and North Star vision (their CEO spreadsheet, in the portal). */
+/** The owner's monthly scorecard, lead tracker and North Star vision (their CEO spreadsheet, in the portal). Never shared. */
 export default async function CeoTracker({ searchParams }: { searchParams: Promise<{ view?: string; month?: string; year?: string }> }) {
-  const { agency, member, userId } = await requireTeam();
-  if (!canSeeCeo(agency, userId, member.role)) redirect("/team");
+  const { agency, userId } = await requireTeam();
+  // Only the owner, even when the CEO dashboard is shared with admins.
+  if (!isOwner(agency, userId)) redirect("/team");
   const sp = await searchParams;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date());
   const view: View = VIEWS.some((v) => v.id === sp.view) ? (sp.view as View) : "month";
@@ -61,7 +62,7 @@ export default async function CeoTracker({ searchParams }: { searchParams: Promi
     <section style={{ display: "grid", gap: 18 }}>
       <div className="top">
         <div>
-          <p className="eyebrow">{isOwner(agency, userId) ? "Only you" : "Shared with you"}{view === "month" ? ` · ${monthName(month)}` : view === "year" ? ` · ${year}` : ""}</p>
+          <p className="eyebrow">Only you{view === "month" ? ` · ${monthName(month)}` : view === "year" ? ` · ${year}` : ""}</p>
           <h1 style={{ marginTop: 6 }}>CEO tracker</h1>
         </div>
         <div className="row" style={{ alignItems: "center" }}>

@@ -1,6 +1,6 @@
 "use server";
 
-import { canSeeCeo } from "@/lib/ceo";
+import { isOwner } from "@/lib/ceo";
 import { cleanPatch, LEAD_STATUSES } from "@/lib/ceoTracker";
 import { requireTeam } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +9,8 @@ type Result = { error?: string; ok?: boolean };
 
 async function requireCeo() {
   const v = await requireTeam();
-  if (!canSeeCeo(v.agency, v.userId, v.member.role)) throw new Error("Only the owner (and admins they share with) can do that.");
+  // The tracker is the owner's alone, even when the CEO dashboard is shared.
+  if (!isOwner(v.agency, v.userId)) throw new Error("Only the owner can do that.");
   return v;
 }
 
