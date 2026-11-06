@@ -3,6 +3,7 @@ export const SERVICES = [
   { id: "social", label: "Social media" },
   { id: "content", label: "Content shoots" },
   { id: "website", label: "Website" },
+  { id: "branding", label: "Branding" },
   { id: "seo", label: "SEO" },
   { id: "ads", label: "Paid ads" },
 ] as const;

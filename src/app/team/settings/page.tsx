@@ -159,16 +159,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="note">Created for the team whenever an admin adds a client. Days count from the day the client is added.</p>
           <NewClientTasksEditor tasks={agency.new_client_tasks ?? []} />
         </div>
-        {PROJECTS.map((p) => (
-          <div key={p.id} className="panel">
-            <h2>{p.label} project tasks</h2>
-            <p className="note">
-              Posted to the account manager when a {p.label.toLowerCase()} project starts: from a client&apos;s page, or when you send the {p.label.toLowerCase()} questionnaire to a new client.
-              Days count from the start date over a {BASE_DAYS}-day project, and stretch to fit a longer or shorter one.
-            </p>
-            <ProjectTasksEditor project={p.id} label={p.label} tasks={agency.project_tasks?.[p.id] ?? []} />
+        <div className="panel" style={{ gridColumn: "1 / -1" }}>
+          <h2>Project tasks</h2>
+          <p className="note">
+            Each service&apos;s timeline, posted to the account manager when you start a new project from a client&apos;s page (and when you send a new client
+            the website or branding questionnaire). Days count from the start date over a {BASE_DAYS}-day project and stretch to fit a longer or shorter one.
+          </p>
+          <div className="project-timelines">
+            {PROJECTS.map((p) => (
+              <details key={p.id}>
+                <summary><span className={`svc-dot svc-${p.id}`} aria-hidden="true" /> {p.label} <span className="note">{agency.project_tasks?.[p.id]?.length ?? 0} tasks</span></summary>
+                <ProjectTasksEditor project={p.id} label={p.label} tasks={agency.project_tasks?.[p.id] ?? []} />
+              </details>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
       <p className="note">Editing these from this page is coming next. For now they&apos;re changed in the database.</p>
     </section>

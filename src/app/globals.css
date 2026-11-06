@@ -943,6 +943,7 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .svc-social { --svc-bg: var(--who-0); --svc-ink: var(--who-0-ink); }
 .svc-content { --svc-bg: var(--who-5); --svc-ink: var(--who-5-ink); }
 .svc-website { --svc-bg: var(--who-3); --svc-ink: var(--who-3-ink); }
+.svc-branding { --svc-bg: var(--who-4); --svc-ink: var(--who-4-ink); }
 .svc-seo { --svc-bg: var(--who-2); --svc-ink: var(--who-2-ink); }
 .svc-ads { --svc-bg: var(--who-1); --svc-ink: var(--who-1-ink); }
 .multi-btn .services { gap: 4px; }
@@ -1321,6 +1322,13 @@ a.shoot-ev { display: block; }
 .project-setup .checks { display: flex; gap: 14px; flex-wrap: wrap; }
 @media (max-width: 700px) { .project-setup { grid-template-columns: 1fr 1fr; } .project-setup .checks { grid-column: 1 / -1; } }
 .modal.wide:has(.project-start) { width: min(1000px, 100%); }
-.project-setup { grid-template-columns: auto 170px 150px 220px; }
+.project-setup { grid-template-columns: 200px 170px 150px minmax(0, 1fr); }
 .project-list li { grid-template-columns: minmax(0, 1fr) 150px 180px auto; }
 @media (max-width: 700px) { .project-setup { grid-template-columns: 1fr 1fr; } .project-list li { grid-template-columns: 1fr 1fr; } .project-list li > :first-child { grid-column: 1 / -1; } }
+.project-timelines { display: grid; gap: 4px; }
+.project-timelines details { border-top: 1px solid var(--line); padding: 10px 0; }
+.project-timelines summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--head); }
+.project-timelines summary .note { font-weight: 400; margin-left: auto; }
+.project-timelines details[open] summary { margin-bottom: 10px; }
+.list li.step-removed { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--line); }
+.list li.step-removed .r { text-decoration: none; }

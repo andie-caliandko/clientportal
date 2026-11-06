@@ -1,12 +1,11 @@
-/** Website and branding projects: a timeline of team tasks, usually a month long. */
-export const PROJECTS = [
-  { id: "website", label: "Website" },
-  { id: "branding", label: "Branding" },
-] as const;
+import { SERVICES, serviceLabel, type ServiceId } from "./services";
 
-export type ProjectId = (typeof PROJECTS)[number]["id"];
-export const isProject = (id: unknown): id is ProjectId => PROJECTS.some((p) => p.id === id);
-export const projectLabel = (id: string) => PROJECTS.find((p) => p.id === id)?.label ?? "Project";
+/** A project is one of our services (website, branding and so on), with a timeline of team tasks, usually a month long. */
+export const PROJECTS = SERVICES;
+
+export type ProjectId = ServiceId;
+export const isProject = (id: unknown): id is ProjectId => SERVICES.some((p) => p.id === id);
+export const projectLabel = (id: string) => serviceLabel(id);
 
 /** One task in the timeline. `days` counts from the project's start date. */
 export type TemplateTask = { title: string; note?: string; days?: number; assignee?: string };

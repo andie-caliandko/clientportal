@@ -670,7 +670,7 @@ export function ProjectTasksEditor({ project, label, tasks }: { project: string;
 }
 
 /**
- * Client page: start a website or branding project. Pick the start date and how long it runs
+ * Client page: start a new project. Pick the service, the start date and how long it runs
  * (the timeline stretches to fit), look over every task and date, then post them to the team.
  */
 export function StartProject({ clientId, templates, people, am, me }: {
@@ -704,19 +704,17 @@ export function StartProject({ clientId, templates, people, am, me }: {
   return (
     <>
       <div className="row" style={{ alignItems: "center" }}>
-        <button type="button" className="btn sm line" onClick={() => { setRows(plan()); setOpen(true); }}>Start a website or branding project</button>
+        <button type="button" className="btn sm line" onClick={() => { setRows(plan()); setOpen(true); }}>Start a new project</button>
         {msg.ok && <p className="flash" role="status" style={{ margin: 0 }}>{msg.ok}</p>}
       </div>
       {open && (
-        <Modal title="Start a project" onClose={() => setOpen(false)} wide>
+        <Modal title="Start a new project" onClose={() => setOpen(false)} wide>
           <div className="project-start" style={{ display: "grid", gap: 14 }}>
             <div className="project-setup">
-              <fieldset className="checks">
-                <legend>Project</legend>
-                {PROJECTS.map((p) => (
-                  <label key={p.id}><input type="radio" name="project" checked={project === p.id} onChange={() => redo({ p: p.id })} /> {p.label}</label>
-                ))}
-              </fieldset>
+              <div className="field"><label htmlFor="pj-service">Service</label>
+                <select className="sel" id="pj-service" value={project} onChange={(e) => redo({ p: e.target.value as ProjectId })}>
+                  {PROJECTS.map((p) => <option key={p.id} value={p.id}>{p.label}{templates[p.id]?.length ? "" : " (no timeline yet)"}</option>)}
+                </select></div>
               <div className="field"><label htmlFor="pj-start">Start date</label>
                 <input className="input" id="pj-start" type="date" value={start} onChange={(e) => e.target.value && redo({ s: e.target.value })} /></div>
               <div className="field"><label htmlFor="pj-length">Project length (days)</label>
@@ -742,7 +740,7 @@ export function StartProject({ clientId, templates, people, am, me }: {
                   <button type="button" className="linkbtn note" onClick={() => setRows(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.title}`}>Remove</button>
                 </li>
               ))}
-              {!rows.length && <li className="note">This project has no timeline yet. Add tasks below, or set one up in Settings.</li>}
+              {!rows.length && <li className="note">{projectLabel(project)} has no timeline yet. Add tasks below, or set one up in Settings under Project tasks.</li>}
             </ul>
             <div><button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: `${projectLabel(project)}: `, note: null, date: end, assignee_id: lead }])}>Add a task</button></div>
             {msg.error && <p className="error">{msg.error}</p>}
@@ -937,30 +935,33 @@ export function EditContactName({ clientId, userId, name }: { clientId: string; 
   );
 }
 
-export function AddClientContact({ clientId }: { clientId: string }) {
+export function AddClientContact({ clientId, full = false }: { clientId: string; full?: boolean }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState(addClientContact, {});
-  // Close the pop-up once it worked; the confirmation shows on the page.
-  useEffect(() => { if (state.ok) setOpen(false); }, [state]);
-  const trigger = (
-    <div style={{ display: "grid", gap: 8 }}>
-      {state.ok && <p className="flash">{state.ok}</p>}
-      <div><button type="button" className="btn sm line" onClick={() => setOpen(true)}>Add a person to their portal</button></div>
-    </div>
-  );
+  const [state, setState] = useState<{ error?: string; ok?: string }>({});
+  const [pending, startTransition] = useTransition();
+  // Stays on the page when the seats fill up, so the pop-up can close itself once the invite is sent.
+  const send = (f: FormData) => startTransition(async () => {
+    const res = await addClientContact({}, f);
+    setState(res);
+    if (res.ok) { setOpen(false); router.refresh(); }
+  });
   return (
     <>
-      {trigger}
+      <div style={{ display: "grid", gap: 8 }}>
+        {state.ok && <p className="flash">{state.ok}</p>}
+        {full ? <p className="note">2 of 2 client seats used.</p>
+          : <div><button type="button" className="btn sm line" onClick={() => { setState({}); setOpen(true); }}>Add a person to their portal</button></div>}
+      </div>
       {open && (
         <Modal title="Add a person to their portal" onClose={() => setOpen(false)}>
-          <form action={async (f) => { action(f); }} style={{ display: "grid", gap: 10 }}>
+          <form action={send} style={{ display: "grid", gap: 10 }}>
             <input type="hidden" name="client" value={clientId} />
             <div className="row">
               <div className="field"><label htmlFor={`cc-name-${clientId}`}>Name</label><input className="input" id={`cc-name-${clientId}`} name="name" required /></div>
               <div className="field"><label htmlFor={`cc-email-${clientId}`}>Email</label><input className="input" id={`cc-email-${clientId}`} name="email" type="email" required /></div>
             </div>
             {state.error && <p className="error">{state.error}</p>}
-            {state.ok && <p className="flash">{state.ok}</p>}
             <div className="row">
               <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send invite"}</button>
               <button type="button" className="btn sm line" onClick={() => setOpen(false)}>Close</button>

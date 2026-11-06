@@ -60,7 +60,7 @@ export default async function ClientDetail({
 
   const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked, briefRows, sentRows] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
-    supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", id),
+    supabase.from("client_step_status").select("step_id, completed_at, skipped").eq("client_id", id),
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
     supabase.from("documents").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("client_users").select("*").eq("client_id", id),
@@ -127,6 +127,8 @@ export default async function ClientDetail({
   const addable = members.filter((m) => m.role !== "admin" && !onTeam.has(m.user_id));
 
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at]));
+  // Steps taken off this client's checklist: they count as finished but say so.
+  const removed = new Set((status.data ?? []).filter((s) => s.skipped).map((s) => s.step_id));
   // Onboarding steps the client still has to do, shown with their tasks until they're all done.
   const allSteps = (steps.data ?? []) as Step[];
   const stepsLeft = allSteps.filter((s) => !done.has(s.id));
@@ -411,15 +413,22 @@ export default async function ClientDetail({
           <h2>Onboarding</h2>
           <ul className="list">
             {((steps.data ?? []) as Step[]).map((s) => (
-              <li key={s.id}>
+              <li key={s.id} className={removed.has(s.id) ? "step-removed" : undefined}>
                 {s.title}
                 <span className="r">
-                  {done.has(s.id) ? <span className="pill ok">Done {short(done.get(s.id)!)}</span> : <span className="note">Not yet</span>}
+                  {removed.has(s.id) ? <span className="note">Removed for this client</span>
+                    : done.has(s.id) ? <span className="pill ok">Done {short(done.get(s.id)!)}</span> : <span className="note">Not yet</span>}
                   {canEdit && <form action={setStep}>
                     <input type="hidden" name="client" value={client.id} />
                     <input type="hidden" name="step" value={s.id} />
                     <input type="hidden" name="done" value={done.has(s.id) ? "0" : "1"} />
-                    <button className="linkbtn note">{done.has(s.id) ? "Undo" : "Mark done"}</button>
+                    <button className="linkbtn note">{removed.has(s.id) ? "Put back" : done.has(s.id) ? "Undo" : "Mark done"}</button>
+                  </form>}
+                  {canEdit && !done.has(s.id) && <form action={setStep}>
+                    <input type="hidden" name="client" value={client.id} />
+                    <input type="hidden" name="step" value={s.id} />
+                    <input type="hidden" name="skip" value="1" />
+                    <button className="linkbtn note" aria-label={`Remove ${s.title} for this client`}>Remove</button>
                   </form>}
                 </span>
               </li>
@@ -506,7 +515,7 @@ export default async function ClientDetail({
               </li>
             ))}
           </ul>
-          {canEdit && (people.data?.length ?? 0) < 2 ? <AddClientContact clientId={client.id} /> : <p className="note">2 of 2 client seats used.</p>}
+          {canEdit ? <AddClientContact clientId={client.id} full={(people.data?.length ?? 0) >= 2} /> : (people.data?.length ?? 0) >= 2 && <p className="note">2 of 2 client seats used.</p>}
         </div>
 
         <div className="panel">

@@ -18,7 +18,7 @@ import { scheduleNextRepeat } from "@/lib/repeatTasks";
 import { linkSignup } from "@/lib/signups";
 import { postToSlack, slackChannelInfo } from "@/lib/slack";
 import { channelBelongsToOther } from "@/lib/slackMatch";
-import { isSocial, readServices } from "@/lib/services";
+import { isSocial, readServices, SERVICES } from "@/lib/services";
 import { formTitle, isForm, readForms } from "@/lib/questionnaires";
 import { isProject, planProject, projectLabel, readTemplate } from "@/lib/projectTasks";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
@@ -221,7 +221,10 @@ export async function setStep(form: FormData) {
   const supabase = await createClient();
   const clientId = String(form.get("client"));
   const stepId = String(form.get("step"));
-  if (form.get("done") === "1") {
+  if (form.get("skip") === "1") {
+    // Not needed for this client: off their checklist, and counted as finished.
+    await supabase.from("client_step_status").upsert({ client_id: clientId, step_id: stepId, skipped: true });
+  } else if (form.get("done") === "1") {
     await supabase.from("client_step_status").upsert({ client_id: clientId, step_id: stepId }, { ignoreDuplicates: true });
   } else {
     await supabase.from("client_step_status").delete().eq("client_id", clientId).eq("step_id", stepId);
@@ -334,7 +337,7 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     })),
     ...CONNECTIONS.filter((c) => later(c.key)).map((c) => ({ title: c.laterTask, note: null, date: dayAfter(1), assignee_id: am })),
     // Sending the website or branding questionnaire starts that project's month-long timeline too.
-    ...forms.filter(isProject).flatMap((p) => planProject(p, v.agency.project_tasks?.[p] ?? [], { start: dayAfter(0), am, me: v.userId })),
+    ...forms.filter((f) => f !== "social" && isProject(f)).flatMap((p) => planProject(p, v.agency.project_tasks?.[p] ?? [], { start: dayAfter(0), am, me: v.userId })),
   ];
 
   // Their Drive folder, with Branding and Content inside (made for them in the Clients folder if no link was pasted).
@@ -1248,7 +1251,7 @@ export async function addReviewedTasks(clientId: string, tasks: ProposedTask[]):
   return { ok: rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"} added.` : "No tasks added." };
 }
 
-/** Admins: the website or branding project timeline in Settings. */
+/** Admins: a service's project timeline in Settings. */
 export async function saveProjectTasks(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
   if (v.member.role !== "admin") return { error: "Only admins can change this list." };
@@ -1263,7 +1266,7 @@ export async function saveProjectTasks(_: Result, form: FormData): Promise<Resul
 }
 
 /**
- * Start a website or branding project: post its timeline (as looked over and changed on the
+ * Start a new project (website, branding or any other service): post its timeline (as looked over and changed on the
  * client's page) to the team, and let each person know what's coming their way.
  */
 export async function addProjectTasks(clientId: string, project: string, tasks: ProposedTask[]): Promise<Result> {
@@ -1283,9 +1286,16 @@ export async function addProjectTasks(clientId: string, project: string, tasks: 
     }));
   if (!rows.length) return { error: "Add at least one task." };
   // Admin client: an account manager can start a project with tasks for teammates on the account.
-  const { error } = await createAdminClient().from("tasks").insert(rows);
+  const admin = createAdminClient();
+  const { error } = await admin.from("tasks").insert(rows);
   if (error) return { error: "Those tasks couldn't be saved." };
-  const { data: client } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+  const { data: client } = await supabase.from("clients").select("name, services").eq("id", clientId).maybeSingle();
+  // The client now gets this service too. (Clients with no services set yet are treated as social, so leave them be.)
+  if (client?.services?.length && !client.services.includes(project)) {
+    const services = SERVICES.map((x) => x.id).filter((x) => x === project || (client.services ?? []).includes(x));
+    await admin.from("clients").update({ services }).eq("id", clientId);
+    revalidatePath("/team/clients");
+  }
   const label = projectLabel(project).toLowerCase();
   for (const who of new Set(rows.map((r) => r.assignee_id).filter(Boolean) as string[])) {
     const mine = rows.filter((r) => r.assignee_id === who);

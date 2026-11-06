@@ -66,7 +66,7 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
   const ctx = { userId, preview };
   const [steps, status, calendars, manager, people, tasks, teamRows, calls, sentForms] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
-    supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", client.id),
+    supabase.from("client_step_status").select("step_id, completed_at, skipped").eq("client_id", client.id),
     supabase.from("content_calendars").select("*").eq("client_id", client.id).order("month", { ascending: false }),
     client.account_manager_id
       ? supabase.from("agency_members").select("display_name, email").eq("user_id", client.account_manager_id).maybeSingle()
@@ -93,7 +93,9 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at as string]));
   // The questionnaire step names the ones still waiting (website, branding and so on).
   const waiting = inOrder(sentForms.data ?? []).filter((r) => !r.submitted_at).map((r) => formTitle(r.form).toLowerCase());
-  const allSteps = ((steps.data ?? []) as Step[]).map((s) => s.kind === "questionnaire" && waiting.length
+  // Steps the team took off this client's checklist don't show at all.
+  const skipped = new Set((status.data ?? []).filter((x) => x.skipped).map((x) => x.step_id));
+  const allSteps = ((steps.data ?? []) as Step[]).filter((x) => !skipped.has(x.id)).map((s) => s.kind === "questionnaire" && waiting.length
     ? { ...s, title: waiting.length > 1 ? "Fill out your questionnaires" : `Fill out your ${waiting[0]}`, help: `${waiting.length > 1 ? `Your ${waiting.join(" and ")}. ` : ""}You can stop and come back any time. Your answers save as you go.` }
     : s);
   const cals = (calendars.data ?? []) as Calendar[];
