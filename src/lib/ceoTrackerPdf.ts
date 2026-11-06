@@ -99,7 +99,8 @@ function monthPages(doc: PDFDocument, b: PdfBrand, agency: string, m: Month) {
   pairs([
     ["Happiness", fmtNum(d.happiness ?? null)], ["Routine consistency", fmtPct(d.routine ?? null)], ["CEO identity rating", fmtNum(d.identity ?? null)], ["Inbound leads", fmtNum(s.inboundLeads, 0)],
     ["Total touch points", fmtNum(s.touchPoints, 0)], ["Disco calls had (outbound)", fmtNum(s.callsHad, 0)], ["Touch points per booked call", fmtNum(s.touchPerCall)], ["Disco calls had (inbound)", fmtNum(s.inboundCalls, 0)],
-    ["Disco calls offered", fmtNum(s.callsOffered, 0)], ["Show rate", fmtPct(s.showRate)], ["New clients", fmtNum(s.signed, 0)], ["Close rate", fmtPct(s.closeRate)],
+    ["Disco calls offered", fmtNum(s.callsOffered, 0)], ["Show rate", fmtPct(s.showRate)], ["Proposal calls offered", fmtNum(s.proposalsOffered, 0)], ["Proposal calls had", fmtNum(s.proposalsHad, 0)],
+    ["New clients", fmtNum(s.signed, 0)], ["Close rate", fmtPct(s.closeRate)],
     ["Clients", fmtNum(s.clients, 0)], ["Clients upgraded", fmtNum(s.upgraded, 0)], ["Cancellations", fmtNum(s.cancellations, 0)], ["Churn", fmtPct(s.churn)],
     ["Team members", fmtNum(s.teamMembers, 0)], ["Revenue per team member", fmtMoney(s.revenuePerMember)],
   ]);
@@ -157,6 +158,7 @@ function overviewPage(doc: PDFDocument, b: PdfBrand, agency: string, months: Mon
     row("Disco calls had", (m) => fmtNum(m.s.callsHad, 0), fmtNum(y.callsHad, 0)),
     row("Show rate", (m) => fmtPct(m.s.showRate), fmtPct(y.showRate)),
     row("New clients", (m) => fmtNum(m.s.signed, 0), fmtNum(y.signed, 0)),
+    row("Proposal calls had", (m) => fmtNum(m.s.proposalsHad, 0), fmtNum(y.proposalsHad, 0)),
     row("Close rate", (m) => fmtPct(m.s.closeRate), fmtPct(y.closeRate)),
     row("Clients", (m) => fmtNum(m.s.clients, 0), fmtNum(y.clientsServed, 0)),
     row("Cancellations", (m) => fmtNum(m.s.cancellations, 0), fmtNum(y.cancellations, 0)),

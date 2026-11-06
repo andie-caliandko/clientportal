@@ -36,6 +36,8 @@ const ROWS: { group: string; rows: { label: string; m: (x: M) => number | null |
     { label: "Disco calls offered", m: (x) => x.s.callsOffered, y: (y) => y.callsOffered, fmt: whole },
     { label: "Disco calls had", m: (x) => x.s.callsHad, y: (y) => y.callsHad, fmt: whole },
     { label: "Show rate", m: (x) => x.s.showRate, y: (y) => y.showRate, fmt: fmtPct },
+    { label: "Proposal calls offered", m: (x) => x.s.proposalsOffered, y: (y) => y.proposalsOffered, fmt: whole },
+    { label: "Proposal calls had", m: (x) => x.s.proposalsHad, y: (y) => y.proposalsHad, fmt: whole },
     { label: "New clients", m: (x) => x.s.signed, y: (y) => y.signed, fmt: whole },
     { label: "Close rate", m: (x) => x.s.closeRate, y: (y) => y.closeRate, fmt: fmtPct },
   ] },

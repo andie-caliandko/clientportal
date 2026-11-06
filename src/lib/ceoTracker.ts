@@ -72,6 +72,8 @@ const sum = (xs: number[]) => xs.reduce((n, x) => n + (Number.isFinite(x) ? x : 
 const rowTotal = (daily: Daily, key: string) => sum(Object.values(daily[key] ?? {}));
 /** a ÷ b, or null when there's nothing to divide by (shown as a dash, never "#DIV/0!"). */
 export const ratio = (a: number, b: number) => (b ? a / b : null);
+/** Clients signed out of the proposal calls had (the step right before signing), or out of discovery calls when no proposal calls were logged. */
+const closeRate = (signed: number, proposalsHad: number, callsHad: number) => ratio(signed, proposalsHad || callsHad);
 
 /** `clients` is the month's income from the CEO dashboard; payments added by hand come from the month itself. */
 export function monthSummary(d: MonthData, daily: Daily, clients: IncomeRow[] = []) {
@@ -93,6 +95,8 @@ export function monthSummary(d: MonthData, daily: Daily, clients: IncomeRow[] = 
   const callsOffered = rowTotal(daily, "calls_offered");
   const callsHad = rowTotal(daily, "calls_had");
   const signed = rowTotal(daily, "signed");
+  const proposalsOffered = rowTotal(daily, "proposals_offered");
+  const proposalsHad = rowTotal(daily, "proposals_had");
   const clientCount = d.clients ?? 0;
   const ending = d.ending ?? 0;
 
@@ -105,8 +109,8 @@ export function monthSummary(d: MonthData, daily: Daily, clients: IncomeRow[] = 
     inboundLeads: d.inboundLeads ?? 0,
     touchPoints, callsHad, touchPerCall: ratio(touchPoints, callsHad), inboundCalls: d.inboundCalls ?? 0,
     callsOffered, showRate: ratio(callsHad, callsOffered),
-    proposalsOffered: rowTotal(daily, "proposals_offered"), proposalsHad: rowTotal(daily, "proposals_had"),
-    signed, closeRate: ratio(signed, callsHad),
+    proposalsOffered, proposalsHad, proposalShowRate: ratio(proposalsHad, proposalsOffered),
+    signed, closeRate: closeRate(signed, proposalsHad, callsHad),
     clients: clientCount, upgraded: d.upgraded ?? 0, cancellations: d.cancellations ?? 0, churn: ratio(d.cancellations ?? 0, clientCount),
     teamMembers: d.teamMembers ?? 0, revenuePerMember: ratio(ending, d.teamMembers ?? 0),
     budget: BUDGET.map((b) => {
@@ -127,6 +131,8 @@ export function yearSummary(months: { data: MonthData; s: MonthSummary }[]) {
   const callsHad = t((s) => s.callsHad);
   const callsOffered = t((s) => s.callsOffered);
   const signed = t((s) => s.signed);
+  const proposalsOffered = t((s) => s.proposalsOffered);
+  const proposalsHad = t((s) => s.proposalsHad);
   const clientsServed = Math.max(0, ...months.map((m) => m.s.clients));
   const cancellations = t((s) => s.cancellations);
   // Profit is each month's profit (income minus pay and expenses) added up, so the year matches its months.
@@ -139,7 +145,9 @@ export function yearSummary(months: { data: MonthData; s: MonthSummary }[]) {
     touchPoints: t((s) => s.touchPoints), callsHad, touchPerCall: ratio(t((s) => s.touchPoints), callsHad),
     inboundCalls: t((s) => s.inboundCalls),
     clientsServed, upgraded: t((s) => s.upgraded), cancellations, churn: ratio(cancellations, clientsServed),
-    callsOffered, showRate: ratio(callsHad, callsOffered), signed, closeRate: ratio(signed, callsHad),
+    callsOffered, showRate: ratio(callsHad, callsOffered),
+    proposalsOffered, proposalsHad, proposalShowRate: ratio(proposalsHad, proposalsOffered),
+    signed, closeRate: closeRate(signed, proposalsHad, callsHad),
   };
 }
 

@@ -112,6 +112,8 @@ export function MonthView({ month, initial, initialDaily, days, income, today }:
           <Row label="Disco calls offered" calc>{fmtNum(s.callsOffered, 0)}</Row>
           <Row label="Disco calls had" calc>{fmtNum(s.callsHad, 0)}</Row>
           <Row label="Show rate" calc>{fmtPct(s.showRate)}</Row>
+          <Row label="Proposal calls offered" calc>{fmtNum(s.proposalsOffered, 0)}</Row>
+          <Row label="Proposal calls had" calc>{fmtNum(s.proposalsHad, 0)}</Row>
           <Row label="New clients" calc>{fmtNum(s.signed, 0)}</Row>
           <Row label="Close rate" calc>{fmtPct(s.closeRate)}</Row>
         </Card>

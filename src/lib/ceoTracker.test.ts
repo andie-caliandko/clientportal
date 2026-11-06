@@ -48,6 +48,12 @@ describe("CEO tracker month", () => {
     expect(s.churn).toBe(0.1);
     expect(s.revenuePerMember).toBe(9000);
   });
+  it("works out the close rate from proposal calls when they're logged", () => {
+    const p = monthSummary({}, { proposals_offered: { 2: 2 }, proposals_had: { 3: 2 }, signed: { 4: 1 } });
+    expect(p.proposalsHad).toBe(2);
+    expect(p.closeRate).toBe(0.5);
+    expect(p.proposalShowRate).toBe(1);
+  });
   it("shows a dash instead of dividing by zero", () => {
     const empty = monthSummary({}, {});
     expect(empty.touchPerCall).toBeNull();
