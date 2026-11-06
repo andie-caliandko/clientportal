@@ -1,4 +1,5 @@
 import { Avatar } from "@/app/Avatar";
+import { FORMS } from "@/lib/questionnaires";
 import Link from "next/link";
 import { Logo } from "@/lib/brand";
 import { redirect } from "next/navigation";
@@ -23,10 +24,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { agency, member } = await requireTeam();
   if (member.role !== "admin") redirect("/team");
   const supabase = await createClient();
-  const [{ data: members }, { data: steps }, { count: questionCount }, { data: activeClients }, { data: onClients }] = await Promise.all([
+  const [{ data: members }, { data: steps }, { data: questionRows }, { data: activeClients }, { data: onClients }] = await Promise.all([
     supabase.from("agency_members").select("user_id, display_name, title, role, email, avatar_path").eq("agency_id", agency.id).order("display_name"),
     supabase.from("onboarding_steps").select("title, kind").eq("agency_id", agency.id).order("position"),
-    supabase.from("questions").select("*", { count: "exact", head: true }).eq("agency_id", agency.id),
+    supabase.from("questions").select("form").eq("agency_id", agency.id),
     supabase.from("clients").select("id, account_manager_id").eq("agency_id", agency.id).is("archived_at", null),
     supabase.from("client_team").select("client_id, user_id"),
   ]);
@@ -138,7 +139,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <ul className="list">
               {(steps ?? []).map((s) => <li key={s.title}>{s.title}</li>)}
             </ul>
-            <p className="note">{questionCount ?? 0} questionnaire questions. Every new client gets this checklist and questionnaire automatically.</p>
+            <p className="note">
+              Questionnaires: {FORMS.map((f) => `${f.label.toLowerCase()} (${(questionRows ?? []).filter((q) => q.form === f.id).length} questions)`).join(", ")}.
+              Every new client gets this checklist and the questionnaires picked when they&apos;re added. Send more from a client&apos;s page any time.
+            </p>
           </div>
           <div className="panel">
             <h2>Content approvals</h2>

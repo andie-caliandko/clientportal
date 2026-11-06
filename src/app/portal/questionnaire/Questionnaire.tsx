@@ -5,12 +5,16 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import type { Brand, Question } from "@/lib/types";
 import { saveAnswer, submitQuestionnaire } from "../actions";
 
-export function Questionnaire({ questions, saved, start, brand, agencyName }: {
+export function Questionnaire({ form, title, questions, saved, start, brand, agencyName, justSent = false }: {
+  form: string;
+  title: string;
   questions: Question[];
   saved: Record<string, string>;
   start: number;
   brand: Brand;
   agencyName: string;
+  /** They just sent another questionnaire and landed on this one. */
+  justSent?: boolean;
 }) {
   const [i, setI] = useState(start);
   const [answers, setAnswers] = useState(saved);
@@ -44,7 +48,7 @@ export function Questionnaire({ questions, saved, start, brand, agencyName }: {
     if (!last) return setI(i + 1);
     startTransition(async () => {
       await saveAnswer(q.id, value);
-      const res = await submitQuestionnaire();
+      const res = await submitQuestionnaire(form);
       if (res?.error) setError(res.error);
     });
   };
@@ -56,8 +60,9 @@ export function Questionnaire({ questions, saved, start, brand, agencyName }: {
         {brand.mark ? <img src={brand.mark} alt={agencyName} style={{ height: 40, width: "auto" }} /> : <span className="wordmark">{agencyName}</span>}
         <Link className="btn line sm" href="/portal" onClick={persist}>Save and close</Link>
       </div>
+      {justSent && i === start && <p className="flash" role="status">Thank you! Those answers are in. Next up is your {title.toLowerCase()}.</p>}
       <div style={{ display: "grid", gap: 10 }}>
-        <p className="eyebrow">Onboarding questionnaire · Question {i + 1} of {questions.length}</p>
+        <p className="eyebrow">{title} · Question {i + 1} of {questions.length}</p>
         <div className="progress"><i style={{ width: `${((i + 1) / questions.length) * 100}%` }} /></div>
       </div>
       <div className="q">

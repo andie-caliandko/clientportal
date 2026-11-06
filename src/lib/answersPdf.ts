@@ -38,9 +38,10 @@ export function wrap(text: string, font: PDFFont, size: number, width: number) {
 }
 
 /** A client's questionnaire answers as a letter-size PDF. */
-export async function answersPdf(opts: { agency: string; client: string; date: string; primary?: string; items: { position: number; prompt: string; answer: string }[] }) {
+export async function answersPdf(opts: { agency: string; client: string; date: string; primary?: string; title?: string; items: { position: number; prompt: string; answer: string }[] }) {
+  const title = (opts.title ?? "Onboarding questionnaire").toLowerCase();
   const doc = await PDFDocument.create();
-  doc.setTitle(`${opts.client} onboarding questionnaire`);
+  doc.setTitle(`${opts.client} ${title}`);
   doc.setAuthor(opts.agency);
   // Brand fonts, and every word in the brand's dark green.
   const brand = await pdfBrand(doc, opts.primary);
@@ -60,7 +61,7 @@ export async function answersPdf(opts: { agency: string; client: string; date: s
 
   draw(opts.agency.toUpperCase(), bold, 9, muted);
   y -= 4;
-  draw(`${opts.client}: onboarding questionnaire`, serif, 26, ink, 10);
+  draw(`${opts.client}: ${title}`, serif, 26, ink, 10);
   draw(`Downloaded ${opts.date}`, regular, 10, muted);
   y -= 14;
   for (const q of opts.items) {

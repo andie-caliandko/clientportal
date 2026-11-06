@@ -1,6 +1,7 @@
 import "server-only";
 import { accessToken, integration } from "./google";
 import { createAdminClient } from "./supabase/server";
+import { formTitle, type FormId } from "./questionnaires";
 
 // Files clients upload are stored in the portal first, then copied into the
 // client's Google Drive folder: branding and content uploads into their own
@@ -219,7 +220,7 @@ export async function setClientDriveAccess(clientId: string, on: boolean) {
 
 // ---------------------------------------------------------------------------
 // Folders the platform makes and files it keeps there:
-//   Clients/<Client>/<Client> onboarding questionnaire.pdf   (saved when they submit it)
+//   Clients/<Client>/<Client> website questionnaire.pdf      (one per questionnaire, saved when they submit it)
 //   Clients/<Client>/Branding, Content                (client uploads)
 //   Clients/<Client>/Content Shoots/<date> Content Shoot/   (sent shoot plan PDF, plus the shoot's files)
 //   Clients/<Client>/Content Shoots/<date> Content Shoot/Model Waivers/
@@ -380,18 +381,22 @@ export async function trashDriveFile(agencyId: string, fileId: string) {
   });
 }
 
-/** Save the client's onboarding questionnaire answers as a PDF in their main Drive folder (replaced if they send it again). */
-export async function saveQuestionnaireToDrive(clientId: string) {
+/** Save the client's answers to one questionnaire as a PDF in their main Drive folder (replaced if they send it again). */
+export async function saveQuestionnaireToDrive(clientId: string, form: FormId = "social") {
   const admin = createAdminClient();
-  const { data: client } = await admin.from("clients").select("id, name, agency_id, drive_folder_id, drive_questionnaire_id").eq("id", clientId).maybeSingle();
+  const [{ data: client }, { data: sent }] = await Promise.all([
+    admin.from("clients").select("id, name, agency_id, drive_folder_id").eq("id", clientId).maybeSingle(),
+    admin.from("client_questionnaires").select("drive_file_id").eq("client_id", clientId).eq("form", form).maybeSingle(),
+  ]);
   if (!client?.drive_folder_id) return null;
   const agency = await agencyDrive(client.agency_id);
   if (!agency) return null;
   const { questionnairePdf } = await import("./questionnairePdf");
-  const pdf = await questionnairePdf(clientId);
+  const pdf = await questionnairePdf(clientId, form);
   if (!pdf) return null;
-  const id = await saveBytes(agency.token, client.drive_folder_id, `${client.name.replace(/[\\/:*?"<>|]+/g, "-")} onboarding questionnaire.pdf`, pdf, "application/pdf", client.drive_questionnaire_id);
-  await admin.from("clients").update({ drive_questionnaire_id: id }).eq("id", clientId);
+  const name = `${client.name.replace(/[\\/:*?"<>|]+/g, "-")} ${formTitle(form).toLowerCase()}.pdf`;
+  const id = await saveBytes(agency.token, client.drive_folder_id, name, pdf, "application/pdf", sent?.drive_file_id);
+  await admin.from("client_questionnaires").update({ drive_file_id: id }).eq("client_id", clientId).eq("form", form);
   return id;
 }
 

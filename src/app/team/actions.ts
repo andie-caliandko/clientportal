@@ -19,6 +19,7 @@ import { linkSignup } from "@/lib/signups";
 import { postToSlack, slackChannelInfo } from "@/lib/slack";
 import { channelBelongsToOther } from "@/lib/slackMatch";
 import { isSocial, readServices } from "@/lib/services";
+import { formTitle, isForm, readForms } from "@/lib/questionnaires";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string; ok?: string };
@@ -300,6 +301,14 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
   if (services.length) await supabase.from("clients").update({ services, health_tracked: isSocial(services) }).eq("id", client.id);
   if (extraTeam.length) {
     await supabase.from("client_team").insert(extraTeam.map((user_id) => ({ client_id: client.id, user_id })));
+  }
+  // The questionnaires picked for them. None picked: nothing to fill out, so that step starts checked off.
+  const forms = readForms(form);
+  if (forms.length) {
+    await supabase.from("client_questionnaires").insert(forms.map((f) => ({ client_id: client.id, form: f, sent_by: v.userId })));
+  } else {
+    const { data: qStep } = await supabase.from("onboarding_steps").select("id").eq("agency_id", v.agency.id).eq("kind", "questionnaire").maybeSingle();
+    if (qStep) await supabase.from("client_step_status").insert({ client_id: client.id, step_id: qStep.id, completed_by: v.userId });
   }
   // Came in through Dubsado? Link their signed contract and payment, and check off the setup task.
   after(() => linkSignup(client.id, v.agency.id, [dubsadoEmail, contactEmail], v.agency.timezone));
@@ -1136,39 +1145,57 @@ export async function deleteBrief(form: FormData) {
 }
 
 /**
- * Open the onboarding questionnaire back up for a client and email the people
- * chosen (say, a different teammate of theirs). Their earlier answers stay so
- * they can update them, unless the team chooses to start fresh.
+ * Send a client a questionnaire (social media, website or branding), at onboarding or any time
+ * after, and email the people chosen. Sending one they've had before opens it back up with their
+ * earlier answers kept so they can update them, unless the team chooses to start fresh.
  */
-export async function resendQuestionnaire(_: Result, form: FormData): Promise<Result> {
+export async function sendQuestionnaire(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
   if (v.member.role === "creator") return { error: VIEW_ONLY };
   const clientId = String(form.get("client") ?? "");
+  const kind = String(form.get("form") ?? "");
+  if (!isForm(kind)) return { error: "Choose which questionnaire to send." };
   const supabase = await createClient();
   const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
   if (!canEdit) return { error: "You don't have access to this client." };
   const admin = createAdminClient();
-  const [{ data: step }, { data: contacts }] = await Promise.all([
+  const [{ data: step }, { data: contacts }, { data: questions }, { data: before }] = await Promise.all([
     admin.from("onboarding_steps").select("id").eq("agency_id", v.agency.id).eq("kind", "questionnaire").maybeSingle(),
     admin.from("client_users").select("user_id, display_name, email").eq("client_id", clientId),
+    admin.from("questions").select("id").eq("agency_id", v.agency.id).eq("form", kind),
+    admin.from("client_questionnaires").select("form").eq("client_id", clientId).eq("form", kind).maybeSingle(),
   ]);
-  if (!step) return { error: "There's no questionnaire step in your onboarding." };
+  if (!questions?.length) return { error: `The ${formTitle(kind).toLowerCase()} has no questions yet.` };
   const picked = new Set(form.getAll("contact").map(String));
   const to = (contacts ?? []).filter((c) => picked.has(c.user_id));
-  if (!to.length) return { error: "Choose who should fill it out." };
+  // With no portal logins yet it just waits on their to-do list; otherwise someone has to get it.
+  if (contacts?.length && !to.length) return { error: "Choose who should fill it out." };
 
-  await admin.from("client_step_status").delete().eq("client_id", clientId).eq("step_id", step.id);
-  if (form.get("fresh") === "on") await admin.from("answers").delete().eq("client_id", clientId);
-  const note = String(form.get("note") ?? "").trim();
-  const short = v.agency.brand.shortName ?? v.agency.name;
-  await sendEmail(
-    to.map((c) => c.email),
-    `Please fill out your ${short} questionnaire`,
-    `${v.member.display_name} opened your onboarding questionnaire back up${form.get("fresh") === "on" ? "" : " so you can review and update your answers"}.${note ? `\n\n${note}` : ""}\n\nOpen it here:\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/questionnaire`,
+  const { error } = await admin.from("client_questionnaires").upsert(
+    { client_id: clientId, form: kind, sent_at: new Date().toISOString(), sent_by: v.userId, submitted_at: null },
+    { onConflict: "client_id,form" },
   );
-  await notifyClient(clientId, { kind: "task", title: "Your questionnaire is open again", body: note || null, link: "/portal/questionnaire" }, to.map((c) => c.user_id));
+  if (error) return { error: "That questionnaire couldn't be sent. Try again." };
+  // Back on their onboarding checklist until it's in.
+  if (step) await admin.from("client_step_status").delete().eq("client_id", clientId).eq("step_id", step.id);
+  const fresh = form.get("fresh") === "on";
+  if (fresh) await admin.from("answers").delete().eq("client_id", clientId).in("question_id", questions.map((q) => q.id));
+
+  const title = formTitle(kind).toLowerCase();
+  const link = `/portal/questionnaire?form=${kind}`;
+  const note = String(form.get("note") ?? "").trim();
+  if (to.length) {
+    const short = v.agency.brand.shortName ?? v.agency.name;
+    const what = !before ? `sent you a ${title}` : `opened your ${title} back up${fresh ? "" : " so you can review and update your answers"}`;
+    await sendEmail(
+      to.map((c) => c.email),
+      `Please fill out your ${short} ${title}`,
+      `${v.member.display_name} ${what}.${note ? `\n\n${note}` : ""}\n\nOpen it here:\n${process.env.NEXT_PUBLIC_SITE_URL}${link}`,
+    );
+    await notifyClient(clientId, { kind: "task", title: `Your ${title} is ready`, body: note || null, link }, to.map((c) => c.user_id));
+  }
   revalidatePath(`/team/clients/${clientId}`);
-  return { ok: `Sent to ${to.map((c) => c.display_name.split(" ")[0]).join(" and ")}.` };
+  return { ok: to.length ? `Sent to ${to.map((c) => c.display_name.split(" ")[0]).join(" and ")}.` : "Added to their to-do list. They'll see it when they sign in." };
 }
 
 /** Team page: set which clients a teammate is on, all at once. Account managers stay on their own accounts. */

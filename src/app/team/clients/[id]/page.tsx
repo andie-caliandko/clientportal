@@ -3,6 +3,7 @@ import { ShootEditor } from "@/app/team/shoots/ShootForms";
 import { ShootList } from "@/app/team/shoots/ShootList";
 import { slackChannelInfo } from "@/lib/slack";
 import { AnswersButton } from "./AnswersButton";
+import { formTitle, inOrder, type SentForm } from "@/lib/questionnaires";
 import { UploadGroups } from "@/app/portal/UploadGroups";
 import { isSocial } from "@/lib/services";
 import { ServiceTag } from "../../ServicesPicker";
@@ -22,7 +23,7 @@ import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, EditContactName, AddTeammate, DriveShareToggle, ResendInviteButton, SendLoginLinkButton, ResendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, EditContactName, AddTeammate, DriveShareToggle, ResendInviteButton, SendLoginLinkButton, SendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -57,7 +58,7 @@ export default async function ClientDetail({
   if (!client) notFound();
   if (client.archived_at && member.role !== "admin") notFound();
 
-  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked, briefRows] = await Promise.all([
+  const [steps, status, cals, docs, people, messages, questions, answers, manager, teamRows, allMembers, tasks, taskPeople, uploads, callRows, linked, briefRows, sentRows] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", id),
     supabase.from("content_calendars").select("*").eq("client_id", id).order("sent_at", { ascending: false }),
@@ -77,6 +78,7 @@ export default async function ClientDetail({
     supabase.from("call_requests").select("*").eq("client_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(10),
     connectedMembers(agency.id),
     supabase.from("client_briefs").select("*").eq("client_id", id).order("created_at", { ascending: false }),
+    supabase.from("client_questionnaires").select("form, sent_at, submitted_at").eq("client_id", id),
   ]);
   const briefs = (briefRows.data ?? []) as { id: string; title: string; notes: string | null; url: string | null; file_path: string | null; file_name: string | null; created_by: string | null; created_at: string }[];
   const uploadRows = uploads.data ?? [];
@@ -424,14 +426,24 @@ export default async function ClientDetail({
             ))}
           </ul>
           {canEdit ? <ContractLinkForm clientId={client.id} url={client.dubsado_project_url} /> : null}
-          <div className="row" style={{ alignItems: "center" }}>
-            <AnswersButton clientId={client.id} clientName={client.name}
-              items={((questions.data ?? []) as Question[]).map((q) => ({ id: q.id, position: q.position, prompt: q.prompt, answer: answerBy[q.id] ?? "" }))} />
-            {canEdit && (
-              <ResendQuestionnaire clientId={client.id}
-                contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
-            )}
-          </div>
+          <h3 className="eyebrow" style={{ margin: "6px 0 0" }}>Questionnaires</h3>
+          <ul className="list">
+            {inOrder((sentRows.data ?? []) as SentForm[]).map((r) => (
+              <li key={r.form}>
+                {formTitle(r.form)}
+                <span className="r">
+                  {r.submitted_at ? <span className="pill ok">Sent back {short(r.submitted_at)}</span> : <span className="note">Sent {short(r.sent_at)}, waiting</span>}
+                  <AnswersButton clientId={client.id} clientName={client.name} form={r.form} title={formTitle(r.form)}
+                    items={((questions.data ?? []) as Question[]).filter((q) => q.form === r.form).map((q) => ({ id: q.id, position: q.position, prompt: q.prompt, answer: answerBy[q.id] ?? "" }))} />
+                </span>
+              </li>
+            ))}
+            {!sentRows.data?.length && <li className="note">None sent yet.</li>}
+          </ul>
+          {canEdit && (
+            <SendQuestionnaire clientId={client.id} sent={(sentRows.data ?? []).map((r) => r.form)}
+              contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
+          )}
         </div>
 
         <div className="panel">

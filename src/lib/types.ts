@@ -96,7 +96,7 @@ export type Step = {
   action_url: string | null;
 };
 
-export type Question = { id: string; position: number; prompt: string; hint: string; required: boolean };
+export type Question = { id: string; form: string; position: number; prompt: string; hint: string; required: boolean };
 
 export type Calendar = {
   id: string;

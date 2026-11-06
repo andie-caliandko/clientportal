@@ -13,6 +13,7 @@ import { postToSlack } from "@/lib/slack";
 import { after } from "next/server";
 import { saveQuestionnaireToDrive, syncUploadsToDrive } from "@/lib/drive";
 import { afterMessageFiles, readAttachments } from "@/lib/messageFiles";
+import { allIn, formTitle, isForm, nextOpen } from "@/lib/questionnaires";
 
 async function markStep(v: { agency: { id: string }; client: { id: string }; userId: string }, kind: string) {
   const supabase = await createClient();
@@ -40,28 +41,38 @@ export async function saveAnswer(questionId: string, body: string) {
   });
 }
 
-export async function submitQuestionnaire(): Promise<{ error?: string }> {
+export async function submitQuestionnaire(form: string): Promise<{ error?: string }> {
   const v = await requireClient();
+  if (!isForm(form)) return { error: "That questionnaire wasn't found." };
   const supabase = await createClient();
-  const [{ data: questions }, { data: answers }] = await Promise.all([
-    supabase.from("questions").select("id, position, required").order("position"),
+  const [{ data: questions }, { data: answers }, { data: sent }] = await Promise.all([
+    supabase.from("questions").select("id, position, required").eq("agency_id", v.agency.id).eq("form", form).order("position"),
     supabase.from("answers").select("question_id, body").eq("client_id", v.client.id),
+    supabase.from("client_questionnaires").select("form, submitted_at").eq("client_id", v.client.id),
   ]);
+  if (!(sent ?? []).some((r) => r.form === form)) return { error: "This questionnaire isn't open for you right now." };
   const answered = new Set((answers ?? []).filter((a) => a.body.trim()).map((a) => a.question_id));
   const missing = (questions ?? []).filter((q) => q.required && !answered.has(q.id));
   if (missing.length) return { error: `Question ${missing[0].position} still needs an answer.` };
 
-  await markStep(v, "questionnaire");
+  // Clients can read their questionnaires but only the team can change them, so this goes through the admin client.
+  const now = new Date().toISOString();
+  await createAdminClient().from("client_questionnaires").update({ submitted_at: now }).eq("client_id", v.client.id).eq("form", form);
+  const rows = (sent ?? []).map((r) => (r.form === form ? { ...r, submitted_at: now } : r));
+  if (allIn(rows)) await markStep(v, "questionnaire");
+  const title = formTitle(form);
   await clientActivity(v.client.id, {
-    task: `Review ${v.client.name}'s onboarding questionnaire`,
+    task: `Review ${v.client.name}'s ${title.toLowerCase()}`,
     source: "portal",
-    subject: "onboarding questionnaire submitted",
-    body: `${v.clientUser.display_name} finished the onboarding questionnaire.`,
+    subject: `${title.toLowerCase()} submitted`,
+    body: `${v.clientUser.display_name} finished the ${title.toLowerCase()}.`,
   });
   // A copy in their Drive folder, right in the main folder.
-  after(async () => { try { await saveQuestionnaireToDrive(v.client.id); } catch (err) { console.error("Questionnaire to Drive failed", err); } });
+  after(async () => { try { await saveQuestionnaireToDrive(v.client.id, form); } catch (err) { console.error("Questionnaire to Drive failed", err); } });
   revalidatePath("/portal");
-  redirect("/portal?done=questionnaire");
+  // Another one waiting? Go straight to it.
+  const next = nextOpen(rows);
+  redirect(next ? `/portal/questionnaire?form=${next.form}&done=1` : "/portal?done=questionnaire");
 }
 
 export async function finishUploads(kind: "branding" | "content", files: { name: string; path: string; note?: string }[]) {

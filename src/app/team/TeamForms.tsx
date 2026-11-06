@@ -2,6 +2,7 @@
 
 import { Modal } from "@/app/Modal";
 import { ServicesPicker } from "./ServicesPicker";
+import { FORMS } from "@/lib/questionnaires";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -16,7 +17,7 @@ import {
   addBrief,
   addReviewedTasks,
   createClientAccount,
-  resendQuestionnaire,
+  sendQuestionnaire,
   resendClientInvite,
   sendClientLoginLink,
   sendTeammateLoginLink,
@@ -281,6 +282,14 @@ export function NewClientForm({ members, agencyId, meId, defaults, autoDrive = f
         <span className="note">Social clients get health scorecards and Daily engagement.</span></div>
 
       <fieldset className="checks">
+        <legend>Questionnaires to send</legend>
+        {FORMS.map((q) => (
+          <label key={q.id}><input type="checkbox" name="questionnaires" value={q.id} defaultChecked={q.id === "social"} /> {q.title}</label>
+        ))}
+        <p className="note">They fill these out in their portal during onboarding. You can send another one from their page any time.</p>
+      </fieldset>
+
+      <fieldset className="checks">
         <legend>Anyone else from the team on this account?</legend>
         {others.map((m) => (
           <label key={m.user_id}><input type="checkbox" name="team" value={m.user_id} /> {m.display_name} · {ROLE_NAMES[m.role ?? ""]}</label>
@@ -326,7 +335,7 @@ export function NewClientForm({ members, agencyId, meId, defaults, autoDrive = f
       <div className="field"><label htmlFor="brief_file">Or upload a file</label><input className="input" id="brief_file" name="brief_file" type="file" /></div>
 
       <p className="note">
-        Every new client automatically gets your onboarding checklist and questionnaire in their portal, plus your new-client
+        Every new client automatically gets your onboarding checklist and the questionnaires you pick in their portal, plus your new-client
         tasks for the team (see Settings).
       </p>
       {state.error && <p className="error">{state.error}</p>}
@@ -909,31 +918,50 @@ export function AddClientButton({ members, agencyId, meId, defaults, label = "Ad
   );
 }
 
-/** Client page: open the questionnaire back up and send it to one or more of their people. */
-export function ResendQuestionnaire({ clientId, contacts }: { clientId: string; contacts: { user_id: string; display_name: string; email: string }[] }) {
+/** Client page: send them a questionnaire (or one they've had before, opened back up) and email the people picked. */
+export function SendQuestionnaire({ clientId, contacts, sent }: {
+  clientId: string;
+  contacts: { user_id: string; display_name: string; email: string }[];
+  /** The questionnaires they've been sent so far. */
+  sent: string[];
+}) {
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState(resendQuestionnaire, {});
+  const [pick, setPick] = useState<string>(FORMS.find((f) => !sent.includes(f.id))?.id ?? "social");
+  const [state, action, pending] = useActionState(sendQuestionnaire, {});
   useEffect(() => { if (state.ok) setOpen(false); }, [state]);
+  const again = sent.includes(pick);
   return (
     <>
       <div className="row" style={{ alignItems: "center" }}>
-        <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Send the questionnaire again</button>
+        <button type="button" className="btn sm line" onClick={() => setOpen(true)}>Send a questionnaire</button>
         {state.ok && <p className="flash" role="status" style={{ margin: 0 }}>{state.ok}</p>}
       </div>
       {open && (
-        <Modal title="Send the questionnaire again" onClose={() => setOpen(false)}>
+        <Modal title="Send a questionnaire" onClose={() => setOpen(false)}>
           <form action={action} style={{ display: "grid", gap: 12 }}>
             <input type="hidden" name="client" value={clientId} />
+            <fieldset className="checks">
+              <legend>Which questionnaire?</legend>
+              {FORMS.map((q) => (
+                <label key={q.id}>
+                  <input type="radio" name="form" value={q.id} checked={pick === q.id} onChange={() => setPick(q.id)} /> {q.title}
+                  {sent.includes(q.id) && <span className="note"> · sent before</span>}
+                </label>
+              ))}
+            </fieldset>
             <fieldset className="checks">
               <legend>Who should fill it out?</legend>
               {contacts.map((c) => (
                 <label key={c.user_id}><input type="checkbox" name="contact" value={c.user_id} defaultChecked={contacts.length === 1} /> {c.display_name} · {c.email}</label>
               ))}
-              {!contacts.length && <p className="note">No one has a portal login yet. Add them under People on their portal first.</p>}
+              {!contacts.length && <p className="note">No one has a portal login yet. It&apos;ll wait on their to-do list for when they sign in.</p>}
             </fieldset>
-            <label className="row" style={{ alignItems: "center", gap: 8 }}><input type="checkbox" name="fresh" /> Start fresh (clear their earlier answers)</label>
-            <p className="note">Otherwise their answers stay filled in so they can update them. Either way, it moves back to their to-do list and they get an email.</p>
-            <div className="field"><label htmlFor="rq-note">Note for them (optional)</label><textarea className="input" id="rq-note" name="note" style={{ minHeight: 60 }} placeholder="We've updated a few questions for your new location." /></div>
+            {again && <>
+              <label className="row" style={{ alignItems: "center", gap: 8 }}><input type="checkbox" name="fresh" /> Start fresh (clear their earlier answers)</label>
+              <p className="note">Otherwise their answers stay filled in so they can update them.</p>
+            </>}
+            <p className="note">It goes on their to-do list and they get an email with a link.</p>
+            <div className="field"><label htmlFor="rq-note">Note for them (optional)</label><textarea className="input" id="rq-note" name="note" style={{ minHeight: 60 }} placeholder="So excited to get started! Your answers help us plan." /></div>
             {state.error && <p className="error">{state.error}</p>}
             <div className="row">
               <button className="btn sm" disabled={pending}>{pending ? "Sending…" : "Send"}</button>

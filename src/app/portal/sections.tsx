@@ -22,6 +22,7 @@ import { GalleryView } from "./GalleryView";
 import { galleryCovers, loadGallery } from "@/lib/gallery.server";
 import { galleryCount } from "@/lib/gallery";
 import { shootDates, timeLabel } from "@/lib/shoots";
+import { formTitle, inOrder } from "@/lib/questionnaires";
 
 /** Everything a portal page needs to know about who's looking. */
 export type PortalCtx = {
@@ -63,7 +64,7 @@ const loadCore = (ctx: Omit<PortalCtx, "params">) => coreFor(ctx.agency, ctx.cli
 const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["client"], userId: string | null, preview: boolean) => {
   const supabase = await createClient();
   const ctx = { userId, preview };
-  const [steps, status, calendars, manager, people, tasks, teamRows, calls] = await Promise.all([
+  const [steps, status, calendars, manager, people, tasks, teamRows, calls, sentForms] = await Promise.all([
     supabase.from("onboarding_steps").select("*").eq("agency_id", agency.id).order("position"),
     supabase.from("client_step_status").select("step_id, completed_at").eq("client_id", client.id),
     supabase.from("content_calendars").select("*").eq("client_id", client.id).order("month", { ascending: false }),
@@ -81,6 +82,7 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
       .order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("client_team").select("user_id").eq("client_id", client.id),
     supabase.from("call_requests").select("*").eq("client_id", client.id).eq("status", "open").order("created_at"),
+    supabase.from("client_questionnaires").select("form, submitted_at").eq("client_id", client.id),
   ]);
   // Teammates this client can see (admins only when they're the account manager), for "From <name>".
   const teamIds = (teamRows.data ?? []).map((r) => r.user_id);
@@ -89,7 +91,11 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
     : { data: [] as { user_id: string; display_name: string; role: string }[] };
   const visibleTeam = new Map((teamPeople ?? []).filter((p) => p.role !== "admin").map((p) => [p.user_id, p.display_name]));
   const done = new Map((status.data ?? []).map((s) => [s.step_id, s.completed_at as string]));
-  const allSteps = (steps.data ?? []) as Step[];
+  // The questionnaire step names the ones still waiting (website, branding and so on).
+  const waiting = inOrder(sentForms.data ?? []).filter((r) => !r.submitted_at).map((r) => formTitle(r.form).toLowerCase());
+  const allSteps = ((steps.data ?? []) as Step[]).map((s) => s.kind === "questionnaire" && waiting.length
+    ? { ...s, title: waiting.length > 1 ? "Fill out your questionnaires" : `Fill out your ${waiting[0]}`, help: `${waiting.length > 1 ? `Your ${waiting.join(" and ")}. ` : ""}You can stop and come back any time. Your answers save as you go.` }
+    : s);
   const cals = (calendars.data ?? []) as Calendar[];
   const amName = manager.data?.display_name ?? "your team";
   const contacts = (people.data ?? []) as ClientUser[];
@@ -162,7 +168,7 @@ function stepHelp(step: Step, contractUrl: string | null, isDone: boolean) {
   if (step.kind === "contract" && stepHref(step, contractUrl)) {
     return isDone ? "Signed. Open it any time to look it over." : "Open your contract to review and sign it. This checks off once it's signed.";
   }
-  if (step.kind === "questionnaire" && isDone) return "Thanks for filling this out. You can look over your answers any time.";
+  if (step.kind === "questionnaire" && isDone) return "Thanks for filling these out. You can look over your answers any time.";
   if (step.kind === "logins" && isDone) return "Thanks! Add more or update a password any time from Logins.";
   return step.help;
 }
@@ -173,7 +179,7 @@ function DoneAction({ step, preview, contractUrl }: { step: Step; preview: boole
   const view = contract
     ? { label: "View contract", href: contract, external: true }
     : step.kind === "questionnaire"
-      ? { label: "View questionnaire", href: "/portal/questionnaire", external: false }
+      ? { label: "View answers", href: "/portal/questionnaire", external: false }
       : step.kind === "logins"
         ? { label: "View logins", href: "/portal/logins", external: false }
         : null;
