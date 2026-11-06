@@ -1275,3 +1275,41 @@ a.shoot-ev { display: block; }
 .trk-col .trk-fill { flex: 1; }
 .trk-pay > .panel, .trk-col .trk-fill { display: flex; flex-direction: column; }
 .trk-pay > .panel .trk-total, .trk-col .trk-fill .trk-total { margin-top: auto; }
+
+/* Pricing calculator (owner only) */
+.prc-rates .stat { display: grid; gap: 8px; align-content: start; }
+.prc-rates .stat > span { font-size: .84rem; color: var(--ink-2); }
+.prc-rates .stat b small { font-family: var(--body, inherit); font-size: .9rem; color: var(--ink-2); margin-left: 2px; }
+.prc-rates .stat.calc { background: var(--soft); }
+.prc-table { width: 100%; font-size: .9rem; }
+.prc-table th[scope="row"] { font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.prc-table .trk-num { width: 7em; }
+.prc-items td:first-child { width: 100%; }
+.prc-items td:first-child .input { width: 100%; padding: .35em .6em; font-size: .92rem; border-radius: 10px; }
+.prc-meter { height: 12px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.prc-meter i { display: block; height: 100%; width: calc(100% * var(--w, 0)); background: var(--series-1); border-radius: 999px; }
+.prc-meter i.over { background: var(--crit); }
+.prc-offer { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px 24px; align-items: start; }
+.prc-offer-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.prc-offer-name { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+.prc-offer-name > .input:first-child { font-family: var(--serif); font-size: 1.5rem; padding: .1em .4em; border-radius: 10px; flex: 1; min-width: 0; }
+.prc-offer-name select { width: auto; padding: .4em .8em; font-size: .85rem; border-radius: 10px; }
+.prc-offer-body { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.prc-offer-body > .tablewrap, .prc-builder .tablewrap { width: 100%; }
+.prc-offer > textarea { grid-column: 1 / -1; }
+.prc-sum dd .trk-num { width: 8.5em; }
+.prc-quote-card { display: grid; gap: 8px; text-decoration: none; color: inherit; align-content: start; }
+.prc-quote-card:hover { border-color: var(--head); }
+.prc-quote-card h2 { font-size: 1.3rem; }
+.prc-quote-head { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.prc-quote-head .wide { grid-column: 1 / -1; }
+.prc-builder { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+.prc-builder > section { display: grid; gap: 12px; min-width: 0; }
+.prc-price { display: grid; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.prc-price-head dt { font-weight: 600; color: var(--head) !important; }
+@media (max-width: 900px) {
+  .prc-offer, .prc-builder { grid-template-columns: 1fr; }
+  .prc-price { position: static; }
+  .prc-rates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) { .prc-quote-head { grid-template-columns: 1fr; } }
