@@ -3,6 +3,7 @@
 import { Modal } from "@/app/Modal";
 import { ServicesPicker } from "./ServicesPicker";
 import { FORMS } from "@/lib/questionnaires";
+import { BASE_DAYS, PROJECTS, planProject, projectLabel, type ProjectId, type TemplateTask } from "@/lib/projectTasks";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -18,6 +19,8 @@ import {
   addReviewedTasks,
   createClientAccount,
   sendQuestionnaire,
+  saveProjectTasks,
+  addProjectTasks,
   resendClientInvite,
   sendClientLoginLink,
   sendTeammateLoginLink,
@@ -621,6 +624,140 @@ export function NewClientTasksEditor({ tasks }: { tasks: { title: string; days?:
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
     </form>
+  );
+}
+
+/** Settings: the website or branding project timeline (days from the project's start). */
+export function ProjectTasksEditor({ project, label, tasks }: { project: string; label: string; tasks: TemplateTask[] }) {
+  const [editing, setEditing] = useState(false);
+  const [rows, setRows] = useState(tasks.map((t, i) => ({ key: i, ...t })));
+  const [state, action, pending] = useActionState(saveProjectTasks, {});
+  if (!editing) {
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        {state.ok && <p className="flash">{state.ok}</p>}
+        <ul className="list">
+          {tasks.map((t, i) => <li key={i}>{t.title}<span className="r note">Day {t.days ?? 0}</span></li>)}
+          {!tasks.length && <li className="note">No tasks yet.</li>}
+        </ul>
+        <div><button type="button" className="btn sm line" onClick={() => setEditing(true)}>Edit {label.toLowerCase()} timeline</button></div>
+      </div>
+    );
+  }
+  return (
+    <form action={async (f) => { action(f); setEditing(false); }} style={{ display: "grid", gap: 10 }}>
+      <input type="hidden" name="project" value={project} />
+      {rows.map((r, i) => (
+        <div className="task-row project-row" key={r.key}>
+          <div className="field"><label htmlFor={`pt-d-${project}-${r.key}`}>Day</label><input className="input" id={`pt-d-${project}-${r.key}`} name="days" type="number" min={0} max={365} defaultValue={r.days ?? 0} /></div>
+          <div className="field"><label htmlFor={`pt-t-${project}-${r.key}`}>Task</label><input className="input" id={`pt-t-${project}-${r.key}`} name="title" defaultValue={r.title} /></div>
+          <div className="field"><label htmlFor={`pt-a-${project}-${r.key}`}>Goes to</label>
+            <select className="sel" id={`pt-a-${project}-${r.key}`} name="assignee" defaultValue={r.assignee ?? "account_manager"}>
+              <option value="account_manager">Account manager</option><option value="me">Whoever starts the project</option>
+            </select></div>
+          <button type="button" className="btn sm line" onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>
+          <div className="field wide"><label htmlFor={`pt-n-${project}-${r.key}`}>What to do (optional)</label><input className="input" id={`pt-n-${project}-${r.key}`} name="note" defaultValue={r.note ?? ""} /></div>
+        </div>
+      ))}
+      <div className="row">
+        <button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: "", days: 0, assignee: "account_manager" }])}>Add a task</button>
+        <button className="btn sm" disabled={pending}>{pending ? "Saving…" : "Save timeline"}</button>
+        <button type="button" className="btn sm line" onClick={() => setEditing(false)}>Cancel</button>
+      </div>
+      {state.error && <p className="error">{state.error}</p>}
+    </form>
+  );
+}
+
+/**
+ * Client page: start a website or branding project. Pick the start date and how long it runs
+ * (the timeline stretches to fit), look over every task and date, then post them to the team.
+ */
+export function StartProject({ clientId, templates, people, am, me }: {
+  clientId: string;
+  templates: Record<string, TemplateTask[]>;
+  people: Opt[];
+  am: string | null;
+  me: string;
+}) {
+  const router = useRouter();
+  const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+  const [open, setOpen] = useState(false);
+  const [project, setProject] = useState<ProjectId>("website");
+  const [start, setStart] = useState(today);
+  const [length, setLength] = useState(BASE_DAYS);
+  const [lead, setLead] = useState(am ?? me);
+  const plan = (p = project, s = start, l = length, who = lead) =>
+    planProject(p, templates[p] ?? [], { start: s || today, length: l || BASE_DAYS, am: who, me }).map((t, i) => ({ ...t, key: i }));
+  const [rows, setRows] = useState(plan);
+  const [msg, setMsg] = useState<{ ok?: string; error?: string }>({});
+  const [pending, startTransition] = useTransition();
+  // Changing the project, start, length or lead redraws the list from the timeline.
+  const redo = (patch: { p?: ProjectId; s?: string; l?: number; who?: string }) => {
+    const p = patch.p ?? project, s = patch.s ?? start, l = patch.l ?? length, who = patch.who ?? lead;
+    setProject(p); setStart(s); setLength(l); setLead(who);
+    setRows(plan(p, s, l, who));
+  };
+  const set = (key: number, patch: Partial<ProposedTask>) => setRows(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const end = rows.reduce((m, r) => (r.date > m ? r.date : m), start);
+  const team = people.filter((m) => m.role !== "creator" || rows.some((r) => r.assignee_id === m.user_id));
+  return (
+    <>
+      <div className="row" style={{ alignItems: "center" }}>
+        <button type="button" className="btn sm line" onClick={() => { setRows(plan()); setOpen(true); }}>Start a website or branding project</button>
+        {msg.ok && <p className="flash" role="status" style={{ margin: 0 }}>{msg.ok}</p>}
+      </div>
+      {open && (
+        <Modal title="Start a project" onClose={() => setOpen(false)} wide>
+          <div className="project-start" style={{ display: "grid", gap: 14 }}>
+            <div className="project-setup">
+              <fieldset className="checks">
+                <legend>Project</legend>
+                {PROJECTS.map((p) => (
+                  <label key={p.id}><input type="radio" name="project" checked={project === p.id} onChange={() => redo({ p: p.id })} /> {p.label}</label>
+                ))}
+              </fieldset>
+              <div className="field"><label htmlFor="pj-start">Start date</label>
+                <input className="input" id="pj-start" type="date" value={start} onChange={(e) => e.target.value && redo({ s: e.target.value })} /></div>
+              <div className="field"><label htmlFor="pj-length">Project length (days)</label>
+                <input className="input" id="pj-length" type="number" min={7} max={365} value={length}
+                  onChange={(e) => setLength(Number(e.target.value))} onBlur={() => redo({ l: Math.max(7, Math.min(365, length || BASE_DAYS)) })} /></div>
+              <div className="field"><label htmlFor="pj-lead">Goes to</label>
+                <select className="sel" id="pj-lead" value={lead} onChange={(e) => redo({ who: e.target.value })}>
+                  {people.filter((m) => m.role !== "creator").map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}{m.user_id === am ? " (account manager)" : m.user_id === me ? " (you)" : ""}</option>)}
+                </select></div>
+            </div>
+            <p className="note">
+              {rows.length} tasks from {new Date(`${start}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })} to {new Date(`${end}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}.
+              A bigger or smaller scope? Change the length and every date stretches to fit, or change any date below. Changing the settings above redraws the list.
+            </p>
+            <ul className="review-list project-list">
+              {rows.map((r) => (
+                <li key={r.key}>
+                  <input className="input" aria-label="Task" value={r.title} title={r.note ?? undefined} onChange={(e) => set(r.key, { title: e.target.value })} />
+                  <input className="input" type="date" aria-label="Due" value={r.date} onChange={(e) => set(r.key, { date: e.target.value })} />
+                  <select className="sel" aria-label="Who" value={r.assignee_id} onChange={(e) => set(r.key, { assignee_id: e.target.value })}>
+                    {team.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
+                  </select>
+                  <button type="button" className="linkbtn note" onClick={() => setRows(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.title}`}>Remove</button>
+                </li>
+              ))}
+              {!rows.length && <li className="note">This project has no timeline yet. Add tasks below, or set one up in Settings.</li>}
+            </ul>
+            <div><button type="button" className="btn sm line" onClick={() => setRows([...rows, { key: Date.now(), title: `${projectLabel(project)}: `, note: null, date: end, assignee_id: lead }])}>Add a task</button></div>
+            {msg.error && <p className="error">{msg.error}</p>}
+            <div className="row">
+              <button type="button" className="btn" disabled={pending || !rows.length} onClick={() => startTransition(async () => {
+                const res = await addProjectTasks(clientId, project, rows.map(({ title, note, date, assignee_id }) => ({ title, note, date, assignee_id })));
+                setMsg(res);
+                if (res.ok) { setOpen(false); router.refresh(); }
+              })}>{pending ? "Adding…" : `Add ${rows.length} task${rows.length === 1 ? "" : "s"}`}</button>
+              <button type="button" className="btn line" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 

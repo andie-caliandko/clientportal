@@ -1,5 +1,6 @@
 import { Avatar } from "@/app/Avatar";
 import { FORMS } from "@/lib/questionnaires";
+import { BASE_DAYS, PROJECTS } from "@/lib/projectTasks";
 import Link from "next/link";
 import { Logo } from "@/lib/brand";
 import { redirect } from "next/navigation";
@@ -7,7 +8,7 @@ import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { googleConfigured, googleStatus, isPersonalCalendar, listCalendars } from "@/lib/google";
 import { disconnectGoogle, setDeadlinesCalendar } from "../actions";
-import { ConfirmButton, DriveSettings, NewClientTasksEditor } from "../TeamForms";
+import { ConfirmButton, DriveSettings, NewClientTasksEditor, ProjectTasksEditor } from "../TeamForms";
 import { ROLE_LABEL } from "@/lib/types";
 
 const GOOGLE_MESSAGES: Record<string, string> = {
@@ -158,6 +159,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="note">Created for the team whenever an admin adds a client. Days count from the day the client is added.</p>
           <NewClientTasksEditor tasks={agency.new_client_tasks ?? []} />
         </div>
+        {PROJECTS.map((p) => (
+          <div key={p.id} className="panel">
+            <h2>{p.label} project tasks</h2>
+            <p className="note">
+              Posted to the account manager when a {p.label.toLowerCase()} project starts: from a client&apos;s page, or when you send the {p.label.toLowerCase()} questionnaire to a new client.
+              Days count from the start date over a {BASE_DAYS}-day project, and stretch to fit a longer or shorter one.
+            </p>
+            <ProjectTasksEditor project={p.id} label={p.label} tasks={agency.project_tasks?.[p.id] ?? []} />
+          </div>
+        ))}
       </div>
       <p className="note">Editing these from this page is coming next. For now they&apos;re changed in the database.</p>
     </section>

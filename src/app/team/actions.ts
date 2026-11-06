@@ -20,6 +20,7 @@ import { postToSlack, slackChannelInfo } from "@/lib/slack";
 import { channelBelongsToOther } from "@/lib/slackMatch";
 import { isSocial, readServices } from "@/lib/services";
 import { formTitle, isForm, readForms } from "@/lib/questionnaires";
+import { isProject, planProject, projectLabel, readTemplate } from "@/lib/projectTasks";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string; ok?: string };
@@ -332,6 +333,8 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
       assignee_id: t.assignee === "me" ? v.userId : am,
     })),
     ...CONNECTIONS.filter((c) => later(c.key)).map((c) => ({ title: c.laterTask, note: null, date: dayAfter(1), assignee_id: am })),
+    // Sending the website or branding questionnaire starts that project's month-long timeline too.
+    ...forms.filter(isProject).flatMap((p) => planProject(p, v.agency.project_tasks?.[p] ?? [], { start: dayAfter(0), am, me: v.userId })),
   ];
 
   // Their Drive folder, with Branding and Content inside (made for them in the Clients folder if no link was pasted).
@@ -1243,6 +1246,59 @@ export async function addReviewedTasks(clientId: string, tasks: ProposedTask[]):
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team");
   return { ok: rows.length ? `${rows.length} task${rows.length === 1 ? "" : "s"} added.` : "No tasks added." };
+}
+
+/** Admins: the website or branding project timeline in Settings. */
+export async function saveProjectTasks(_: Result, form: FormData): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role !== "admin") return { error: "Only admins can change this list." };
+  const project = String(form.get("project") ?? "");
+  if (!isProject(project)) return { error: "That project wasn't found." };
+  const list = readTemplate(form);
+  const { error } = await createAdminClient().from("agencies")
+    .update({ project_tasks: { ...(v.agency.project_tasks ?? {}), [project]: list } }).eq("id", v.agency.id);
+  if (error) return { error: "The list couldn't be saved." };
+  revalidatePath("/team/settings");
+  return { ok: `Saved ${list.length} tasks. New ${projectLabel(project).toLowerCase()} projects get this timeline.` };
+}
+
+/**
+ * Start a website or branding project: post its timeline (as looked over and changed on the
+ * client's page) to the team, and let each person know what's coming their way.
+ */
+export async function addProjectTasks(clientId: string, project: string, tasks: ProposedTask[]): Promise<Result> {
+  const v = await requireTeam();
+  if (v.member.role === "creator") return { error: VIEW_ONLY };
+  if (!isProject(project)) return { error: "That project wasn't found." };
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return { error: "You don't have access to this client." };
+  const rows = tasks
+    .map((t) => ({ ...t, title: t.title.trim().slice(0, 300) }))
+    .filter((t) => t.title && /^\d{4}-\d{2}-\d{2}$/.test(t.date))
+    .map((t) => ({
+      agency_id: v.agency.id, client_id: clientId, title: t.title, note: t.note?.trim().slice(0, 4000) || null,
+      due_at: dateAtHour(t.date, 17, v.agency.timezone).toISOString(), assignee_id: t.assignee_id || null,
+      source: "manual", auto: true, created_by: v.userId,
+    }));
+  if (!rows.length) return { error: "Add at least one task." };
+  // Admin client: an account manager can start a project with tasks for teammates on the account.
+  const { error } = await createAdminClient().from("tasks").insert(rows);
+  if (error) return { error: "Those tasks couldn't be saved." };
+  const { data: client } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+  const label = projectLabel(project).toLowerCase();
+  for (const who of new Set(rows.map((r) => r.assignee_id).filter(Boolean) as string[])) {
+    const mine = rows.filter((r) => r.assignee_id === who);
+    await notifyUser(v.agency.id, clientId, who, {
+      kind: "task",
+      title: `${client?.name ?? "A client"}'s ${label} project: ${mine.length} task${mine.length === 1 ? "" : "s"} for you`,
+      body: `${v.member.display_name} started the ${label} project. First up: ${mine[0].title}.`,
+      link: `/team/clients/${clientId}`,
+    }, v.userId);
+  }
+  revalidatePath(`/team/clients/${clientId}`);
+  revalidatePath("/team");
+  return { ok: `${rows.length} ${label} task${rows.length === 1 ? "" : "s"} added.` };
 }
 
 /** Admins: the Google Drive folder new clients' folders are made in. */

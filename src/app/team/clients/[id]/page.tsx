@@ -23,7 +23,7 @@ import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Calendar, type ClientUser, type Doc, type Message, type Question, type Role, type Step } from "@/lib/types";
 import { archiveClient, deleteBrief, removeClientContact, removeFromClient, replyAsTeam, setAccountManager, setStep } from "../../actions";
-import { AddClientContact, EditContactName, AddTeammate, DriveShareToggle, ResendInviteButton, SendLoginLinkButton, SendQuestionnaire, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
+import { AddClientContact, EditContactName, AddTeammate, DriveShareToggle, ResendInviteButton, SendLoginLinkButton, SendQuestionnaire, StartProject, SendSavedInvite, ClientInfoForm, ClientLogoForm, ConfirmButton, ContractLinkForm, CopyButton, DeleteClientForm, EditCalendar, NewTask, SendCalendarForm, UploadDocForm } from "../../TeamForms";
 import { HealthTab } from "./HealthTab";
 import { loadHealth } from "@/lib/healthData";
 import { weekStart } from "@/lib/health";
@@ -443,6 +443,10 @@ export default async function ClientDetail({
           {canEdit && (
             <SendQuestionnaire clientId={client.id} sent={(sentRows.data ?? []).map((r) => r.form)}
               contacts={((people.data ?? []) as ClientUser[]).map((p) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }))} />
+          )}
+          {canEdit && !client.archived_at && (
+            <StartProject clientId={client.id} templates={agency.project_tasks ?? {}} am={client.account_manager_id} me={userId}
+              people={members.filter((m) => m.role === "admin" || m.user_id === client.account_manager_id || (teamRows.data ?? []).some((t) => t.user_id === m.user_id))} />
           )}
         </div>
 
