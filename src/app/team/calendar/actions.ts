@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { dateAtHour, dateAtMinute } from "@/lib/approval";
 import { calendarChanged, createMemberEvent, createOutOfOffice, deleteMemberEvent, updateMemberEvent } from "@/lib/google";
 import { emailClient } from "@/lib/notify";
-import { notifyClient } from "@/lib/notifications";
+import { notifyClient, notifyUser } from "@/lib/notifications";
 import { requireTeam } from "@/lib/session";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
@@ -49,16 +49,23 @@ export async function addMyEvent(_: Result, form: FormData): Promise<Result> {
   return { ok: guests.ok.length ? `Added to your Google Calendar and invited ${guests.ok.length} ${guests.ok.length === 1 ? "person" : "people"}.` : "Added to your Google Calendar." };
 }
 
-/** A teammate marks themselves out of office for one or more days. */
+/** Marks a teammate out of office for one or more days: yourself, or (for admins) anyone on the team with Google Calendar connected. */
 export async function addMyOutOfOffice(_: Result, form: FormData): Promise<Result> {
   const v = await requireTeam();
+  const who = String(form.get("person") ?? "") || v.userId;
+  const forMe = who === v.userId;
+  if (!forMe && v.member.role !== "admin") return { error: "Only admins can mark someone else out of office." };
+  const { data: person } = forMe ? { data: { display_name: v.member.display_name } }
+    : await createAdminClient().from("agency_members").select("display_name").eq("agency_id", v.agency.id).eq("user_id", who).maybeSingle();
+  if (!person) return { error: "That person isn't on your team." };
   const from = String(form.get("from") ?? "");
   const to = String(form.get("to") ?? "") || from;
-  if (!DATE.test(from) || !DATE.test(to)) return { error: "Pick the days you'll be out." };
+  if (!DATE.test(from) || !DATE.test(to)) return { error: "Pick the days they'll be out." };
   if (to < from) return { error: "The last day needs to be on or after the first day." };
   const tz = v.agency.timezone;
+  const first = person.display_name.split(" ")[0];
   try {
-    await createOutOfOffice(v.userId, {
+    await createOutOfOffice(who, {
       start: dateAtHour(from, 0, tz).toISOString(),
       end: dateAtHour(nextDay(to), 0, tz).toISOString(),
       timeZone: tz,
@@ -67,11 +74,19 @@ export async function addMyOutOfOffice(_: Result, form: FormData): Promise<Resul
     });
   } catch (err) {
     console.error("Adding out of office failed", err);
-    return { error: "Google Calendar didn't accept that. Try reconnecting your calendar." };
+    return { error: forMe ? "Google Calendar didn't accept that. Try reconnecting your calendar." : `${first}'s Google Calendar didn't accept that. They may need to reconnect it.` };
   }
-  calendarChanged(v.userId);
+  calendarChanged(who);
   revalidatePath("/team/calendar");
-  return { ok: "You're marked out of office. Google will decline new meetings for those days." };
+  if (forMe) return { ok: "You're marked out of office. Google will decline new meetings for those days." };
+  const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
+  await notifyUser(v.agency.id, null, who, {
+    kind: "task",
+    title: `${v.member.display_name.split(" ")[0]} marked you out of office: ${from === to ? day(from) : `${day(from)} to ${day(to)}`}`,
+    body: "It's on your Google Calendar, and clients can't book calls with you on those days.",
+    link: "/team/calendar",
+  }, v.userId);
+  return { ok: `${first} is marked out of office. Google will decline new meetings for those days.` };
 }
 
 /** The hours clients can book calls with this teammate. */

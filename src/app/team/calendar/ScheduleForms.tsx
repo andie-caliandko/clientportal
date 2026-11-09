@@ -8,8 +8,13 @@ type R = { error?: string; ok?: string };
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hourLabel = (h: number) => (h === 0 || h === 24 ? "12 AM" : h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h - 12} PM`);
 
-/** "Add to my calendar" and "Mark out of office", one open at a time. */
-export function AddToSchedule({ today }: { today: string }) {
+/** "Add to my calendar" and "Mark out of office", one open at a time. Admins can mark any connected teammate out. */
+export function AddToSchedule({ today, me, meConnected = true, team = [] }: { today: string; me: string; meConnected?: boolean; team?: { user_id: string; display_name: string }[] }) {
+  // Your own calendar first, when it's connected; otherwise the first teammate.
+  const start = meConnected ? me : team[0]?.user_id ?? me;
+  const [who, setWho] = useState(start);
+  const other = who !== me ? team.find((t) => t.user_id === who) : undefined;
+  const first = other?.display_name.split(" ")[0];
   const [open, setOpen] = useState<"event" | "ooo" | null>(null);
   const [eventState, eventAction, eventPending] = useActionState(async (p: R, f: FormData) => {
     const r = await addMyEvent(p, f);
@@ -26,8 +31,8 @@ export function AddToSchedule({ today }: { today: string }) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div className="row" style={{ alignItems: "center" }}>
-        <button className="btn sm" onClick={() => setOpen(open === "event" ? null : "event")}>Add to my calendar</button>
-        <button className="btn sm line" onClick={() => setOpen(open === "ooo" ? null : "ooo")}>Mark out of office</button>
+        {meConnected && <button className="btn sm" onClick={() => setOpen(open === "event" ? null : "event")}>Add to my calendar</button>}
+        <button className="btn sm line" onClick={() => { setWho(start); setOpen(open === "ooo" ? null : "ooo"); }}>{meConnected ? "Mark out of office" : "Mark a teammate out of office"}</button>
         {done && <p className="flash" role="status" style={{ margin: 0 }}>{eventState.ok || oooState.ok}</p>}
       </div>
       {open === "event" && (
@@ -54,15 +59,24 @@ export function AddToSchedule({ today }: { today: string }) {
         <Modal title="Mark out of office" onClose={() => setOpen(null)}>
         <form action={oooAction} className="panel">
           <h2>Mark out of office</h2>
+          {team.length > 0 && (
+            <div className="field"><label htmlFor="ooo-who">Who&apos;s out</label>
+              <select className="sel" id="ooo-who" name="person" value={who} onChange={(e) => setWho(e.target.value)}>
+                {meConnected && <option value={me}>Me</option>}
+                {team.map((t) => <option key={t.user_id} value={t.user_id}>{t.display_name}</option>)}
+              </select></div>
+          )}
           <div className="row">
             <div className="field"><label htmlFor="ooo-from">First day out</label><input className="input" id="ooo-from" name="from" type="date" defaultValue={today} required /></div>
             <div className="field"><label htmlFor="ooo-to">Last day out</label><input className="input" id="ooo-to" name="to" type="date" defaultValue={today} required /></div>
           </div>
-          <div className="field"><label htmlFor="ooo-msg">Message for people who invite you (optional)</label><input className="input" id="ooo-msg" name="message" placeholder="I'm out until Monday. Doni can help in the meantime." /></div>
-          <p className="note">This goes on your Google Calendar as Out of office. The team sees it here, and clients can&apos;t book calls with you on those days.</p>
+          <div className="field"><label htmlFor="ooo-msg">Message for people who invite {other ? "them" : "you"} (optional)</label><input className="input" id="ooo-msg" name="message" placeholder="I'm out until Monday. Doni can help in the meantime." /></div>
+          <p className="note">{other
+            ? `This goes on ${first}'s Google Calendar as Out of office, and they get a notification. The team sees it here, and clients can't book calls with ${first} on those days.`
+            : "This goes on your Google Calendar as Out of office. The team sees it here, and clients can't book calls with you on those days."}</p>
           {oooState.error && <p className="error">{oooState.error}</p>}
           <div className="row">
-            <button className="btn sm" disabled={oooPending}>{oooPending ? "Saving…" : "Mark me out"}</button>
+            <button className="btn sm" disabled={oooPending}>{oooPending ? "Saving…" : other ? `Mark ${first} out` : "Mark me out"}</button>
             <button type="button" className="btn sm line" onClick={() => setOpen(null)}>Cancel</button>
           </div>
         </form>

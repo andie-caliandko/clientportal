@@ -245,7 +245,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </div>
       )}
 
-      {iAmConnected && <AddToSchedule today={today} />}
+      {(() => {
+        // Admins can mark any teammate whose Google Calendar is connected out of office.
+        const team = isAdmin ? everyone.filter((p) => p.user_id !== userId && connected.has(p.user_id)) : [];
+        return (iAmConnected || team.length > 0) && <AddToSchedule today={today} me={userId} meConnected={iAmConnected} team={team} />;
+      })()}
 
       {range === "month" ? (
         <MonthGrid
