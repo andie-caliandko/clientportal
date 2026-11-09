@@ -152,6 +152,13 @@ export default async function ClientDetail({
       {logo && <img className="head-logo" src={logo} alt={`${client.name} logo`} />}
       <CopyButton text={portalLink} label="Copy portal link" done="Link copied" />
       <Link className="btn sm" href={`/preview/${client.id}`}>View their portal</Link>
+      {isAdmin && !client.archived_at && (
+        <form action={archiveClient} title="For clients who didn't renew. They get 30 days to download their files, and you can restore them any time.">
+          <input type="hidden" name="client" value={client.id} />
+          <input type="hidden" name="archive" value="1" />
+          <ConfirmButton label="Archive" confirmLabel={`Archive ${client.name}?`} />
+        </form>
+      )}
     </div>
   );
   const tab = sp.tab === "health" ? "health" : "portal";

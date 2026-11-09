@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { loadHealth } from "@/lib/healthData";
 import { clientLogoUrl } from "@/lib/links";
 import { RatingPill } from "./[id]/HealthTab";
-import { AddClientButton } from "../TeamForms";
+import { AddClientButton, ConfirmButton } from "../TeamForms";
+import { archiveClient } from "../actions";
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ archived?: string; done?: string }> }) {
   const { agency, member } = await requireTeam();
@@ -59,11 +60,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         <Link href="/team/clients" role="tab" aria-selected={!showArchived}>Active</Link>
         {isAdmin && <Link href="/team/clients?archived=1" role="tab" aria-selected={showArchived}>Archived{archivedCount ? ` (${archivedCount})` : ""}</Link>}
       </div>
-      {sp.done === "archived" && <p className="flash">Client archived. Their portal is closed, and everything is saved here if you ever need it.</p>}
+      {sp.done === "archived" && <p className="flash">Client archived. They have 30 days to download anything from their portal, and everything is saved under Archived if you ever need it.</p>}
+      {sp.done === "restored" && <p className="flash">Client restored. Their portal is open again.</p>}
       {showArchived && <p className="note">Archived clients keep all their files, messages and history. Their portal is closed. Open one to restore it.</p>}
       <div className="tablewrap">
         <table>
-          <thead><tr><th>Client</th><th>Services</th><th>Health · internal</th><th>Account manager</th><th>Portal</th><th>Onboarding</th><th>Latest content calendar</th></tr></thead>
+          <thead><tr><th>Client</th><th>Services</th><th>Health · internal</th><th>Account manager</th><th>Portal</th><th>Onboarding</th><th>Latest content calendar</th>{isAdmin && <th><span className="sr">Archive</span></th>}</tr></thead>
           <tbody>
             {list.map((c) => {
               const done = doneBy.get(c.id) ?? 0;
@@ -83,10 +85,20 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   <td>{portalStatus(c.id)}</td>
                   <td><span className="bar"><i style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>{done} of {total}</td>
                   <td>{pill[latestCal.get(c.id) ?? ""] ?? <span className="note">None yet</span>}</td>
+                  {isAdmin && (
+                    <td>
+                      <form action={archiveClient}>
+                        <input type="hidden" name="client" value={c.id} />
+                        <input type="hidden" name="archive" value={c.archived_at ? "0" : "1"} />
+                        <input type="hidden" name="from" value="list" />
+                        {c.archived_at ? <button className="btn sm line">Restore</button> : <ConfirmButton label="Archive" confirmLabel={`Archive ${c.name}?`} />}
+                      </form>
+                    </td>
+                  )}
                 </tr>
               );
             })}
-            {!list.length && <tr><td colSpan={6} className="note">{showArchived ? "No archived clients." : "No clients yet."}</td></tr>}
+            {!list.length && <tr><td colSpan={isAdmin ? 8 : 7} className="note">{showArchived ? "No archived clients." : "No clients yet."}</td></tr>}
           </tbody>
         </table>
       </div>

@@ -896,6 +896,8 @@ export async function archiveClient(form: FormData) {
     }
   }
   revalidatePath("/team", "layout");
+  // From the Clients list, stay on the list you were looking at.
+  if (form.get("from") === "list") redirect(archive ? "/team/clients?done=archived" : "/team/clients?archived=1&done=restored");
   redirect(archive ? "/team/clients?archived=1&done=archived" : `/team/clients/${clientId}?restored=1`);
 }
 
