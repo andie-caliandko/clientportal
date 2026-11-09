@@ -26,3 +26,7 @@ export const isSocial = (services: string[] | null | undefined) => {
   const list = (services ?? []).filter((s) => IDS.has(s));
   return !list.length || list.includes("social");
 };
+
+/** Whether a client's health is tracked: turned on (the default) and a social client. Untracked clients get no scorecard reminders. */
+export const isHealthTracked = (c: { health_tracked?: boolean | null; services?: string[] | null }) =>
+  c.health_tracked !== false && isSocial(c.services);

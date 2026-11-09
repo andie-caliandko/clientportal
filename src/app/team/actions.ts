@@ -1015,6 +1015,7 @@ export async function setClientServices(clientId: string, picked: string[]): Pro
   const { error } = await createAdminClient().from("clients")
     .update({ services, ...(services.length ? { health_tracked: isSocial(services) } : {}) }).eq("id", clientId);
   if (error) return { error: "Services couldn't be saved." };
+  if (services.length && !isSocial(services)) await clearScorecardTasks(clientId);
   revalidatePath("/team/clients");
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/engagement");
@@ -1041,7 +1042,13 @@ async function checkSlackChannel(channelId: string, clientName: string, clientId
   return { note: info.isMember ? `Linked to #${info.name}.` : `Linked to #${info.name}. Type /invite @Cali Ko Portal in that channel so messages come through.` };
 }
 
-/** Turn a client's health rating on or off (off shows "Not tracked"). */
+/** A client whose health isn't tracked doesn't need the scorecard reminders already waiting for them. */
+async function clearScorecardTasks(clientId: string) {
+  await createAdminClient().from("tasks").delete().eq("client_id", clientId).eq("source", "scorecard").neq("status", "done");
+  revalidatePath("/team");
+}
+
+/** Turn a client's health rating on or off (off shows "Not tracked", with no scorecard reminders). */
 export async function setHealthTracked(clientId: string, tracked: boolean): Promise<Result> {
   await requireEditor();
   const supabase = await createClient();
@@ -1049,6 +1056,7 @@ export async function setHealthTracked(clientId: string, tracked: boolean): Prom
   if (!canEdit) return { error: "You can't change this client." };
   const { error } = await createAdminClient().from("clients").update({ health_tracked: tracked }).eq("id", clientId);
   if (error) return { error: "That couldn't be saved." };
+  if (!tracked) await clearScorecardTasks(clientId);
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/clients");
   return { ok: tracked ? "Tracking health." : "Not tracking health." };

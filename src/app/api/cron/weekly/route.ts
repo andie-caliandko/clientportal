@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { dateAtHour } from "@/lib/approval";
 import { notifyUser } from "@/lib/notifications";
+import { isHealthTracked } from "@/lib/services";
 import { createAdminClient } from "@/lib/supabase/server";
 
-// Mondays (see vercel.json): each active client's account manager gets an
-// "update this week's scorecard" task. Saving the scorecard checks it off.
+// Mondays (see vercel.json): each active client whose health is tracked gets an
+// "update this week's scorecard" task for their account manager. Saving the scorecard checks it off.
 export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -12,14 +13,14 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data: clients } = await admin
     .from("clients")
-    .select("id, name, agency_id, account_manager_id, agency:agencies(timezone)")
+    .select("id, name, agency_id, account_manager_id, health_tracked, services, agency:agencies(timezone)")
     .is("archived_at", null);
   const { data: open } = await admin.from("tasks").select("client_id").eq("source", "scorecard").neq("status", "done");
   const hasOpen = new Set((open ?? []).map((t) => t.client_id));
 
   let created = 0;
   for (const c of clients ?? []) {
-    if (hasOpen.has(c.id)) continue;
+    if (hasOpen.has(c.id) || !isHealthTracked(c)) continue;
     const tz = (c.agency as unknown as { timezone: string }).timezone;
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
     const { data: task } = await admin
