@@ -498,14 +498,18 @@ export default async function ClientDetail({
                 <span className="r">
                   {(() => {
                     // Joined, or still invited (and how long ago, with the reminders sent).
-                    const x = p as ClientUser & { joined_at?: string | null; created_at?: string; invite_reminders?: number };
+                    const x = p as ClientUser & { joined_at?: string | null; created_at?: string; invite_reminders?: number; invite_expires_at?: string | null };
                     if (!("joined_at" in x)) return null;
                     if (x.joined_at) return <><span className="pill ok">Joined {short(x.joined_at).split(",")[0]}</span>{canEdit && !client.archived_at && <SendLoginLinkButton clientId={client.id} userId={p.user_id} />}</>;
                     const days = x.created_at ? Math.floor((Date.now() - new Date(x.created_at).getTime()) / 86_400_000) : 0;
                     return (
                       <>
-                        <span className="pill warn" title={x.invite_reminders ? `${x.invite_reminders} reminder${x.invite_reminders === 1 ? "" : "s"} sent` : "No reminders yet"}>
-                          Invited {days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`}{x.invite_reminders ? ` · ${x.invite_reminders} reminder${x.invite_reminders === 1 ? "" : "s"}` : ""}
+                        <span className={`pill ${x.invite_expires_at && new Date(x.invite_expires_at).getTime() <= Date.now() ? "crit" : "warn"}`} title={x.invite_reminders ? "Reminder sent" : "Reminder goes out 2 days before the link expires"}>
+                          Invited {days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`}
+                          {x.invite_expires_at ? (new Date(x.invite_expires_at).getTime() <= Date.now()
+                            ? " · link expired"
+                            : ` · link works until ${new Date(x.invite_expires_at).toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })}`) : ""}
+                          {x.invite_reminders ? " · reminded" : ""}
                         </span>
                         {canEdit && !client.archived_at && <ResendInviteButton clientId={client.id} userId={p.user_id} />}
                       </>

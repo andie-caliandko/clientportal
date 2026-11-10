@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   const shootsAdded = await extendAllSeries();
   // Contracts reaching their renewal point.
   const renewals = await flagRenewals();
-  // Portal invites not accepted yet: 48 hours, then a week later.
+  // Portal invites not accepted yet: a reminder 2 days before the week-long link expires.
   const inviteReminders = await remindUnjoinedInvites();
   return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders, shootsAdded });
 }

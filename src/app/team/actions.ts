@@ -353,21 +353,11 @@ export async function createClientAccount(_: Result, form: FormData): Promise<Re
     return { ok: `${name} is set up. Send their portal invite from their page when you're ready.`, clientId: client.id, proposed };
   }
 
-  const admin = createAdminClient();
-  const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(contactEmail, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
-    data: { display_name: contactName },
-  });
-  if (inviteErr || !invite.user) {
+  const { inviteToPortal } = await import("@/lib/invites.server");
+  const sent = await inviteToPortal({ clientId: client.id, email: contactEmail, name: contactName, role: "owner" });
+  if (sent.error) {
     return { clientId: client.id, proposed, error: `${name} was created, but the invite to ${contactEmail} didn't send. Check the address and invite them from the client page.` };
   }
-  await admin.from("client_users").insert({
-    client_id: client.id,
-    user_id: invite.user.id,
-    role: "owner",
-    display_name: contactName,
-    email: contactEmail,
-  });
   return { ok: `${name} is set up.`, clientId: client.id, proposed };
 }
 
@@ -954,21 +944,17 @@ export async function addClientContact(_: Result, form: FormData): Promise<Resul
   const { count } = await supabase.from("client_users").select("*", { count: "exact", head: true }).eq("client_id", clientId);
   if ((count ?? 0) >= 2) return { error: "This client already has 2 people on their portal, which is the limit. Remove someone first." };
 
+  const { inviteToPortal } = await import("@/lib/invites.server");
+  const sent = await inviteToPortal({ clientId, email, name, role: count ? "member" : "owner" });
+  if (sent.error) return { error: sent.error };
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
-    data: { display_name: name },
-  });
-  if (error || !data.user) return { error: "That invite didn't send. Check the email address, or they may already have an account." };
-  const { error: linkErr } = await admin.from("client_users").insert({ client_id: clientId, user_id: data.user.id, role: count ? "member" : "owner", display_name: name, email });
-  if (linkErr) return { error: "They were invited but couldn't be added to this portal. Try again." };
   // The saved "invite later" contact has now been invited.
   await admin.from("clients").update({ contact_name: null, contact_email: null }).eq("id", clientId).ilike("contact_email", email);
   // Their Drive folder is shared with the client: share it with this person too.
   const { data: shared } = await admin.from("clients").select("drive_shared").eq("id", clientId).maybeSingle();
   if (shared?.drive_shared) after(async () => { const { setClientDriveAccess } = await import("@/lib/drive"); await setClientDriveAccess(clientId, true); });
   revalidatePath(`/team/clients/${clientId}`);
-  return { ok: `Invite sent to ${name}. They'll get an email to create a password.` };
+  return { ok: `Invite sent to ${name}. Their link works for a week, and they'll get a reminder 2 days before it expires.` };
 }
 
 /** Take someone off a client's portal, the owner included. If the owner goes, the other person becomes the owner. */
@@ -1352,9 +1338,10 @@ export async function resendClientInvite(clientId: string, userId: string): Prom
   if (v.member.role === "creator") return { error: VIEW_ONLY };
   const { data: canEdit } = await (await createClient()).rpc("can_edit_client", { c: clientId });
   if (!canEdit) return { error: "You don't have access to this client." };
-  const { sendInviteReminder } = await import("@/lib/invites.server");
-  const ok = await sendInviteReminder({ client_id: clientId, user_id: userId }, { manual: true });
-  return ok ? { ok: "Invite sent again." } : { error: "That invite couldn't be sent." };
+  const { sendPortalInvite } = await import("@/lib/invites.server");
+  const ok = await sendPortalInvite({ client_id: clientId, user_id: userId }, { manual: true });
+  revalidatePath(`/team/clients/${clientId}`);
+  return ok ? { ok: "New invite sent. It works for a week." } : { error: "That invite couldn't be sent." };
 }
 
 /** Email a client contact who's already joined their sign-in page and a set-a-new-password link. */

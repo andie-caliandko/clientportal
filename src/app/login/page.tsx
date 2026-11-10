@@ -4,7 +4,7 @@ import { getPublicAgency, getSignedInWithoutAccess, getViewer, publicClientName 
 import { signOut } from "./actions";
 import { LoginForm } from "./LoginForm";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ client?: string; invite?: string }> }) {
   if (await getViewer()) redirect("/");
   // Signed in but nothing to open: their portal was closed (client archived).
   if (await getSignedInWithoutAccess()) {
@@ -23,7 +23,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     );
   }
   const agency = await getPublicAgency();
-  const slug = (await searchParams).client;
+  const sp = await searchParams;
+  const slug = sp.client;
+  const short = agency?.brand.shortName ?? agency?.name ?? "your team";
+  // Where an invite link that can't be used sends them.
+  const inviteNote = sp.invite === "expired" ? `This invite link has expired. Invites work for a week. Email your ${short} team and they'll send you a new one.`
+    : sp.invite === "joined" ? "You've already created your password. Sign in below, or use Forgot password if you need a new one."
+    : sp.invite === "invalid" ? `That invite link isn't valid. Use the newest invite email, or ask your ${short} team to send a new one.`
+    : null;
   const clientName = slug && agency ? await publicClientName(agency.slug, slug) : null;
   return (
     <main className="auth">
@@ -33,6 +40,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           {clientName && <p className="eyebrow">{clientName}</p>}
           <h1 style={{ marginTop: clientName ? 8 : 0 }}>Welcome to your portal</h1>
         </div>
+        {inviteNote && <p className={sp.invite === "joined" ? "note" : "readonly"} role="status">{inviteNote}</p>}
         <LoginForm />
       </div>
     </main>

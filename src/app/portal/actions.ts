@@ -178,24 +178,12 @@ export async function invitePerson(_: { error?: string; ok?: string }, form: For
     .eq("client_id", v.client.id);
   if ((count ?? 0) >= 2) return { error: "Your portal already has 2 people, which is the limit." };
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`,
-    data: { display_name: name },
-  });
-  if (error || !data.user) return { error: "We couldn't send that invite. Check the email address and try again." };
-
-  const { error: linkError } = await admin.from("client_users").insert({
-    client_id: v.client.id,
-    user_id: data.user.id,
-    role: "member",
-    display_name: name,
-    email,
-  });
-  if (linkError) return { error: "That person couldn't be added. They may already have a portal." };
+  const { inviteToPortal } = await import("@/lib/invites.server");
+  const sent = await inviteToPortal({ clientId: v.client.id, email, name, role: "member" });
+  if (sent.error) return { error: "We couldn't send that invite. Check the email address and try again, or they may already have a portal." };
 
   revalidatePath("/portal");
-  return { ok: `Invite sent. ${name.split(" ")[0]} will get an email to create a password.` };
+  return { ok: `Invite sent. ${name.split(" ")[0]} has a week to create a password from the email.` };
 }
 
 /** Client marks a task from their team done, with an optional comment and file. */
