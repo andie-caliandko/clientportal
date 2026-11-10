@@ -1,0 +1,65 @@
+import { describe, expect, it } from "vitest";
+import { autoValues, cleanCard, fmtTarget, statusOf, type KpiRow, type TeamKpi } from "./teamScorecard";
+
+const green: TeamKpi = { id: "g", label: "GREEN clients", source: "health_green", unit: "pct", dir: "min", targets: [80, 85, 90, 90] };
+const red: TeamKpi = { id: "r", label: "RED clients", source: "health_red", unit: "pct", dir: "max", targets: [5, 5, 5, 5] };
+const growth: TeamKpi = { id: "f", label: "Follower growth", source: "followers", unit: "pct", dir: "min", targets: [null, 10, 10, 10] };
+
+describe("team scorecard targets", () => {
+  it("uses the quarter's target and the right direction", () => {
+    expect(statusOf(green, 86, "2026-04")).toBe("hit");
+    expect(statusOf(green, 86, "2026-11")).toBe("miss");
+    expect(statusOf(red, 5, "2026-11")).toBe("hit");
+    expect(statusOf(red, 6, "2026-11")).toBe("miss");
+    expect(statusOf(growth, 3, "2026-02")).toBe("none");
+    expect(statusOf(green, null, "2026-11")).toBe("open");
+    expect(fmtTarget(red, "2026-11")).toBe("≤ 5%");
+    expect(fmtTarget(growth, "2026-01")).toBe("No target");
+  });
+});
+
+const kpi = (id: string, client: string, name: string, history: [string, number][], good = 1, better = 2, best = 3): KpiRow => ({
+  id, client_id: client, name, unit: "number", higher_is_better: true, good, better, best, benchmark: null,
+  history: history.map(([week, value]) => ({ week, value })),
+});
+
+describe("team scorecard numbers from the portal", () => {
+  const clients = [
+    { id: "a", name: "A", account_manager_id: "doni", archived_at: null, created_at: "2026-01-01", tracked: true },
+    { id: "b", name: "B", account_manager_id: "doni", archived_at: null, created_at: "2026-01-01", tracked: true },
+    { id: "c", name: "C", account_manager_id: "taylor", archived_at: "2026-11-05T00:00:00Z", created_at: "2026-01-01", tracked: true },
+  ];
+  const kpis = [
+    kpi("1", "a", "Followers", [["2026-10-26", 1000], ["2026-11-02", 1050], ["2026-11-09", 1100]], 900, 1000, 1100),
+    kpi("2", "b", "Followers", [["2026-10-27", 500], ["2026-11-03", 400]], 600, 700, 800),
+  ];
+  const tasks = [
+    { assignee_id: "doni", due_at: "2026-11-03T22:00:00Z", completed_at: "2026-11-03T15:00:00Z", status: "done" },
+    { assignee_id: "doni", due_at: "2026-11-04T22:00:00Z", completed_at: "2026-11-06T15:00:00Z", status: "done" },
+    { assignee_id: "doni", due_at: "2026-11-05T22:00:00Z", completed_at: null, status: "todo" },
+    { assignee_id: "doni", due_at: "2026-11-28T22:00:00Z", completed_at: null, status: "todo" },
+  ];
+  const reports = [{ client_id: "a", created_at: "2026-11-20T10:00:00Z" }, { client_id: "b", created_at: "2026-11-27T10:00:00Z" }];
+  const own = autoValues({ userId: "doni", month: "2026-11", today: "2026-11-10", scope: "own", clients, kpis, tasks, reports });
+
+  it("rates the accounts they manage", () => {
+    expect(own.health_green.value).toBe(50);
+    expect(own.health_red.value).toBe(50);
+    expect(own.accounts.value).toBe(2);
+  });
+  it("averages follower growth across accounts", () => {
+    expect(own.followers.value).toBeCloseTo((10 + -20) / 2);
+  });
+  it("counts reports in by the 25th and tasks done on time", () => {
+    expect(own.reports.value).toBe(50);
+    expect(own.tasks.value).toBeCloseTo(100 / 3);
+  });
+  it("counts clients kept, across every account for a director", () => {
+    const all = autoValues({ userId: "shayla", month: "2026-11", today: "2026-11-10", scope: "all", clients, kpis, tasks, reports });
+    expect(all.retention.value).toBeCloseTo(200 / 3);
+  });
+  it("cleans a saved scorecard", () => {
+    const c = cleanCard({ role_title: "AM", mission: "x", kpis: [{ label: "", source: "weird", targets: ["10", "", null] }] })!;
+    expect(c.kpis[0]).toMatchObject({ label: "New KPI", source: "manual", unit: "pct", dir: "min", targets: [10, null, null, null] });
+  });
+});

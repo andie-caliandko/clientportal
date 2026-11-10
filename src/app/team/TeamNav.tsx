@@ -16,9 +16,9 @@ const LINKS = [
   { href: "/team/settings", label: "Settings", adminOnly: true },
 ];
 
-export function TeamNav({ isAdmin, isCreator = false, showCeo = false, showTracker = false }: { isAdmin: boolean; isCreator?: boolean; showCeo?: boolean; showTracker?: boolean }) {
+export function TeamNav({ isAdmin, isCreator = false, showCeo = false, showTracker = false, showScorecards = false }: { isAdmin: boolean; isCreator?: boolean; showCeo?: boolean; showTracker?: boolean; showScorecards?: boolean }) {
   const path = usePathname();
-  const links = [...(showCeo ? [{ href: "/team/ceo", label: "CEO dashboard" }] : []), ...(showTracker ? [{ href: "/team/ceo/tracker", label: "CEO tracker" }, { href: "/team/ceo/pricing", label: "Pricing" }] : []), ...LINKS]
+  const links = [...(showCeo ? [{ href: "/team/ceo", label: "CEO dashboard" }] : []), ...(showTracker ? [{ href: "/team/ceo/tracker", label: "CEO tracker" }, { href: "/team/ceo/pricing", label: "Pricing" }] : []), ...(showScorecards ? [{ href: "/team/ceo/scorecards", label: "Team scorecards" }] : []), ...LINKS]
     .filter((l) => (isAdmin || !("adminOnly" in l && l.adminOnly)) && !(isCreator && "hideForCreators" in l && l.hideForCreators));
   // The most specific link that matches is the current page (so the tracker doesn't also light up the dashboard).
   const current = links.map((l) => l.href).filter((h) => (h === "/team" ? path === "/team" : path === h || path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];

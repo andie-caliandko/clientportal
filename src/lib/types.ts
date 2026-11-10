@@ -22,6 +22,8 @@ export type Agency = {
   monthly_rhythm: import("./rhythm").RhythmWeek[];
   new_client_tasks: { title: string; note?: string; days?: number; assignee?: string }[];
   /** Website and branding project timelines, by project. */
+  /** Admins the owner shares team scorecards with. */
+  scorecards_shared_with?: string[];
   project_tasks?: Record<string, { title: string; note?: string; days?: number; assignee?: string }[]>;
   plan: string;
   /** The agency owner (sees the CEO dashboard), and admins they've shared it with. */

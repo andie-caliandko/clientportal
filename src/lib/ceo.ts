@@ -41,3 +41,9 @@ export function invoiceState(paid: boolean, billingDay: number | null, month: st
 
 /** Has a client started by a month? (No start date means they have.) */
 export const startedBy = (start: string | null | undefined, month: string) => !start || start.slice(0, 7) <= month;
+
+/** Team scorecards: the owner, plus any admins the owner shares them with. */
+export function canSeeScorecards(agency: Pick<Agency, "owner_id"> & { scorecards_shared_with?: string[] | null }, userId: string, role: string) {
+  if (agency.owner_id && agency.owner_id === userId) return true;
+  return role === "admin" && (agency.scorecards_shared_with ?? []).includes(userId);
+}
