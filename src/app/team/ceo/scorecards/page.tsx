@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { canSeeScorecards, isOwner } from "@/lib/ceo";
 import { monthName } from "@/lib/ceoTracker";
 import { requireTeam } from "@/lib/session";
-import { autoValues, healthAsOf, statusOf, type Card, type Status } from "@/lib/teamScorecard";
+import { autoValues, healthAsOf, resolveCard, statusOf, type Card, type Status } from "@/lib/teamScorecard";
 import { loadScorecards } from "@/lib/teamScorecard.server";
-import { ScorecardView, ShareScorecards } from "./ScorecardView";
+import { EditCard, ScorecardView, ShareScorecards } from "./ScorecardView";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ const shift = (month: string, by: number) => {
 };
 
 /** Each teammate's scorecard: KPIs by role, tied to the accounts they manage. The owner's, shared with chosen admins. */
-export default async function TeamScorecards({ searchParams }: { searchParams: Promise<{ person?: string; month?: string }> }) {
+export default async function TeamScorecards({ searchParams }: { searchParams: Promise<{ person?: string; month?: string; position?: string }> }) {
   const { agency, userId, member } = await requireTeam();
   if (!canSeeScorecards(agency, userId, member.role)) redirect("/team");
   const sp = await searchParams;
@@ -26,6 +26,7 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
   const team = d.members.filter((m) => m.user_id !== agency.owner_id);
   const end = `${shift(month, 1)}-01`;
   const health = healthAsOf(d.kpis, end);
+  const cardFor = (m: (typeof team)[number]) => resolveCard(m, d.rows.get(m.user_id), d.templates);
 
   // Each KPI's number this month: worked out from the portal, or what was entered.
   const scored = (uid: string, card: Card) => {
@@ -48,8 +49,28 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
     </div>
   );
 
+  // A position's scorecard: the same for everyone in it.
+  if (sp.position) {
+    const t = sp.position === "new" ? null : d.templates.find((x) => x.id === sp.position);
+    if (sp.position !== "new" && !t) redirect("/team/ceo/scorecards");
+    const inIt = t ? team.filter((m) => cardFor(m).template?.id === t.id && !cardFor(m).custom) : [];
+    return (
+      <section style={{ display: "grid", gap: 18 }}>
+        <Link href={here(`month=${month}`)} className="note">← All team scorecards</Link>
+        <div>
+          <p className="eyebrow">Position scorecard{inIt.length ? ` · ${inIt.map((m) => m.display_name.split(" ")[0]).join(", ")}` : ""}</p>
+          <h1 style={{ marginTop: 6 }}>{t ? t.title : "New position"}</h1>
+        </div>
+        <EditCard key={sp.position} mode={{ kind: "template", id: t?.id ?? null, auto_role: t?.auto_role ?? null, auto_title: t?.auto_title ?? null, people: inIt.length }}
+          card={t ? { role_title: t.title, mission: t.mission, kpis: t.kpis } : { role_title: "", mission: "", kpis: [] }} others={[]}
+          back={here(`month=${month}`)} />
+      </section>
+    );
+  }
+
   if (person) {
-    const card = d.cards.get(person.user_id) ?? { role_title: person.title ?? ROLE[person.role] ?? "", mission: "", kpis: [] };
+    const resolved = cardFor(person);
+    const card = resolved.card ?? { role_title: person.title ?? ROLE[person.role] ?? "", mission: "", kpis: [] };
     const accounts = d.clients.filter((c) => c.account_manager_id === person.user_id && !c.archived_at)
       .map((c) => ({ id: c.id, name: c.name, tracked: c.tracked, rating: health.get(c.id) ?? null }));
     const theirTasks = d.tasks.filter((t) => t.assignee_id === person.user_id);
@@ -68,7 +89,9 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
           rows={scored(person.user_id, card)} note={d.months.get(person.user_id)?.note ?? ""}
           accounts={accounts}
           tasks={theirTasks.map((t) => ({ title: t.title, due: t.due_at!.slice(0, 10), done: t.status === "done", late: t.status === "done" ? !!t.completed_at && t.completed_at.slice(0, 10) > t.due_at!.slice(0, 10) : t.due_at!.slice(0, 10) < today, client: t.client_id ? names.get(t.client_id) ?? null : null }))}
-          others={team.filter((m) => m.user_id !== person.user_id && d.cards.get(m.user_id)?.kpis.length).map((m) => ({ user_id: m.user_id, name: m.display_name, card: d.cards.get(m.user_id)! }))} />
+          name={person.display_name.split(" ")[0]} position={{ id: resolved.template?.id ?? null, title: resolved.template?.title ?? null, custom: resolved.custom, picked: d.rows.get(person.user_id)?.template_id ?? null }}
+          positions={d.templates.map((t) => ({ id: t.id, title: t.title }))}
+          others={d.templates.map((t) => ({ user_id: t.id, name: t.title, card: { role_title: t.title, mission: t.mission, kpis: t.kpis } }))} />
       </section>
     );
   }
@@ -85,7 +108,7 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
       </div>
       <div className="trk-cards">
         {team.map((m) => {
-          const card = d.cards.get(m.user_id);
+          const card = cardFor(m).card;
           const rows = card ? scored(m.user_id, card) : [];
           const counted = rows.filter((r) => r.status === "hit" || r.status === "miss");
           const hit = counted.filter((r) => r.status === "hit").length;
@@ -94,7 +117,7 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
             <Link key={m.user_id} href={here(`person=${m.user_id}&month=${month}`)} className="panel tsc-card">
               <div>
                 <h2>{m.display_name}</h2>
-                <p className="note">{card?.role_title || m.title || ROLE[m.role]} · {accounts.length} account{accounts.length === 1 ? "" : "s"}</p>
+                <p className="note">{card?.role_title || m.title || ROLE[m.role]}{cardFor(m).custom ? " (their own)" : ""} · {accounts.length} account{accounts.length === 1 ? "" : "s"}</p>
               </div>
               {card?.kpis.length ? (
                 <>
@@ -105,11 +128,33 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
                     {rows.some((r) => r.status === "open") && <li className="note">{rows.filter((r) => r.status === "open").length} still to enter</li>}
                   </ul>
                 </>
-              ) : <p className="note">No scorecard yet. Open to set one up.</p>}
+              ) : <p className="note">No position matches yet. Open to pick one.</p>}
             </Link>
           );
         })}
       </div>
+      <section className="panel">
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+          <h2>Positions</h2>
+          <Link className="btn sm line" href={here(`position=new&month=${month}`)}>New position</Link>
+        </div>
+        <p className="note">Each position has one scorecard. Everyone in it gets it automatically, matched by their team role or job title. Change it once and it changes for all of them.</p>
+        <ul className="list">
+          {d.templates.map((t) => {
+            const inIt = team.filter((m) => cardFor(m).template?.id === t.id && !cardFor(m).custom);
+            return (
+              <li key={t.id}>
+                <span><b>{t.title}</b><br /><span className="note">
+                  {[t.auto_role && `Everyone with the ${ROLE[t.auto_role] ?? t.auto_role} role`, t.auto_title && `job titles with "${t.auto_title}"`].filter(Boolean).join(" or ") || "Picked person by person"}
+                  {" · "}{inIt.length ? inIt.map((m) => m.display_name.split(" ")[0]).join(", ") : "No one yet"} · {t.kpis.length} KPIs
+                </span></span>
+                <span className="r"><Link className="btn sm line" href={here(`position=${t.id}&month=${month}`)}>Edit</Link></span>
+              </li>
+            );
+          })}
+          {!d.templates.length && <li className="note">No positions yet.</li>}
+        </ul>
+      </section>
       {isOwner(agency, userId) && (
         <section className="panel">
           <h2>Sharing</h2>

@@ -6,7 +6,7 @@ import { useActionState, useState, useTransition } from "react";
 import type { Rating } from "@/lib/health";
 import { fmtTarget, fmtValue, SOURCES, type Card, type Status, type TeamKpi } from "@/lib/teamScorecard";
 import { newId, Num, SaveNote, Text, type SaveState } from "../tracker/TrackerBits";
-import { saveCard, saveMonth, saveScorecardSharing } from "./actions";
+import { deleteTemplate, saveCard, saveMonth, saveScorecardSharing, saveTemplate, setPosition } from "./actions";
 
 type Row = { kpi: TeamKpi; value: number | null; detail: string | null; status: Status };
 const STATUS: Record<Status, { cls: string; text: string }> = {
@@ -17,8 +17,12 @@ const STATUS: Record<Status, { cls: string; text: string }> = {
 };
 const RATING: Record<Rating, { cls: string; text: string }> = { green: { cls: "ok", text: "Green" }, yellow: { cls: "warn", text: "Yellow" }, red: { cls: "crit", text: "Red" } };
 
-export function ScorecardView({ userId, month, card, rows, note, accounts, tasks, others }: {
+export function ScorecardView({ userId, name, month, card, rows, note, accounts, tasks, others, position, positions }: {
   userId: string;
+  name: string;
+  /** Their position, and whether they have a scorecard of their own instead. */
+  position: { id: string | null; title: string | null; custom: boolean; picked: string | null };
+  positions: { id: string; title: string }[];
   month: string;
   card: Card;
   rows: Row[];
@@ -28,7 +32,7 @@ export function ScorecardView({ userId, month, card, rows, note, accounts, tasks
   others: { user_id: string; name: string; card: Card }[];
 }) {
   const router = useRouter();
-  const [editing, setEditing] = useState(!card.kpis.length);
+  const [editing, setEditing] = useState(false);
   const [state, setState] = useState<SaveState>("idle");
   const save = async (fn: () => Promise<{ error?: string }>) => {
     setState("saving");
@@ -40,16 +44,33 @@ export function ScorecardView({ userId, month, card, rows, note, accounts, tasks
   const late = tasks.filter((t) => t.late).length;
   const other = tasks.filter((t) => !t.client && !t.done);
 
-  if (editing) return <EditCard userId={userId} card={card} others={others} onDone={() => { setEditing(false); router.refresh(); }} />;
+  if (editing) return <EditCard mode={{ kind: "person", userId, name }} card={card} others={others} onDone={() => { setEditing(false); router.refresh(); }} />;
 
   return (
     <div className="trk">
       <div className="trk-savebar"><SaveNote state={state} /></div>
       <section className="panel tsc-mission">
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-          <h2>{card.role_title || "Scorecard"}</h2>
-          <button type="button" className="btn sm line" onClick={() => setEditing(true)}>Edit scorecard</button>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "end" }}>
+          <div className="field" style={{ minWidth: 240 }}>
+            <label htmlFor="tsc-position">Position</label>
+            <select className="sel" id="tsc-position" value={position.custom ? "__own" : position.picked ?? ""}
+              onChange={(e) => {
+                if (e.target.value === "__own") return setEditing(true);
+                save(() => setPosition(userId, e.target.value || null));
+              }}>
+              <option value="">{position.title && !position.picked ? `${position.title} (matched automatically)` : "Match automatically"}</option>
+              {positions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              <option value="__own">Their own scorecard…</option>
+            </select>
+          </div>
+          <div className="row">
+            {position.id && !position.custom && <Link className="btn sm line" href={`/team/ceo/scorecards?position=${position.id}`}>Edit the {position.title} scorecard</Link>}
+            <button type="button" className="btn sm line" onClick={() => setEditing(true)}>{position.custom ? `Edit ${name}'s scorecard` : `Give ${name} their own`}</button>
+          </div>
         </div>
+        {position.custom && <p className="note">{name} has their own scorecard, so changes to {position.title ? `the ${position.title} position` : "positions"} don&apos;t reach them. Pick a position above to switch back.</p>}
+        {!card.kpis.length && <p className="note">No position matches {name} yet. Pick one above, or give them their own scorecard.</p>}
+        <h2>{card.role_title || "Scorecard"}</h2>
         {card.mission && <p className="tsc-mission-text">{card.mission}</p>}
       </section>
 
@@ -135,9 +156,16 @@ export function ScorecardView({ userId, month, card, rows, note, accounts, tasks
   );
 }
 
-/** Change a scorecard's role, mission and KPIs, or start from someone else's. */
-function EditCard({ userId, card, others, onDone }: { userId: string; card: Card; others: { user_id: string; name: string; card: Card }[]; onDone: () => void }) {
+type Mode =
+  | { kind: "person"; userId: string; name: string }
+  | { kind: "template"; id: string | null; auto_role: string | null; auto_title: string | null; people: number };
+
+/** Change a scorecard's name, mission and KPIs: a position's (for everyone in it) or one person's own. */
+export function EditCard({ mode, card, others, onDone, back }: { mode: Mode; card: Card; others: { user_id: string; name: string; card: Card }[]; onDone?: () => void; back?: string }) {
+  const router = useRouter();
   const [c, setC] = useState(card);
+  const [auto, setAuto] = useState(mode.kind === "template" ? { role: mode.auto_role ?? "", title: mode.auto_title ?? "" } : { role: "", title: "" });
+  const finish = () => { if (onDone) onDone(); else if (back) { router.push(back); router.refresh(); } };
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const set = (id: string, patch: Partial<TeamKpi>) => setC({ ...c, kpis: c.kpis.map((k) => (k.id === id ? { ...k, ...patch } : k)) });
@@ -145,16 +173,24 @@ function EditCard({ userId, card, others, onDone }: { userId: string; card: Card
     <div className="trk">
       <section className="panel" style={{ display: "grid", gap: 12 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "end" }}>
-          <div className="field" style={{ minWidth: 260 }}><label htmlFor="tsc-role">Role</label>
+          <div className="field" style={{ minWidth: 260 }}><label htmlFor="tsc-role">{mode.kind === "template" ? "Position" : "Scorecard name"}</label>
             <input className="input" id="tsc-role" value={c.role_title} onChange={(e) => setC({ ...c, role_title: e.target.value })} placeholder="Account Manager" /></div>
+          {mode.kind === "template" && <>
+            <div className="field"><label htmlFor="tsc-auto-role">Everyone with this role gets it</label>
+              <select className="sel" id="tsc-auto-role" value={auto.role} onChange={(e) => setAuto({ ...auto, role: e.target.value })}>
+                <option value="">No one by role</option><option value="account_manager">Account managers</option><option value="admin">Admins</option><option value="creator">Creators</option>
+              </select></div>
+            <div className="field"><label htmlFor="tsc-auto-title">Or job titles that include</label>
+              <input className="input" id="tsc-auto-title" value={auto.title} placeholder="Director of Op" onChange={(e) => setAuto({ ...auto, title: e.target.value })} /></div>
+          </>}
           {others.length > 0 && (
-            <div className="field"><label htmlFor="tsc-copy">Start from someone else&apos;s</label>
-              <select className="sel" id="tsc-copy" value="" onChange={(e) => {
+            <div className="field"><label htmlFor="tsc-copy">Start from</label>
+              <select className="sel" id="tsc-copy" value="" aria-label="Start from a position's scorecard" onChange={(e) => {
                 const o = others.find((x) => x.user_id === e.target.value);
                 if (o && (!c.kpis.length || confirm(`Replace this scorecard with a copy of ${o.name}'s?`))) setC({ ...o.card, kpis: o.card.kpis.map((k) => ({ ...k, id: newId() })) });
               }}>
-                <option value="">Copy a scorecard…</option>
-                {others.map((o) => <option key={o.user_id} value={o.user_id}>{o.name} ({o.card.role_title})</option>)}
+                <option value="">Copy a position&apos;s scorecard…</option>
+                {others.map((o) => <option key={o.user_id} value={o.user_id}>{o.name}</option>)}
               </select></div>
           )}
         </div>
@@ -208,11 +244,22 @@ function EditCard({ userId, card, others, onDone }: { userId: string; card: Card
       {error && <p className="error">{error}</p>}
       <div className="row">
         <button type="button" className="btn" disabled={pending} onClick={() => start(async () => {
-          const r = await saveCard(userId, { ...c, kpis: c.kpis.filter((k) => k.label.trim()) });
+          const clean = { ...c, kpis: c.kpis.filter((k) => k.label.trim()) };
+          const r = mode.kind === "template"
+            ? await saveTemplate(mode.id, { card: clean, auto_role: auto.role || null, auto_title: auto.title || null })
+            : await saveCard(mode.userId, clean);
           if (r.error) return setError(r.error);
-          onDone();
-        })}>{pending ? "Saving…" : "Save scorecard"}</button>
-        {card.kpis.length > 0 && <button type="button" className="btn line" onClick={onDone}>Cancel</button>}
+          finish();
+        })}>{pending ? "Saving…" : mode.kind === "template" ? (mode.people > 1 ? `Save for all ${mode.people}` : "Save position") : `Save ${mode.name}'s scorecard`}</button>
+        <button type="button" className="btn line" onClick={finish}>Cancel</button>
+        {mode.kind === "template" && mode.id && (
+          <button type="button" className="linkbtn note" style={{ marginLeft: "auto" }} onClick={() => start(async () => {
+            if (!confirm(`Remove the ${card.role_title} position? People in it keep their entered numbers but lose this scorecard.`)) return;
+            const r = await deleteTemplate(mode.id!);
+            if (r.error) return setError(r.error);
+            finish();
+          })}>Remove position</button>
+        )}
       </div>
     </div>
   );

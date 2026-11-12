@@ -206,3 +206,24 @@ export const cleanValues = (v: unknown): Record<string, number | null> | null =>
   for (const [k, x] of Object.entries(v).slice(0, 100)) if (/^[\w-]{1,40}$/.test(k)) out[k] = num(x);
   return out;
 };
+
+// ---- Positions ----
+
+/** A position's scorecard that everyone in it gets, matched by team role or job title. */
+export type Template = Card & { id: string; title: string; auto_role: string | null; auto_title: string | null };
+/** What's saved for one person: a position picked for them, or a scorecard of their own. */
+export type PersonRow = Card & { user_id: string; template_id: string | null; custom: boolean };
+
+/**
+ * The scorecard a person sees: their own if it's been customized, otherwise their position's.
+ * The position is the one picked for them, else the first whose job title matches, else whose role matches.
+ */
+export function resolveCard(member: { role: string; title: string | null }, row: PersonRow | undefined, templates: Template[]) {
+  const title = (member.title ?? "").toLowerCase();
+  const template = (row?.template_id ? templates.find((t) => t.id === row.template_id) : undefined)
+    ?? templates.find((t) => t.auto_title && title.includes(t.auto_title.toLowerCase()))
+    ?? templates.find((t) => t.auto_role && t.auto_role === member.role)
+    ?? null;
+  if (row?.custom) return { card: { role_title: row.role_title, mission: row.mission, kpis: row.kpis } as Card, template, custom: true };
+  return { card: template ? { role_title: template.title, mission: template.mission, kpis: template.kpis } as Card : null, template, custom: false };
+}

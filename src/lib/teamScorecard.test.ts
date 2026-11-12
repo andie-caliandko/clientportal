@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoValues, cleanCard, fmtTarget, statusOf, type KpiRow, type TeamKpi } from "./teamScorecard";
+import { autoValues, cleanCard, fmtTarget, resolveCard, statusOf, type KpiRow, type TeamKpi } from "./teamScorecard";
 
 const green: TeamKpi = { id: "g", label: "GREEN clients", source: "health_green", unit: "pct", dir: "min", targets: [80, 85, 90, 90] };
 const red: TeamKpi = { id: "r", label: "RED clients", source: "health_red", unit: "pct", dir: "max", targets: [5, 5, 5, 5] };
@@ -61,5 +61,22 @@ describe("team scorecard numbers from the portal", () => {
   it("cleans a saved scorecard", () => {
     const c = cleanCard({ role_title: "AM", mission: "x", kpis: [{ label: "", source: "weird", targets: ["10", "", null] }] })!;
     expect(c.kpis[0]).toMatchObject({ label: "New KPI", source: "manual", unit: "pct", dir: "min", targets: [10, null, null, null] });
+  });
+});
+
+describe("scorecards by position", () => {
+  const am = { id: "am", title: "Account Manager", role_title: "", mission: "AM", kpis: [], auto_role: "account_manager", auto_title: null };
+  const ops = { id: "ops", title: "Director of Operations", role_title: "", mission: "Ops", kpis: [], auto_role: null, auto_title: "director of op" };
+  const templates = [am, ops];
+  it("matches job title first, then role", () => {
+    expect(resolveCard({ role: "account_manager", title: "Account Manager" }, undefined, templates).template?.id).toBe("am");
+    expect(resolveCard({ role: "admin", title: "Director of Ops" }, undefined, templates).template?.id).toBe("ops");
+    expect(resolveCard({ role: "creator", title: "Designer" }, undefined, templates).card).toBeNull();
+  });
+  it("uses a position picked for them, or their own scorecard", () => {
+    const row = { user_id: "x", template_id: "ops", custom: false, role_title: "", mission: "", kpis: [] };
+    expect(resolveCard({ role: "account_manager", title: null }, row, templates).card?.role_title).toBe("Director of Operations");
+    const own = { ...row, custom: true, role_title: "Special", mission: "Mine" };
+    expect(resolveCard({ role: "account_manager", title: null }, own, templates)).toMatchObject({ custom: true, card: { role_title: "Special" } });
   });
 });
