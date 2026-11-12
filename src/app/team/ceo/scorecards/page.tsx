@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { canSeeScorecards, isOwner } from "@/lib/ceo";
 import { monthName } from "@/lib/ceoTracker";
 import { requireTeam } from "@/lib/session";
-import { autoValues, healthAsOf, resolveCard, statusOf, type Card, type Status } from "@/lib/teamScorecard";
-import { loadScorecards } from "@/lib/teamScorecard.server";
+import { overallScore, quarterLabel, quarterMonths, resolveCard } from "@/lib/teamScorecard";
+import { loadScorecards, scoresFor } from "@/lib/teamScorecard.server";
 import { EditCard, ScorecardView, ShareScorecards } from "./ScorecardView";
 
 export const dynamic = "force-dynamic";
 
 const ROLE: Record<string, string> = { admin: "Admin", account_manager: "Account manager", creator: "Creator" };
+const pctText = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`);
+const pick = (x: { scorecard: number | null; accountsHealth: number | null; overall: number | null }) => ({ scorecard: x.scorecard, accountsHealth: x.accountsHealth, overall: x.overall });
 const shift = (month: string, by: number) => {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
@@ -22,21 +24,19 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: agency.timezone }).format(new Date());
   const month = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : today.slice(0, 7);
+  // This month, plus the quarter's earlier months for the quarter-to-date scores.
+  const months = quarterMonths(month);
+  const loaded = await Promise.all(months.map((m) => (m === month ? null : loadScorecards(agency.id, m))));
   const d = await loadScorecards(agency.id, month);
   const team = d.members.filter((m) => m.user_id !== agency.owner_id);
-  const end = `${shift(month, 1)}-01`;
-  const health = healthAsOf(d.kpis, end);
   const cardFor = (m: (typeof team)[number]) => resolveCard(m, d.rows.get(m.user_id), d.templates);
-
-  // Each KPI's number this month: worked out from the portal, or what was entered.
-  const scored = (uid: string, card: Card) => {
-    const autos = { own: autoValues({ userId: uid, month, today, scope: "own", ...d }), all: autoValues({ userId: uid, month, today, scope: "all", ...d }) };
-    const entered = d.months.get(uid)?.values ?? {};
-    return card.kpis.map((k) => {
-      const auto = k.source === "manual" ? null : autos[k.scope ?? "own"][k.source];
-      const value = auto ? auto.value : entered[k.id] ?? null;
-      return { kpi: k, value, detail: auto?.detail ?? null, status: statusOf(k, value, month) as Status };
-    });
+  const scored = (m: (typeof team)[number]) => scoresFor(d, m, month, today);
+  // Each month of the quarter so far, and their average.
+  const quarter = (m: (typeof team)[number]) => {
+    const each = months.map((mo, i) => ({ month: mo, ...pick(scoresFor(loaded[i] ?? d, m, mo, today)) }));
+    const avg = (k: "scorecard" | "accountsHealth") => overallScore(...each.map((e) => e[k]));
+    const scorecard = avg("scorecard"), accountsHealth = avg("accountsHealth");
+    return { each, scorecard, accountsHealth, overall: overallScore(scorecard, accountsHealth) };
   };
   const here = (extra: string) => `/team/ceo/scorecards?${extra}`;
   const person = sp.person ? team.find((m) => m.user_id === sp.person) : undefined;
@@ -71,8 +71,9 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
   if (person) {
     const resolved = cardFor(person);
     const card = resolved.card ?? { role_title: person.title ?? ROLE[person.role] ?? "", mission: "", kpis: [] };
-    const accounts = d.clients.filter((c) => c.account_manager_id === person.user_id && !c.archived_at)
-      .map((c) => ({ id: c.id, name: c.name, tracked: c.tracked, rating: health.get(c.id) ?? null }));
+    const now = scored(person);
+    const q = quarter(person);
+    const accounts = now.accounts.map((c) => ({ id: c.id, name: c.name, tracked: c.tracked, rating: now.health.get(c.id) ?? null }));
     const theirTasks = d.tasks.filter((t) => t.assignee_id === person.user_id);
     const names = new Map(d.clients.map((c) => [c.id, c.name]));
     return (
@@ -86,7 +87,8 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
           {monthNav(`person=${person.user_id}&`)}
         </div>
         <ScorecardView key={`${person.user_id}-${month}`} userId={person.user_id} month={month} card={card}
-          rows={scored(person.user_id, card)} note={d.months.get(person.user_id)?.note ?? ""}
+          rows={now.rows} note={d.months.get(person.user_id)?.note ?? ""}
+          scores={{ month: pick(now), quarter: q, label: quarterLabel(month) }}
           accounts={accounts}
           tasks={theirTasks.map((t) => ({ title: t.title, due: t.due_at!.slice(0, 10), done: t.status === "done", late: t.status === "done" ? !!t.completed_at && t.completed_at.slice(0, 10) > t.due_at!.slice(0, 10) : t.due_at!.slice(0, 10) < today, client: t.client_id ? names.get(t.client_id) ?? null : null }))}
           name={person.display_name.split(" ")[0]} position={{ id: resolved.template?.id ?? null, title: resolved.template?.title ?? null, custom: resolved.custom, picked: d.rows.get(person.user_id)?.template_id ?? null }}
@@ -108,20 +110,29 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
       </div>
       <div className="trk-cards">
         {team.map((m) => {
-          const card = cardFor(m).card;
-          const rows = card ? scored(m.user_id, card) : [];
+          const now = scored(m);
+          const card = now.card;
+          const rows = now.rows;
           const counted = rows.filter((r) => r.status === "hit" || r.status === "miss");
           const hit = counted.filter((r) => r.status === "hit").length;
-          const accounts = d.clients.filter((c) => c.account_manager_id === m.user_id && !c.archived_at);
+          const accounts = now.accounts;
+          const q = quarter(m);
           return (
             <Link key={m.user_id} href={here(`person=${m.user_id}&month=${month}`)} className="panel tsc-card">
               <div>
                 <h2>{m.display_name}</h2>
                 <p className="note">{card?.role_title || m.title || ROLE[m.role]}{cardFor(m).custom ? " (their own)" : ""} · {accounts.length} account{accounts.length === 1 ? "" : "s"}</p>
               </div>
+              <div className="tsc-scores">
+                <div className="tsc-overall"><b>{pctText(q.overall)}</b><span>Overall, {quarterLabel(month)} so far</span></div>
+                <dl className="trk-dl">
+                  <div><dt>Scorecard</dt><dd>{pctText(q.scorecard)}</dd></div>
+                  <div><dt>Client accounts</dt><dd>{accounts.length ? pctText(q.accountsHealth) : "No accounts"}</dd></div>
+                </dl>
+              </div>
               {card?.kpis.length ? (
                 <>
-                  <p className="tsc-score"><b>{hit}</b> of {counted.length} KPIs on target</p>
+                  <p className="tsc-score"><b>{hit}</b> of {counted.length} KPIs on target in {monthName(month, "short").split(" ")[0]}</p>
                   <div className="prc-meter" role="img" aria-label={`${hit} of ${counted.length} on target`}><i style={{ "--w": counted.length ? hit / counted.length : 0 } as React.CSSProperties} /></div>
                   <ul className="tsc-misses">
                     {rows.filter((r) => r.status === "miss").slice(0, 3).map((r) => <li key={r.kpi.id}><span className="pill crit">Off</span> {r.kpi.label}</li>)}

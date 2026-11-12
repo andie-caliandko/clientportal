@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 import { autoValues, cleanCard, fmtTarget, resolveCard, statusOf, type KpiRow, type TeamKpi } from "./teamScorecard";
 
 const green: TeamKpi = { id: "g", label: "GREEN clients", source: "health_green", unit: "pct", dir: "min", targets: [80, 85, 90, 90] };
@@ -57,6 +59,7 @@ describe("team scorecard numbers from the portal", () => {
   it("counts clients kept, across every account for a director", () => {
     const all = autoValues({ userId: "shayla", month: "2026-11", today: "2026-11-10", scope: "all", clients, kpis, tasks, reports });
     expect(all.retention.value).toBeCloseTo(200 / 3);
+    expect(all.health_updated.value).toBeCloseTo(100 / 3);
   });
   it("cleans a saved scorecard", () => {
     const c = cleanCard({ role_title: "AM", mission: "x", kpis: [{ label: "", source: "weird", targets: ["10", "", null] }] })!;
@@ -78,5 +81,28 @@ describe("scorecards by position", () => {
     expect(resolveCard({ role: "account_manager", title: null }, row, templates).card?.role_title).toBe("Director of Operations");
     const own = { ...row, custom: true, role_title: "Special", mission: "Mine" };
     expect(resolveCard({ role: "account_manager", title: null }, own, templates)).toMatchObject({ custom: true, card: { role_title: "Special" } });
+  });
+});
+
+describe("scores", () => {
+  it("averages the scorecard and the client accounts", async () => {
+    const { accountsScore, overallScore, quarterMonths, scorecardScore } = await import("./teamScorecard");
+    expect(scorecardScore(["hit", "hit", "miss", "open", "none"])).toBeCloseTo(66.67, 1);
+    expect(scorecardScore(["open"])).toBeNull();
+    expect(accountsScore(["green", "yellow", "red", null])).toBe(50);
+    expect(overallScore(80, 60)).toBe(70);
+    expect(overallScore(null, 60)).toBe(60);
+    expect(quarterMonths("2026-11")).toEqual(["2026-10", "2026-11"]);
+    expect(quarterMonths("2026-01")).toEqual(["2026-01"]);
+  });
+});
+
+describe("quarterly reviews", () => {
+  it("are due in the first week of a quarter, for the quarter that just ended", async () => {
+    const { reviewDue } = await import("./teamScorecard.server");
+    expect(reviewDue("2027-01-03")).toEqual({ months: ["2026-10", "2026-11", "2026-12"], label: "Q4 2026", dueDate: "2027-01-08" });
+    expect(reviewDue("2026-07-01")?.label).toBe("Q2 2026");
+    expect(reviewDue("2026-07-08")).toBeNull();
+    expect(reviewDue("2026-11-02")).toBeNull();
   });
 });

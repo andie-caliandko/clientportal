@@ -7,6 +7,7 @@ import { announceRecurringTasks } from "@/lib/repeatTasks";
 import { extendAllSeries } from "@/lib/shoots.server";
 import { flagRenewals } from "@/lib/contracts.server";
 import { remindUnjoinedInvites } from "@/lib/invites.server";
+import { quarterlyReviewTasks } from "@/lib/teamScorecard.server";
 
 const LABEL = ["", "2 days", "5 days", "1 week"];
 
@@ -71,5 +72,7 @@ export async function GET(request: NextRequest) {
   const renewals = await flagRenewals();
   // Portal invites not accepted yet: a reminder 2 days before the week-long link expires.
   const inviteReminders = await remindUnjoinedInvites();
-  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders, shootsAdded });
+  // First week of each quarter: the owner's quarterly review task for each teammate with a scorecard.
+  const quarterlyReviews = await quarterlyReviewTasks().catch((err) => { console.error("Quarterly reviews failed", err); return 0; });
+  return NextResponse.json({ reminded: sent, loginsRemoved, recurring, renewals, inviteReminders, shootsAdded, quarterlyReviews });
 }

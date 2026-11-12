@@ -17,8 +17,14 @@ const STATUS: Record<Status, { cls: string; text: string }> = {
 };
 const RATING: Record<Rating, { cls: string; text: string }> = { green: { cls: "ok", text: "Green" }, yellow: { cls: "warn", text: "Yellow" }, red: { cls: "crit", text: "Red" } };
 
-export function ScorecardView({ userId, name, month, card, rows, note, accounts, tasks, others, position, positions }: {
+type Scores = { scorecard: number | null; accountsHealth: number | null; overall: number | null };
+const pctText = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`);
+const monthShort = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short" });
+
+export function ScorecardView({ userId, name, month, card, rows, note, accounts, tasks, others, position, positions, scores }: {
   userId: string;
+  /** This month's scores, and the quarter so far (each month, and averaged). */
+  scores: { month: Scores; quarter: Scores & { each: (Scores & { month: string })[] }; label: string };
   name: string;
   /** Their position, and whether they have a scorecard of their own instead. */
   position: { id: string | null; title: string | null; custom: boolean; picked: string | null };
@@ -72,6 +78,21 @@ export function ScorecardView({ userId, name, month, card, rows, note, accounts,
         {!card.kpis.length && <p className="note">No position matches {name} yet. Pick one above, or give them their own scorecard.</p>}
         <h2>{card.role_title || "Scorecard"}</h2>
         {card.mission && <p className="tsc-mission-text">{card.mission}</p>}
+      </section>
+
+      <section className="panel tsc-scorepanel" aria-label="Scores">
+        <div className="tsc-overall"><b>{pctText(scores.quarter.overall)}</b><span>Overall, {scores.label} so far</span></div>
+        <div className="tablewrap">
+          <table className="prc-table">
+            <thead><tr><th scope="col"><span className="sr">Score</span></th>{scores.quarter.each.map((e) => <th key={e.month} scope="col">{monthShort(e.month)}</th>)}<th scope="col">{scores.label}</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Scorecard (KPIs on target)</th>{scores.quarter.each.map((e) => <td key={e.month} className="kn">{pctText(e.scorecard)}</td>)}<td className="kn"><b>{pctText(scores.quarter.scorecard)}</b></td></tr>
+              <tr><th scope="row">Client accounts (health)</th>{scores.quarter.each.map((e) => <td key={e.month} className="kn">{pctText(e.accountsHealth)}</td>)}<td className="kn"><b>{pctText(scores.quarter.accountsHealth)}</b></td></tr>
+              <tr><th scope="row">Overall</th>{scores.quarter.each.map((e) => <td key={e.month} className="kn">{pctText(e.overall)}</td>)}<td className="kn"><b>{pctText(scores.quarter.overall)}</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="note tsc-scorenote">Scorecard: the share of KPIs with a target that are on target. Client accounts: the average health of the accounts {name} manages (green 100, yellow 50, red 0). Overall: the two averaged.</p>
       </section>
 
       <section className="panel">

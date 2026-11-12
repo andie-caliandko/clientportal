@@ -1354,3 +1354,10 @@ a.shoot-ev { display: block; }
 .tsc-targets label { display: grid; gap: 4px; font-size: .8rem; color: var(--ink-2); font-weight: 600; }
 .tsc-row-actions { grid-column: 3 / -1; justify-content: flex-end; gap: 14px; }
 @media (max-width: 760px) { .tsc-edit { grid-template-columns: 1fr 1fr; } .tsc-targets, .tsc-row-actions { grid-column: 1 / -1; } }
+.tsc-scores { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.tsc-overall { display: grid; gap: 2px; }
+.tsc-overall b { font-family: var(--serif); font-weight: 400; font-size: 2.6rem; line-height: 1; color: var(--head); font-variant-numeric: tabular-nums; }
+.tsc-overall span { font-size: .8rem; color: var(--ink-2); }
+.tsc-scorepanel { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px 24px; align-items: center; }
+.tsc-scorepanel .tsc-scorenote { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 700px) { .tsc-scorepanel, .tsc-scores { grid-template-columns: 1fr; } }

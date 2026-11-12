@@ -10,7 +10,7 @@ export const SOURCES = [
   { id: "health_green", label: "Accounts in GREEN (%)" },
   { id: "health_yellow", label: "Accounts in YELLOW (%)" },
   { id: "health_red", label: "Accounts in RED (%)" },
-  { id: "health_updated", label: "Accounts with this week's scorecard (%)" },
+  { id: "health_updated", label: "Accounts with a scorecard this week or last (%)" },
   { id: "followers", label: "Follower growth this month (avg %)" },
   { id: "engagement", label: "Engagement growth this month (avg %)" },
   { id: "reports", label: "Monthly reports in by the 25th (%)" },
@@ -144,7 +144,10 @@ export function autoValues(input: {
   const d = new Date(`${asOf}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   const week = d.toISOString().slice(0, 10);
-  const updated = tracked.filter((c) => kpis.some((k) => k.client_id === c.id && k.history.some((h) => h.week === week)));
+  d.setUTCDate(d.getUTCDate() - 7);
+  const lastWeek = d.toISOString().slice(0, 10);
+  // Entered this week or last, so a new week doesn't count against them on Monday.
+  const updated = tracked.filter((c) => kpis.some((k) => k.client_id === c.id && k.history.some((h) => h.week === week || h.week === lastWeek)));
 
   const due25 = `${month}-26`;
   const reported = tracked.filter((c) => input.reports.some((r) => r.client_id === c.id && r.created_at.slice(0, 10) >= start && r.created_at.slice(0, 10) < due25));
@@ -154,19 +157,19 @@ export function autoValues(input: {
   const counted = theirs.filter((t) => t.status === "done" || t.due_at!.slice(0, 10) < input.today);
   const onTime = counted.filter((t) => t.status === "done" && t.completed_at && t.completed_at.slice(0, 10) <= t.due_at!.slice(0, 10));
 
-  const atStart = mine.filter((c) => c.created_at.slice(0, 10) < start && (!c.archived_at || c.archived_at.slice(0, 10) >= start));
-  const kept = atStart.filter((c) => !c.archived_at || c.archived_at.slice(0, 10) >= end);
+  // Accounts active during the month that weren't archived by its end.
+  const kept = active.filter((c) => !c.archived_at || c.archived_at.slice(0, 10) >= end);
 
   return {
     health_green: share("green"),
     health_yellow: share("yellow"),
     health_red: share("red"),
-    health_updated: { value: pct(updated.length, tracked.length), detail: `${updated.length} of ${tracked.length} tracked accounts, week of ${week}` },
+    health_updated: { value: pct(updated.length, tracked.length), detail: `${updated.length} of ${tracked.length} tracked accounts, this week or last` },
     followers: growth(kpis, month, isFollowers, "last"),
     engagement: growth(kpis, month, isEngagement, "avg"),
     reports: { value: pct(reported.length, tracked.length), detail: `${reported.length} of ${tracked.length} tracked accounts` },
     tasks: { value: pct(onTime.length, counted.length), detail: `${onTime.length} of ${counted.length} tasks due this month` },
-    retention: { value: pct(kept.length, atStart.length), detail: `${kept.length} of ${atStart.length} accounts` },
+    retention: { value: pct(kept.length, active.length), detail: `${kept.length} of ${active.length} accounts kept` },
     accounts: { value: active.filter((c) => !c.archived_at).length, detail: scope === "all" ? "All active accounts" : "As account manager" },
   };
 }
@@ -227,3 +230,34 @@ export function resolveCard(member: { role: string; title: string | null }, row:
   if (row?.custom) return { card: { role_title: row.role_title, mission: row.mission, kpis: row.kpis } as Card, template, custom: true };
   return { card: template ? { role_title: template.title, mission: template.mission, kpis: template.kpis } as Card : null, template, custom: false };
 }
+
+// ---- Scores ----
+
+/** The share of KPIs with a target that are on target (0 to 100). KPIs still to enter don't count yet. */
+export function scorecardScore(statuses: Status[]) {
+  const counted = statuses.filter((s) => s === "hit" || s === "miss");
+  return counted.length ? (counted.filter((s) => s === "hit").length / counted.length) * 100 : null;
+}
+
+const RATING_POINTS: Record<Rating, number> = { green: 100, yellow: 50, red: 0 };
+
+/** Average health of their accounts (green 100, yellow 50, red 0). Accounts without a rating don't count. */
+export function accountsScore(ratings: (Rating | null | undefined)[]) {
+  const rated = ratings.filter(Boolean) as Rating[];
+  return rated.length ? rated.reduce((n, r) => n + RATING_POINTS[r], 0) / rated.length : null;
+}
+
+/** The overall score: the average of whichever of the scores they have. */
+export const overallScore = (...scores: (number | null)[]) => {
+  const have = scores.filter((s): s is number => s !== null);
+  return have.length ? have.reduce((a, b) => a + b, 0) / have.length : null;
+};
+
+/** The months of a month's quarter, up to and including that month. */
+export const quarterMonths = (month: string) => {
+  const [y, m] = month.split("-").map(Number);
+  const first = (quarterOf(month) - 1) * 3 + 1;
+  return Array.from({ length: m - first + 1 }, (_, i) => `${y}-${String(first + i).padStart(2, "0")}`);
+};
+
+export const quarterLabel = (month: string) => `Q${quarterOf(month)} ${month.slice(0, 4)}`;
