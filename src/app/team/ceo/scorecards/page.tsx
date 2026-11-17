@@ -108,7 +108,8 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
         </div>
         {monthNav("")}
       </div>
-      <div className="trk-cards">
+      {/* Every card has the same five rows (a subgrid), so names, scores, KPI counts and lists line up across cards. */}
+      <div className="tsc-grid">
         {team.map((m) => {
           const now = scored(m);
           const card = now.card;
@@ -116,30 +117,31 @@ export default async function TeamScorecards({ searchParams }: { searchParams: P
           const counted = rows.filter((r) => r.status === "hit" || r.status === "miss");
           const hit = counted.filter((r) => r.status === "hit").length;
           const accounts = now.accounts;
+          const open = rows.filter((r) => r.status === "open").length;
           const q = quarter(m);
+          const monthShort = monthName(month, "short").split(" ")[0];
           return (
             <Link key={m.user_id} href={here(`person=${m.user_id}&month=${month}`)} className="panel tsc-card">
-              <div>
+              <div className="tsc-head">
                 <h2>{m.display_name}</h2>
                 <p className="note">{card?.role_title || m.title || ROLE[m.role]}{cardFor(m).custom ? " (their own)" : ""} · {accounts.length} account{accounts.length === 1 ? "" : "s"}</p>
               </div>
-              <div className="tsc-scores">
-                <div className="tsc-overall"><b>{pctText(q.overall)}</b><span>Overall, {quarterLabel(month)} so far</span></div>
-                <dl className="trk-dl">
-                  <div><dt>Scorecard</dt><dd>{pctText(q.scorecard)}</dd></div>
-                  <div><dt>Client accounts</dt><dd>{accounts.length ? pctText(q.accountsHealth) : "No accounts"}</dd></div>
-                </dl>
+              <div className="tsc-overall"><b>{pctText(q.overall)}</b><span>Overall, {quarterLabel(month)} so far</span></div>
+              <div className="tsc-parts">
+                <div><b>{pctText(q.scorecard)}</b><span>Scorecard</span></div>
+                <div><b>{accounts.length ? pctText(q.accountsHealth) : "—"}</b><span>{accounts.length ? "Client accounts" : "No accounts yet"}</span></div>
               </div>
-              {card?.kpis.length ? (
-                <>
-                  <p className="tsc-score"><b>{hit}</b> of {counted.length} KPIs on target in {monthName(month, "short").split(" ")[0]}</p>
-                  <div className="prc-meter" role="img" aria-label={`${hit} of ${counted.length} on target`}><i style={{ "--w": counted.length ? hit / counted.length : 0 } as React.CSSProperties} /></div>
-                  <ul className="tsc-misses">
-                    {rows.filter((r) => r.status === "miss").slice(0, 3).map((r) => <li key={r.kpi.id}><span className="pill crit">Off</span> {r.kpi.label}</li>)}
-                    {rows.some((r) => r.status === "open") && <li className="note">{rows.filter((r) => r.status === "open").length} still to enter</li>}
-                  </ul>
-                </>
-              ) : <p className="note">No position matches yet. Open to pick one.</p>}
+              <div className="tsc-month">
+                {!card?.kpis.length ? <p className="note">No position matches yet. Open to pick one.</p>
+                  : counted.length ? <>
+                    <p className="tsc-score"><b>{hit}</b> of {counted.length} KPIs on target in {monthShort}</p>
+                    <div className="prc-meter" role="img" aria-label={`${hit} of ${counted.length} on target`}><i style={{ "--w": hit / counted.length } as React.CSSProperties} /></div>
+                  </> : <p className="tsc-score">No KPIs to score yet in {monthShort}</p>}
+              </div>
+              <ul className="tsc-misses">
+                {rows.filter((r) => r.status === "miss").slice(0, 3).map((r) => <li key={r.kpi.id}><span className="pill crit">Off</span><span>{r.kpi.label}</span></li>)}
+                {open > 0 && <li className="note">{open} still to enter</li>}
+              </ul>
             </Link>
           );
         })}
