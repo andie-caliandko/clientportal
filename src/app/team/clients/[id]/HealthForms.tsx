@@ -15,6 +15,9 @@ type KpiLite = {
   best: number;
   benchmark: string | null;
   history: { week: string; value: number }[];
+  template_key?: string | null;
+  category?: string | null;
+  choices?: string[] | null;
 };
 
 export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: KpiLite; onDone?: () => void }) {
@@ -130,15 +133,25 @@ export function ScorecardForm({ clientId, kpis, notes, thisWeek, onSaved }: {
         <p className="note" style={{ paddingBottom: 12 }}>Saving for the week starting Monday, {label}.</p>
       </div>
       <div className="score-inputs">
-        {kpis.map((k) => (
-          <div className="field" key={k.id}>
-            <label htmlFor={`sc-${k.id}`}>{k.name}</label>
-            <input className="input" id={`sc-${k.id}`} name={`kpi:${k.id}`} inputMode="decimal"
-              defaultValue={k.history.find((h) => h.week === monday)?.value ?? ""}
-              placeholder={k.unit === "percent" ? "e.g. 4.2" : k.unit === "currency" ? "e.g. 32.50" : "e.g. 1250"} />
-            <span className="note">Good {k.good} · Better {k.better} · Best {k.best}</span>
-          </div>
-        ))}
+        {kpis.map((k) => {
+          const saved = k.history.find((h) => h.week === monday)?.value;
+          return (
+            <div className="field" key={k.id}>
+              <label htmlFor={`sc-${k.id}`}>{k.name}</label>
+              {k.choices?.length === 3 ? (
+                // Pick-one: Green, Yellow or Red answer, saved as 2, 1, 0.
+                <select className="sel" id={`sc-${k.id}`} name={`kpi:${k.id}`} defaultValue={saved === undefined ? "" : String(Math.round(saved))}>
+                  <option value="">Not entered</option>
+                  {k.choices.map((c, i) => <option key={c} value={String(2 - i)}>{c}</option>)}
+                </select>
+              ) : (
+                <input className="input" id={`sc-${k.id}`} name={`kpi:${k.id}`} inputMode="decimal" defaultValue={saved ?? ""}
+                  placeholder={k.template_key ? "" : k.unit === "percent" ? "e.g. 4.2" : k.unit === "currency" ? "e.g. 32.50" : "e.g. 1250"} />
+              )}
+              <span className="note">{k.choices?.length === 3 ? k.category : k.template_key ? k.benchmark : `Good ${k.good} · Better ${k.better} · Best ${k.best}`}</span>
+            </div>
+          );
+        })}
       </div>
       <div className="field"><label htmlFor="sc-note">Review notes (optional)</label>
         <textarea className="input" id="sc-note" name="note" defaultValue={notes[monday] ?? ""} style={{ minHeight: 80 }}

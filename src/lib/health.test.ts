@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountHealth, ratingFor, summarize, tierFor, trendFor, weekStart, type Kpi } from "./health";
+import { accountHealth, bands, clientHealth, ratingFor, showKpi, summarize, tierFor, trendFor, weekStart, type Kpi } from "./health";
 
 const engagement: Kpi = { id: "e", name: "Engagement rate", unit: "percent", higher_is_better: true, good: 3, better: 4.5, best: 6, benchmark: null };
 const costPerLead: Kpi = { id: "c", name: "Cost per lead", unit: "currency", higher_is_better: false, good: 40, better: 30, best: 20, benchmark: null };
@@ -60,5 +60,35 @@ describe("summarize and weeks", () => {
   it("snaps any date to that week's Monday", () => {
     expect(weekStart("2026-09-26")).toBe("2026-09-21");
     expect(weekStart("2026-09-21")).toBe("2026-09-21");
+  });
+});
+
+describe("client health template", () => {
+  const g = { rating: "green" as const, trend: null };
+  const r = { rating: "red" as const, trend: null };
+  it("uses the performance KPIs alone until template KPIs have readings", () => {
+    const h = clientHealth([{ template_key: null, summary: r }, { template_key: "updates", summary: null }]);
+    expect(h.overall?.rating).toBe("red");
+    expect(h.performance?.rating).toBe("red");
+  });
+  it("counts each template KPI once and the performance KPIs together as one more", () => {
+    // 3 green template KPIs + performance (2 red KPIs → red) = (2+2+2+0)/4 = 1.5 → green
+    const h = clientHealth([
+      { template_key: "updates", summary: g }, { template_key: "checkin", summary: g }, { template_key: "invoices", summary: g },
+      { template_key: null, summary: r }, { template_key: null, summary: r },
+    ]);
+    expect(h.performance?.rating).toBe("red");
+    expect(h.overall).toEqual({ rating: "green", score: 1.5 });
+  });
+  it("shows pick-one answers by their words and colors them Green, Yellow, Red", () => {
+    const k: Kpi = { id: "x", name: "Check-in", unit: "number", higher_is_better: true, good: 1, better: 2, best: 2, benchmark: null, choices: ["Held", "Rescheduled", "Missed"] };
+    expect([2, 1, 0].map((v) => showKpi(k, v))).toEqual(["Held", "Rescheduled", "Missed"]);
+    expect([2, 1, 0].map((v) => ratingFor(tierFor(v, k)))).toEqual(["green", "yellow", "red"]);
+    expect(bands(k)).toEqual({ green: "Held", yellow: "Rescheduled", red: "Missed" });
+  });
+  it("describes number bands, like satisfaction 8+ green, 6+ yellow, below 6 red", () => {
+    const k: Kpi = { id: "s", name: "Satisfaction", unit: "number", higher_is_better: true, good: 6, better: 8, best: 10, benchmark: null };
+    expect([9, 7, 5].map((v) => ratingFor(tierFor(v, k)))).toEqual(["green", "yellow", "red"]);
+    expect(bands(k)).toEqual({ green: "8 or more", yellow: "6 or more", red: "Below 6" });
   });
 });

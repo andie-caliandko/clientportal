@@ -10,22 +10,14 @@ export const SERVICES = [
 
 export type ServiceId = (typeof SERVICES)[number]["id"];
 
-const IDS = new Set<string>(SERVICES.map((s) => s.id));
-
 export const serviceLabel = (id: string) => SERVICES.find((s) => s.id === id)?.label ?? id;
 
 /** The services ticked on a form, in the standard order. */
 export const readServices = (form: FormData): ServiceId[] =>
   SERVICES.map((s) => s.id).filter((id) => form.getAll("services").map(String).includes(id));
 
-/**
- * Social clients get red / yellow / green scorecards and Daily engagement.
- * A client with no services picked yet is treated as social, so nothing disappears before they're set.
- */
-export const isSocial = (services: string[] | null | undefined) => {
-  const list = (services ?? []).filter((s) => IDS.has(s));
-  return !list.length || list.includes("social");
-};
+/** Only social clients get the Account health tab (red / yellow / green scorecards) and Daily engagement. */
+export const isSocial = (services: string[] | null | undefined) => (services ?? []).includes("social");
 
 /** Whether a client's health is tracked: turned on (the default) and a social client. Untracked clients get no scorecard reminders. */
 export const isHealthTracked = (c: { health_tracked?: boolean | null; services?: string[] | null }) =>

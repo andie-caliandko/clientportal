@@ -2,7 +2,7 @@
  * Team scorecards: each teammate's KPIs with a target for each quarter, filled in each month either
  * from the portal (account health, client growth, reports, tasks, retention) or by hand.
  */
-import { accountHealth, summarize, type Kpi as ClientKpi, type Rating, type Trend } from "./health";
+import { clientHealth, summarize, type Kpi as ClientKpi, type Rating, type Trend } from "./health";
 
 /** Where a KPI's number comes from. Everything but "manual" is worked out from the portal. */
 export const SOURCES = [
@@ -88,13 +88,13 @@ const pct = (n: number, d: number) => (d ? (n / d) * 100 : null);
 
 /** Each account's health as of the end of the month (readings after it are ignored). */
 export function healthAsOf(kpis: KpiRow[], end: string) {
-  const byClient = new Map<string, { rating: Rating; trend: Trend | null }[]>();
+  const byClient = new Map<string, { template_key?: string | null; summary: { rating: Rating; trend: Trend | null } }[]>();
   for (const k of kpis) {
     const s = summarize(k, k.history.filter((h) => h.week < end).map((h) => h.value));
     if (!s) continue;
-    byClient.set(k.client_id, [...(byClient.get(k.client_id) ?? []), { rating: s.rating, trend: s.trend }]);
+    byClient.set(k.client_id, [...(byClient.get(k.client_id) ?? []), { template_key: k.template_key, summary: s }]);
   }
-  return new Map([...byClient].map(([id, list]) => [id, accountHealth(list)?.rating ?? null]));
+  return new Map([...byClient].map(([id, list]) => [id, clientHealth(list).overall?.rating ?? null]));
 }
 
 const isFollowers = (name: string) => /follower/i.test(name) && !/growth|gained|new|reach|non/i.test(name);

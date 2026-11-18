@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { isHealthTracked, isSocial, readServices } from "./services";
 
 describe("services", () => {
-  it("treats social clients, and clients not set up yet, as social", () => {
+  it("only treats clients with Social media as social", () => {
     expect(isSocial(["social", "seo"])).toBe(true);
-    expect(isSocial([])).toBe(true);
-    expect(isSocial(null)).toBe(true);
+    expect(isSocial([])).toBe(false);
+    expect(isSocial(null)).toBe(false);
     expect(isSocial(["website", "ads"])).toBe(false);
   });
   it("reads ticked services in the standard order and ignores unknown ones", () => {
@@ -15,7 +15,8 @@ describe("services", () => {
   });
   it("only tracks health (and sends scorecard reminders) for social clients with tracking on", () => {
     expect(isHealthTracked({ health_tracked: true, services: ["social"] })).toBe(true);
-    expect(isHealthTracked({ health_tracked: null, services: [] })).toBe(true);
+    expect(isHealthTracked({ health_tracked: null, services: ["social"] })).toBe(true);
+    expect(isHealthTracked({ health_tracked: true, services: [] })).toBe(false);
     expect(isHealthTracked({ health_tracked: false, services: ["social"] })).toBe(false);
     expect(isHealthTracked({ health_tracked: true, services: ["website"] })).toBe(false);
   });

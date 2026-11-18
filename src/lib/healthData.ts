@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { accountHealth, summarize, type Kpi } from "./health";
+import { clientHealth, summarize, type Kpi } from "./health";
 
 export type KpiWithHistory = Kpi & {
   client_id: string;
@@ -33,11 +33,8 @@ export async function loadHealth(supabase: SupabaseClient, clientIds?: string[])
 
   const byClient = new Map<string, KpiWithHistory[]>();
   withHistory.forEach((k) => byClient.set(k.client_id, [...(byClient.get(k.client_id) ?? []), k]));
-  const health = new Map(
-    [...byClient].map(([id, list]) => [
-      id,
-      accountHealth(list.filter((k) => k.summary).map((k) => ({ rating: k.summary!.rating, trend: k.summary!.trend }))),
-    ]),
-  );
-  return { byClient, health };
+  const both = new Map([...byClient].map(([id, list]) => [id, clientHealth(list)]));
+  const health = new Map([...both].map(([id, h]) => [id, h.overall]));
+  const performance = new Map([...both].map(([id, h]) => [id, h.performance]));
+  return { byClient, health, performance };
 }

@@ -79,7 +79,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   <td>{member.role !== "creator" && !c.archived_at
                     ? <ServicesPicker id={`svc-${c.id}`} clientId={c.id} initial={c.services ?? []} compact />
                     : (c.services ?? []).length ? <span className="services">{(c.services as string[]).map((s) => <ServiceTag key={s} id={s} />)}</span> : <span className="note">—</span>}</td>
-                  <td>{c.health_tracked === false || !isSocial(c.services) ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
+                  <td>{!isSocial(c.services) ? <span className="not-tracked" title="Only social clients get account health">— Not social</span>
+                    : c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
                     : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
                   <td>{portalStatus(c.id)}</td>

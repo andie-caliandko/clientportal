@@ -10,7 +10,15 @@ export type Kpi = {
   better: number;
   best: number;
   benchmark: string | null;
+  /** Set on the client health template KPIs every social client gets. */
+  template_key?: string | null;
+  category?: string | null;
+  /** Pick-one KPIs: the Green, Yellow and Red answers, saved as 2, 1 and 0. */
+  choices?: string[] | null;
 };
+
+/** The client health template, in order. The KPIs themselves are added by the database (seed_health_template). */
+export const HEALTH_TEMPLATE_KEYS = ["updates", "response", "checkin", "satisfaction", "contact", "deadlines", "assets", "invoices", "renewal"] as const;
 
 export type Rating = "green" | "yellow" | "red";
 export type Tier = "best" | "better" | "good" | "below";
@@ -60,6 +68,18 @@ export function accountHealth(kpis: { rating: Rating; trend: Trend | null }[]): 
   return { rating: score >= 1.5 ? "green" : score >= 0.75 ? "yellow" : "red", score: Math.round(score * 100) / 100 };
 }
 
+/**
+ * A client's overall health. With template KPIs, each of them counts once and the client's own (social performance)
+ * KPIs count together as one more, by their combined color. Without template readings it's the performance KPIs alone.
+ */
+export function clientHealth(kpis: { template_key?: string | null; summary: { rating: Rating; trend: Trend | null } | null }[]) {
+  const rated = (list: typeof kpis) => list.filter((k) => k.summary).map((k) => ({ rating: k.summary!.rating, trend: k.summary!.trend }));
+  const performance = accountHealth(rated(kpis.filter((k) => !k.template_key)));
+  const template = rated(kpis.filter((k) => k.template_key));
+  if (!template.length) return { overall: performance, performance };
+  return { overall: accountHealth([...template, ...(performance ? [{ rating: performance.rating, trend: null }] : [])]), performance };
+}
+
 /** Latest rating and trend for one KPI from its readings (oldest first). */
 export function summarize(kpi: Kpi, readings: number[]) {
   if (!readings.length) return null;
@@ -72,6 +92,21 @@ export function formatKpi(value: number, unit: Kpi["unit"]) {
   if (unit === "percent") return `${Number(value.toFixed(2))}%`;
   if (unit === "currency") return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+/** A reading as the team sees it: the answer for pick-one KPIs, the number otherwise. */
+export function showKpi(kpi: Pick<Kpi, "unit" | "choices">, value: number) {
+  if (kpi.choices?.length === 3) return kpi.choices[2 - Math.max(0, Math.min(2, Math.round(value)))];
+  return formatKpi(value, kpi.unit);
+}
+
+/** What counts as Green, Yellow and Red for a KPI, in words. */
+export function bands(kpi: Kpi): Record<Rating, string> {
+  if (kpi.choices?.length === 3) return { green: kpi.choices[0], yellow: kpi.choices[1], red: kpi.choices[2] };
+  const f = (n: number) => formatKpi(n, kpi.unit);
+  return kpi.higher_is_better
+    ? { green: `${f(kpi.better)} or more`, yellow: `${f(kpi.good)} or more`, red: `Below ${f(kpi.good)}` }
+    : { green: `${f(kpi.better)} or less`, yellow: `${f(kpi.good)} or less`, red: `Over ${f(kpi.good)}` };
 }
 
 /** Monday of the week containing `date` (yyyy-mm-dd), as yyyy-mm-dd. */

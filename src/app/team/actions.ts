@@ -1050,6 +1050,17 @@ export async function setHealthTracked(clientId: string, tracked: boolean): Prom
   return { ok: tracked ? "Tracking health." : "Not tracking health." };
 }
 
+/** Put back any client health template KPIs that were removed from a social client. */
+export async function addHealthTemplate(form: FormData) {
+  await requireEditor();
+  const clientId = String(form.get("client"));
+  const supabase = await createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_client", { c: clientId });
+  if (!canEdit) return;
+  await createAdminClient().rpc("seed_health_template", { c: clientId });
+  revalidatePath(`/team/clients/${clientId}`);
+}
+
 /** A teammate adds, replaces or removes their own photo. */
 export async function setMyPhoto(path: string | null): Promise<Result> {
   const v = await requireTeam();

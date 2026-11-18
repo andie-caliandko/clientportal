@@ -161,16 +161,18 @@ export default async function ClientDetail({
       )}
     </div>
   );
-  const tab = sp.tab === "health" ? "health" : "portal";
-  const tabs = (
+  // Account health is for social clients only. It appears as soon as Social media is one of their services.
+  const social = isSocial(client.services);
+  const tab = sp.tab === "health" && social ? "health" : "portal";
+  const tabs = social ? (
     <div className="tabs" role="tablist" aria-label="Client sections">
       <Link href={`/team/clients/${client.id}`} role="tab" aria-selected={tab === "portal"}>Portal</Link>
       <Link href={`/team/clients/${client.id}?tab=health`} role="tab" aria-selected={tab === "health"}>Account health · internal</Link>
     </div>
-  );
+  ) : null;
 
   if (tab === "health") {
-    const [{ byClient, health }, { data: noteRows }] = await Promise.all([
+    const [{ byClient, health, performance }, { data: noteRows }] = await Promise.all([
       loadHealth(supabase, [client.id]),
       supabase.from("scorecard_notes").select("week, note").eq("client_id", client.id),
     ]);
@@ -194,9 +196,9 @@ export default async function ClientDetail({
           <span className="note">Pick a time frame, then share it with the client or the team.</span>
         </div>
         <HealthTab clientId={client.id} clientName={client.name} kpis={byClient.get(client.id) ?? []}
-          health={health.get(client.id) ?? null}
+          health={health.get(client.id) ?? null} performance={performance.get(client.id) ?? null}
           notes={Object.fromEntries((noteRows ?? []).map((n) => [n.week, n.note]))}
-          thisWeek={weekStart(todayLocal)} canEdit={canEdit} tracked={client.health_tracked !== false && isSocial(client.services)} />
+          thisWeek={weekStart(todayLocal)} canEdit={canEdit} tracked={client.health_tracked !== false} />
       </section>
     );
   }

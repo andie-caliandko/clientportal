@@ -41,7 +41,8 @@ export default async function ReportPage({ params, searchParams }: {
       ? supabase.from("scorecard_notes").select("week, note").eq("client_id", client.id).gte("week", from).lte("week", to).order("week")
       : Promise.resolve({ data: [] as { week: string; note: string }[] }),
   ]);
-  const kpis = (byClient.get(client.id) ?? []).map((k) => ({ kpi: k, r: kpiReport(k, k.history, from, to) }));
+  // Performance reports: the client health template (relationship, invoices, renewal) stays internal.
+  const kpis = (byClient.get(client.id) ?? []).filter((k) => !k.template_key).map((k) => ({ kpi: k, r: kpiReport(k, k.history, from, to) }));
   const withData = kpis.filter((k) => k.r.last !== null);
   const improved = withData.filter((k) => k.r.better === true).length;
   const onTarget = withData.filter((k) => k.r.tier && k.r.tier !== "below").length;
