@@ -118,6 +118,10 @@ const coreFor = cache(async (agency: PortalCtx["agency"], client: PortalCtx["cli
     steps: allSteps,
     done,
     next: allSteps.find((s) => !done.has(s.id)),
+    /** Every onboarding task is done (by them or marked done by the team), or none are left: the checklist goes away. */
+    onboarded: allSteps.every((s) => done.has(s.id)),
+    contractUrl: client.dubsado_project_url ?? ((steps.data ?? []) as Step[]).find((s) => s.kind === "contract")?.action_url ?? null,
+    answered: (sentForms.data ?? []).some((r) => r.submitted_at),
     pending: cals.find((c) => c.status === "pending"),
     past: cals.filter((c) => c.status !== "pending"),
     amName,
@@ -228,11 +232,11 @@ function Steps({ steps, done, next, preview, contractUrl }: { steps: Step[]; don
   return (
     <section className="card" aria-labelledby="h-steps">
       <div className="sec-head">
-        <h2 id="h-steps">Getting started</h2>
-        <span className="note">{done.size} of {steps.length} done</span>
+        <h2 id="h-steps">Onboarding tasks</h2>
+        <span className="note">{steps.filter((s) => done.has(s.id)).length} of {steps.length} done</span>
       </div>
       <div className="progress" aria-hidden="true" style={{ marginBottom: 6 }}>
-        <i style={{ width: `${steps.length ? (done.size / steps.length) * 100 : 0}%` }} />
+        <i style={{ width: `${steps.length ? (steps.filter((s) => done.has(s.id)).length / steps.length) * 100 : 0}%` }} />
       </div>
       <ul className="steps">
         {steps.map((s, i) => (
@@ -310,7 +314,7 @@ export async function HomeSection(ctx: PortalCtx) {
       {d.next && (
         <section className="task-card next" aria-label="Your next step">
           <div>
-            <p className="eyebrow">Your next step to get started</p>
+            <p className="eyebrow">Your next onboarding task</p>
             <h2>{d.next.title}</h2>
             <p>{stepHelp(d.next, ctx.client.dubsado_project_url, false)}</p>
           </div>
@@ -318,12 +322,14 @@ export async function HomeSection(ctx: PortalCtx) {
         </section>
       )}
       <div className="home-grid">
-        <Link className="card tile" href={`${ctx.base}/tasks`}>
-          <p className="eyebrow">Getting started</p>
-          <b className="big">{d.done.size} of {d.steps.length}</b>
-          <div className="progress"><i style={{ width: `${d.steps.length ? (d.done.size / d.steps.length) * 100 : 0}%` }} /></div>
-          <span className="note">See your to-dos →</span>
-        </Link>
+        {!d.onboarded && (
+          <Link className="card tile" href={`${ctx.base}/tasks`}>
+            <p className="eyebrow">Onboarding tasks</p>
+            <b className="big">{d.steps.filter((s) => d.done.has(s.id)).length} of {d.steps.length}</b>
+            <div className="progress"><i style={{ width: `${d.steps.length ? (d.steps.filter((s) => d.done.has(s.id)).length / d.steps.length) * 100 : 0}%` }} /></div>
+            <span className="note">See your onboarding tasks →</span>
+          </Link>
+        )}
         <Link className="card tile" href={`${ctx.base}/messages`}>
           <p className="eyebrow">Latest message</p>
           {last ? <p className="quote">&ldquo;{last.body.slice(0, 90)}{last.body.length > 90 ? "…" : ""}&rdquo;</p> : <p className="quote">No messages yet. Say hello!</p>}
@@ -354,7 +360,7 @@ export async function TasksSection(ctx: PortalCtx) {
         )}
       </section>
       {d.pending ? <ApprovalCard cal={d.pending} agency={ctx.agency} preview={ctx.preview} /> : null}
-      <Steps steps={d.steps} done={d.done} next={d.next} preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />
+      {!d.onboarded && <Steps steps={d.steps} done={d.done} next={d.next} preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />}
       {d.past.length > 0 && (
         <section className="card" aria-labelledby="h-hist">
           <div className="sec-head"><h2 id="h-hist">Past content calendars</h2></div>
@@ -485,9 +491,31 @@ export async function FilesSection(ctx: PortalCtx) {
     : [];
   const urlFor = new Map(urls.map((u) => [u.path, u.signedUrl]));
   const short = ctx.agency.brand.shortName ?? ctx.agency.name;
+  const core = await loadCore(ctx);
   return (
     <>
       <PageHead title="Files" sub={`Everything you've sent us. Your ${short} team can see all of it.`} />
+      {(core.contractUrl || core.answered) && (
+        <section className="card" aria-labelledby="h-agreement">
+          <div className="sec-head"><h2 id="h-agreement">Your contract{core.answered ? " and answers" : ""}</h2></div>
+          <ul className="list">
+            {core.contractUrl && (
+              <li>
+                <span><b>Your contract</b><br /><span className="note">Open it any time to look it over.</span></span>
+                <span className="r">{ctx.preview ? <button className="btn sm line" disabled>View contract</button>
+                  : <a className="btn sm line" href={core.contractUrl} target="_blank" rel="noreferrer">View contract</a>}</span>
+              </li>
+            )}
+            {core.answered && (
+              <li>
+                <span><b>Your questionnaire answers</b><br /><span className="note">What you told us when we got started.</span></span>
+                <span className="r">{ctx.preview ? <button className="btn sm line" disabled>View answers</button>
+                  : <Link className="btn sm line" href="/portal/questionnaire">View answers</Link>}</span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
       {ctx.client.drive_shared && ctx.client.drive_folder_id && (
         <section className="card drive-card">
           <div>
