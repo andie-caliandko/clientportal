@@ -113,7 +113,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         <p>{summary.length ? `You have ${summary.join(", ")}.` : "You're all caught up. Nice work."}</p>
       </div>
       <div className="top">
-        <h2 style={{ fontSize: "2rem" }}>Tasks</h2>
+        <div className="row" style={{ alignItems: "center", gap: 14 }}>
+          <h2 style={{ fontSize: "2rem" }}>Tasks</h2>
+          {canEdit && <NewTask clients={clients ?? []} people={people} />}
+        </div>
         {member.role === "admin" && (
           <WhoSelect value={who} options={[{ value: "me", label: "Me" }, ...(members ?? []).filter((m) => m.user_id !== userId).map((m) => ({ value: m.user_id, label: m.display_name })), { value: "all", label: "Everyone" }]} />
         )}

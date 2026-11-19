@@ -372,7 +372,9 @@ td.kn { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stat span { font-size: .84rem; color: var(--ink-2); }
 .stat.crit b { color: var(--crit); }
 .stat.warn b { color: var(--warn); }
-.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+/* minmax(0, 1fr): a long link or word in one card can't stretch its column wider than the others. */
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.board .task { overflow-wrap: anywhere; }
 .col { background: var(--surface-2); border-radius: 18px; padding: 12px; display: grid; gap: 10px; }
 .col h2 { font-family: var(--label); font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; display: flex; justify-content: space-between; padding: 4px 6px; color: var(--ink-2); }
 .task { background: var(--surface); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; border: 1px solid var(--line); }
