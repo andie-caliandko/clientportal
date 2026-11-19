@@ -310,6 +310,20 @@ export async function HomeSection(ctx: PortalCtx) {
       )}
       {!d.onboarded && <Steps steps={d.steps} done={d.done} next={d.next} preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />}
       <div className="home-grid">
+        {d.teamTasks.length ? (
+          <a className="card tile" href="#h-tasks">
+            <p className="eyebrow">Your tasks</p>
+            <b className="big">{d.teamTasks.length} to do</b>
+            <p className="note">{d.teamTasks.slice(0, 2).map((t) => t.title).join(" · ")}{d.teamTasks.length > 2 ? " …" : ""}</p>
+            <span className="note">See your tasks ↑</span>
+          </a>
+        ) : (
+          <div className="card tile">
+            <p className="eyebrow">Your tasks</p>
+            <b className="big">All done</b>
+            <p className="note">No tasks from your team right now. You&apos;re up to date.</p>
+          </div>
+        )}
         <Link className="card tile" href={`${ctx.base}/messages`}>
           <p className="eyebrow">Messages</p>
           {last ? <>
