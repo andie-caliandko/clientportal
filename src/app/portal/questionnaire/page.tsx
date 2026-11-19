@@ -14,7 +14,7 @@ export default async function QuestionnairePage({ searchParams }: { searchParams
   const sent = inOrder((sentRows ?? []) as SentForm[]);
   // No questionnaire picked: the next one waiting, or the first to look back over.
   const current = sent.find((r) => r.form === asked) ?? (asked ? null : nextOpen(sent) ?? sent[0]);
-  if (!current) redirect(sent.length ? "/portal/questionnaire" : "/portal/tasks");
+  if (!current) redirect(sent.length ? "/portal/questionnaire" : "/portal");
 
   const [{ data: questions }, { data: answers }] = await Promise.all([
     supabase.from("questions").select("*").eq("agency_id", agency.id).eq("form", current.form).order("position"),
@@ -30,7 +30,7 @@ export default async function QuestionnairePage({ searchParams }: { searchParams
     const short = agency.brand.shortName ?? agency.name;
     return (
       <main className="q-view">
-        <Link href="/portal/tasks" className="note">← Back to your portal</Link>
+        <Link href="/portal" className="note">← Back to your portal</Link>
         <div>
           <p className="eyebrow">{client.name}</p>
           <h1>Your {title.toLowerCase()}</h1>

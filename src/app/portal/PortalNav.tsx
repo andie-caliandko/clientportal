@@ -23,7 +23,9 @@ const LABELS: Record<Section, string> = {
 };
 
 export function PortalNav({ base, openTasks, newMessages, showShoots }: { base: string; openTasks: number; newMessages: number; showShoots: boolean }) {
-  const current = (usePathname().slice(base.length).split("/")[1] || "home") as Section;
+  const path = (usePathname().slice(base.length).split("/")[1] || "home") as Section;
+  // Tasks and Activity live on Home now.
+  const current: Section = path === "tasks" || path === "activity" ? "home" : path;
   // Opening Messages reads them; hide the count from then on (the menu doesn't reload between pages).
   const [readThrough, setReadThrough] = useState(0);
   useEffect(() => {
@@ -32,11 +34,11 @@ export function PortalNav({ base, openTasks, newMessages, showShoots }: { base: 
   const unread = current === "messages" ? 0 : Math.max(0, newMessages - readThrough);
   return (
     <nav className="nav" aria-label="Your portal">
-      {(Object.keys(LABELS) as Section[]).filter((s) => s !== "shoots" || showShoots || current === "shoots").map((s) => (
+      {(Object.keys(LABELS) as Section[]).filter((s) => s !== "tasks" && s !== "activity" && (s !== "shoots" || showShoots || current === "shoots")).map((s) => (
         <Link key={s} href={s === "home" ? base : `${base}/${s}`} aria-current={s === current ? "page" : undefined}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">{ICONS[s]}</svg>
           {LABELS[s]}
-          {s === "tasks" && openTasks > 0 && <span className="count">{openTasks}</span>}
+          {s === "home" && openTasks > 0 && <span className="count">{openTasks}</span>}
           {s === "messages" && unread > 0 && <span className="count" aria-label={`${unread} new`}>{unread}</span>}
         </Link>
       ))}

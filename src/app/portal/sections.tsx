@@ -268,7 +268,7 @@ export async function HomeSection(ctx: PortalCtx) {
   const d = await loadCore(ctx);
   const { data: last } = await d.supabase
     .from("messages")
-    .select("author_name, body, created_at")
+    .select("author_name, author_kind, body, created_at")
     .eq("client_id", ctx.client.id)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -280,7 +280,8 @@ export async function HomeSection(ctx: PortalCtx) {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const busy = d.pending || d.next || d.teamTasks.length;
+  const busy = d.pending || d.openCalls.length || d.teamTasks.length || !d.onboarded;
+  const day = (at: string) => new Date(at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric" });
 
   return (
     <>
@@ -302,77 +303,42 @@ export async function HomeSection(ctx: PortalCtx) {
         </section>
       ))}
       {d.teamTasks.length > 0 && (
-        <section className="task-card plain" aria-label="From your team">
-          <div>
-            <p className="eyebrow">From your team</p>
-            <h2>You have {d.teamTasks.length} task{d.teamTasks.length > 1 ? "s" : ""} from {d.teamTasks[0].from}</h2>
-            <p>{d.teamTasks.map((t) => t.title).join(" · ")}</p>
-          </div>
-          <Link className="btn lg" href={`${ctx.base}/tasks`}>See your tasks</Link>
+        <section className="card" aria-labelledby="h-tasks">
+          <div className="sec-head"><h2 id="h-tasks">Your tasks</h2><span className="note">{d.teamTasks.length} to do</span></div>
+          <ClientTasks tasks={d.teamTasks} folder={`${ctx.agency.id}/${ctx.client.id}/tasks`} readOnly={ctx.preview} />
         </section>
       )}
-      {d.next && (
-        <section className="task-card next" aria-label="Your next step">
-          <div>
-            <p className="eyebrow">Your next onboarding task</p>
-            <h2>{d.next.title}</h2>
-            <p>{stepHelp(d.next, ctx.client.dubsado_project_url, false)}</p>
-          </div>
-          <StepAction step={d.next} primary preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />
-        </section>
-      )}
+      {!d.onboarded && <Steps steps={d.steps} done={d.done} next={d.next} preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />}
       <div className="home-grid">
-        {!d.onboarded && (
-          <Link className="card tile" href={`${ctx.base}/tasks`}>
-            <p className="eyebrow">Onboarding tasks</p>
-            <b className="big">{d.steps.filter((s) => d.done.has(s.id)).length} of {d.steps.length}</b>
-            <div className="progress"><i style={{ width: `${d.steps.length ? (d.steps.filter((s) => d.done.has(s.id)).length / d.steps.length) * 100 : 0}%` }} /></div>
-            <span className="note">See your onboarding tasks →</span>
-          </Link>
-        )}
         <Link className="card tile" href={`${ctx.base}/messages`}>
-          <p className="eyebrow">Latest message</p>
-          {last ? <p className="quote">&ldquo;{last.body.slice(0, 90)}{last.body.length > 90 ? "…" : ""}&rdquo;</p> : <p className="quote">No messages yet. Say hello!</p>}
-          <span className="note">{last ? `${last.author_name} →` : "Open messages →"}</span>
+          <p className="eyebrow">Messages</p>
+          {last ? <>
+            <p className="note">{last.author_kind === "client" ? "Your last message" : `From ${last.author_name}`} · {day(last.created_at)}</p>
+            <p className="quote">&ldquo;{last.body.slice(0, 90)}{last.body.length > 90 ? "…" : ""}&rdquo;</p>
+          </> : <p className="quote">No messages yet. Say hello!</p>}
+          <span className="note">{last && last.author_kind !== "client" ? "Reply →" : "Open messages →"}</span>
         </Link>
         <Link className="card tile" href={`${ctx.base}/${latestDoc?.kind === "report" ? "analytics" : "strategy"}`}>
-          <p className="eyebrow">Latest from your team</p>
-          <p className="quote">{latestDoc ? latestDoc.title : "Your strategy will show up here once it's ready."}</p>
-          <span className="note">{latestDoc ? "Read it →" : "Strategy →"}</span>
+          <p className="eyebrow">Newest document</p>
+          {latestDoc ? <>
+            <p className="note">{latestDoc.kind === "report" ? "Analytics report" : "Strategy"} · added {day(latestDoc.created_at)}</p>
+            <p className="quote">{latestDoc.title}</p>
+          </> : <p className="quote">Your strategy and analytics reports will show up here once they&apos;re ready.</p>}
+          <span className="note">{latestDoc ? "Open it →" : "Strategy →"}</span>
         </Link>
       </div>
-    </>
-  );
-}
-
-export async function TasksSection(ctx: PortalCtx) {
-  const d = await loadCore(ctx);
-  return (
-    <>
-      <PageHead title="Tasks" sub="Things we need from you. We'll email you when something new shows up here." />
-      {ctx.params.done && DONE_MESSAGES[ctx.params.done] && <p className="flash">{DONE_MESSAGES[ctx.params.done]}</p>}
-      <section className="card" aria-labelledby="h-tasks">
-        <div className="sec-head"><h2 id="h-tasks">From your team</h2><span className="note">{d.teamTasks.length} to do</span></div>
-        {d.teamTasks.length ? (
-          <ClientTasks tasks={d.teamTasks} folder={`${ctx.agency.id}/${ctx.client.id}/tasks`} readOnly={ctx.preview} />
-        ) : (
-          <p className="note">Nothing from your team right now.</p>
-        )}
-      </section>
-      {d.pending ? <ApprovalCard cal={d.pending} agency={ctx.agency} preview={ctx.preview} /> : null}
-      {!d.onboarded && <Steps steps={d.steps} done={d.done} next={d.next} preview={ctx.preview} contractUrl={ctx.client.dubsado_project_url} />}
       {d.past.length > 0 && (
         <section className="card" aria-labelledby="h-hist">
           <div className="sec-head"><h2 id="h-hist">Past content calendars</h2></div>
           <ul className="list">
-            {d.past.map((c) => (
+            {d.past.slice(0, 6).map((c) => (
               <li key={c.id}>
                 <b>{monthName(c.month)}</b>
                 <span className="r">{c.status === "approved" ? <span className="pill ok">Approved by you</span> : <span className="pill info">Approved automatically</span>}</span>
               </li>
             ))}
           </ul>
-          {d.past.some((c) => c.status === "auto_approved") && (
+          {d.past.slice(0, 6).some((c) => c.status === "auto_approved") && (
             <p className="note" style={{ marginTop: 10 }}>&quot;Approved automatically&quot; means we didn&apos;t hear back in time, so your posts went out as planned.</p>
           )}
         </section>
@@ -425,57 +391,6 @@ export async function MessagesSection(ctx: PortalCtx) {
           <p className="note">Clients type their messages and attach files here.</p>
         ) : (
           <MessageComposer folder={`${ctx.agency.id}/${ctx.client.id}/messages`} placeholder={`Write to your ${short} team…`} send={sendMessage} />
-        )}
-      </section>
-    </>
-  );
-}
-
-export async function ActivitySection(ctx: PortalCtx) {
-  const d = await loadCore(ctx);
-  const [msgs, uploads, docs, finished] = await Promise.all([
-    d.supabase.from("messages").select("author_name, author_kind, created_at").eq("client_id", ctx.client.id).order("created_at", { ascending: false }).limit(40),
-    d.supabase.from("uploads").select("kind, created_at").eq("client_id", ctx.client.id).order("created_at", { ascending: false }).limit(200),
-    d.supabase.from("documents").select("title, kind, created_at").eq("client_id", ctx.client.id),
-    d.supabase.from("tasks").select("title, created_at, completed_at").eq("client_id", ctx.client.id).not("client_assignee_id", "is", null),
-  ]);
-  type Item = { at: string; text: string; who: "you" | "team" | "auto" };
-  const items: Item[] = [];
-  (msgs.data ?? []).forEach((m) => items.push({ at: m.created_at, who: m.author_kind === "client" ? "you" : "team", text: `${m.author_name} sent a message` }));
-  d.steps.forEach((s) => d.done.has(s.id) && items.push({ at: d.done.get(s.id)!, who: "you", text: `Finished: ${s.title}` }));
-  // Group uploads made the same day into one line.
-  const upByDay = new Map<string, { kind: string; n: number; at: string }>();
-  (uploads.data ?? []).forEach((u) => {
-    const key = `${u.created_at.slice(0, 10)}-${u.kind}`;
-    const cur = upByDay.get(key);
-    upByDay.set(key, { kind: u.kind, n: (cur?.n ?? 0) + 1, at: cur?.at ?? u.created_at });
-  });
-  upByDay.forEach((u) => items.push({ at: u.at, who: "you", text: `${u.n} ${u.kind} file${u.n > 1 ? "s" : ""} uploaded` }));
-  (docs.data ?? []).forEach((doc) => items.push({ at: doc.created_at, who: "team", text: `${doc.title} added to ${doc.kind === "report" ? "Analytics" : "Strategy"}` }));
-  [d.pending, ...d.past].forEach((c) => {
-    if (!c) return;
-    const m = monthName(c.month).split(" ")[0];
-    items.push({ at: c.sent_at, who: "team", text: `Your ${m} content calendar was sent for approval` });
-    if (c.resolved_at) items.push({ at: c.resolved_at, who: c.status === "approved" ? "you" : "auto", text: c.status === "approved" ? `${m} content approved` : `${m} content approved automatically (no reply within the window)` });
-  });
-  (finished.data ?? []).forEach((t) => {
-    items.push({ at: t.created_at, who: "team", text: `New task from your team: ${t.title}` });
-    if (t.completed_at) items.push({ at: t.completed_at, who: "you", text: `Finished: ${t.title}` });
-  });
-  items.sort((a, b) => b.at.localeCompare(a.at));
-  const fmt = (at: string) => new Date(at).toLocaleDateString("en-US", { timeZone: ctx.agency.timezone, month: "short", day: "numeric", year: "numeric" });
-  return (
-    <>
-      <PageHead title="Activity" sub="Everything that's happened on your account, newest first." />
-      <section className="card">
-        {items.length ? (
-          <ol className="timeline">
-            {items.slice(0, 80).map((it, i) => (
-              <li key={i}><span className={`tdot ${it.who}`} aria-hidden="true" /><span>{it.text}</span><time>{fmt(it.at)}</time></li>
-            ))}
-          </ol>
-        ) : (
-          <p className="note">Nothing yet. Your activity will show up here as you get started.</p>
         )}
       </section>
     </>

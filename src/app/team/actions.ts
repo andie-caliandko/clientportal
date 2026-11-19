@@ -47,11 +47,11 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
       status: "waiting", source: "manual", created_by: v.userId,
     });
     if (error) return { error: "That task couldn't be saved." };
-    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal" });
     await emailClient(
       clientId,
       `${v.member.display_name} added a task for you`,
-      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(dueAt, v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(dueAt, v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
     );
     revalidatePath("/team");
     revalidatePath(`/team/clients/${clientId}`);
@@ -79,11 +79,11 @@ export async function addTask(_: Result, form: FormData): Promise<Result> {
       created_by: v.userId,
     });
     if (error) return { error: "That task couldn't be saved." };
-    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" }, [assignee]);
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal" }, [assignee]);
     await sendEmail(
       [contact.email],
       `${v.member.display_name} added a task for you`,
-      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(dueAt, v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(dueAt, v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
     );
     revalidatePath("/team");
     if (clientId) revalidatePath(`/team/clients/${clientId}`);
@@ -637,19 +637,19 @@ export async function updateTask(_: Result, form: FormData): Promise<Result> {
   }
   const becameClientFacing = everyone || (kind === "team" && !before.auto && before.source !== "rella");
   if (clientId && status === "waiting" && (before.status !== "waiting" || (everyone && before.client_assignee_id)) && becameClientFacing) {
-    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" });
+    await notifyClient(clientId, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal" });
     await emailClient(
       clientId,
       `New task from your team: ${title}`,
-      `Your team added a task for you:\n\n${title}${note ? `\n${note}` : ""}\n\nOpen your portal to see it and mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+      `Your team added a task for you:\n\n${title}${note ? `\n${note}` : ""}\n\nOpen your portal to see it and mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
     );
   }
   if (contact && assignee !== before.client_assignee_id && status !== "done") {
-    await notifyClient(clientId!, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal/tasks" }, [assignee]);
+    await notifyClient(clientId!, { kind: "task", title: `New task: ${title}`, body: note, link: "/portal" }, [assignee]);
     await sendEmail(
       [contact.email],
       `${v.member.display_name} added a task for you`,
-      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(new Date(dueAt), v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+      `${title}${note ? `\n\n${note}` : ""}${dueAt ? `\n\nDue ${formatDue(new Date(dueAt), v.agency.timezone)}.` : ""}\n\nOpen your portal to mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
     );
   }
   revalidatePath("/team");
@@ -919,11 +919,11 @@ export async function setTaskStatus(id: string, status: string) {
     .eq("id", id);
   if (status === "done") await scheduleNextRepeat(id);
   if (status === "waiting" && before.client_id && !before.client_assignee_id && !before.auto && before.source !== "rella") {
-    await notifyClient(before.client_id, { kind: "task", title: `New task: ${before.title}`, body: before.note, link: "/portal/tasks" });
+    await notifyClient(before.client_id, { kind: "task", title: `New task: ${before.title}`, body: before.note, link: "/portal" });
     await emailClient(
       before.client_id,
       `New task from your team: ${before.title}`,
-      `Your team added a task for you:\n\n${before.title}${before.note ? `\n${before.note}` : ""}\n\nOpen your portal to see it and mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal/tasks`,
+      `Your team added a task for you:\n\n${before.title}${before.note ? `\n${before.note}` : ""}\n\nOpen your portal to see it and mark it done.\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
     );
   }
   revalidatePath("/team");
