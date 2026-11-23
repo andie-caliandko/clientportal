@@ -173,14 +173,15 @@ export function HealthTab({ clientId, clientName, kpis, health, performance, rel
       <div className="panel" style={{ display: "grid", gap: 14 }}>
         {!tracked ? <div><p className="eyebrow">Account health</p><p className="not-tracked big">Not tracked</p></div> : (
           <div className="health-tiles">
-            <ColorTile label="Overall" sub="Both, averaged" h={health} big />
+            <ColorTile label="Overall" sub="70% relationship, 30% social" h={health} big />
             <ColorTile label="Social performance" sub="Weekly scorecard" h={performance} />
             <ColorTile label="Relationship" sub={`Monthly client check${enteredThisMonth ? ` · ${monthName(monthKey)}` : ""}`} h={relationship} />
           </div>
         )}
         <p className="note">
           Each KPI is Green, Yellow or Red. Improving adds a little and slipping takes a little away. Social performance averages the
-          social numbers, Relationship averages the monthly client check, and Overall is the two together.
+          social numbers, Relationship averages Mon/Fri updates and the monthly client check, and Overall counts Relationship
+          for 70% and Social performance for 30%.
         </p>
         {canEdit && <TrackHealthToggle clientId={clientId} tracked={tracked} />}
       </div>

@@ -70,18 +70,23 @@ export function accountHealth(kpis: { rating: Rating; trend: Trend | null }[]): 
   return { rating: bandFor(score), score: Math.round(score * 100) / 100 };
 }
 
+/** How much Relationship counts toward Overall; Social performance is the rest. */
+export const RELATIONSHIP_WEIGHT = 0.7;
+
 const bandFor = (score: number): Rating => (score >= 1.5 ? "green" : score >= 0.75 ? "yellow" : "red");
 
 /**
  * A client's health in three colors. Social performance comes from their own KPIs, Relationship from the
- * client health template, and Overall is the two averaged (or whichever one has readings).
+ * client health template, and Overall weighs Relationship 70% and Social performance 30% (clients leave over
+ * the relationship more than the numbers). With only one of them scored, Overall is that one.
  */
 export function clientHealth(kpis: { template_key?: string | null; summary: { rating: Rating; trend: Trend | null } | null }[]) {
   const rated = (list: typeof kpis) => list.filter((k) => k.summary).map((k) => ({ rating: k.summary!.rating, trend: k.summary!.trend }));
   const performance = accountHealth(rated(kpis.filter((k) => !k.template_key)));
   const relationship = accountHealth(rated(kpis.filter((k) => k.template_key)));
-  const both = [performance, relationship].filter(Boolean) as { rating: Rating; score: number }[];
-  const score = both.length ? Math.round((both.reduce((n, h) => n + h.score, 0) / both.length) * 100) / 100 : null;
+  const score = performance && relationship
+    ? Math.round((RELATIONSHIP_WEIGHT * relationship.score + (1 - RELATIONSHIP_WEIGHT) * performance.score) * 100) / 100
+    : relationship?.score ?? performance?.score ?? null;
   return { overall: score === null ? null : { rating: bandFor(score), score }, performance, relationship };
 }
 

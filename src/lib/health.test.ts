@@ -71,15 +71,15 @@ describe("client health template", () => {
     expect(h.overall?.rating).toBe("red");
     expect(h.performance?.rating).toBe("red");
   });
-  it("averages Social performance and Relationship into the overall color", () => {
-    // Relationship: 3 green = 2; performance: 2 red = 0; average 1 → yellow
+  it("weighs Relationship 70% and Social performance 30% in the overall color", () => {
+    // Relationship: 3 green = 2; performance: 2 red = 0; 0.7 × 2 + 0.3 × 0 = 1.4 → yellow
     const h = clientHealth([
       { template_key: "updates", summary: g }, { template_key: "checkin", summary: g }, { template_key: "invoices", summary: g },
       { template_key: null, summary: r }, { template_key: null, summary: r },
     ]);
     expect(h.performance?.rating).toBe("red");
     expect(h.relationship?.rating).toBe("green");
-    expect(h.overall).toEqual({ rating: "yellow", score: 1 });
+    expect(h.overall).toEqual({ rating: "yellow", score: 1.4 });
   });
   it("saves monthly readings on the first of the month", () => {
     expect(monthOf("2026-11-23")).toBe("2026-11-01");
