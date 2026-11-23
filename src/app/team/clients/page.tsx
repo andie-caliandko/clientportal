@@ -77,7 +77,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     : c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
                     : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
-                  <td>{pill[latestCal.get(c.id) ?? ""] ?? <span className="note">None yet</span>}</td>
+                  {/* Content calendars are for social clients; everyone else gets a dash (it follows their services). */}
+                  <td>{!isSocial(c.services) ? <span className="note" title="Only social clients get content calendars">—</span>
+                    : pill[latestCal.get(c.id) ?? ""] ?? <span className="note">None yet</span>}</td>
                   <td>{portalStatus(c.id)}</td>
                   {isAdmin && (
                     <td>
