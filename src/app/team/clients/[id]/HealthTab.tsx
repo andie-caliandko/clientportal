@@ -220,17 +220,18 @@ export function HealthTab({ clientId, clientName, kpis, health, performance, rel
         )}
       </div>
 
+      {/* History stays folded away until someone opens it. */}
       {weeks.length > 0 && (
-        <div className="panel">
-          <h2>Weekly history</h2>
+        <details className="panel history-fold">
+          <summary><h2>Weekly history</h2><span className="note">Last {weeks.length} week{weeks.length === 1 ? "" : "s"} · open to see or edit</span></summary>
           {history(weekly, weeks, false)}
-        </div>
+        </details>
       )}
       {months.length > 0 && (
-        <div className="panel">
-          <h2>Past months</h2>
+        <details className="panel history-fold">
+          <summary><h2>Past months</h2><span className="note">Last {months.length} month{months.length === 1 ? "" : "s"} · open to see or edit</span></summary>
           {history(monthly, months, true)}
-        </div>
+        </details>
       )}
     </div>
   );

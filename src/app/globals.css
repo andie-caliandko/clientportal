@@ -841,6 +841,12 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .kpi-table .kpi-goal { width: 1%; white-space: nowrap; }
 .kpi-table .kpi-best { padding-right: 1.75em; }
 .kpi-table th.kpi-latest, .kpi-table td.kpi-latest { text-align: left; }
+.history-fold summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; cursor: pointer; list-style: none; }
+.history-fold summary::-webkit-details-marker { display: none; }
+.history-fold summary::before { content: "▸"; color: var(--ink-2); transition: transform .15s; }
+.history-fold[open] summary::before { transform: rotate(90deg); }
+.history-fold[open] summary { margin-bottom: 14px; }
+@media (prefers-reduced-motion: reduce) { .history-fold summary::before { transition: none; } }
 .health-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .health-tile { display: grid; gap: 6px; align-content: start; padding: 14px 16px; border-radius: 14px; background: var(--soft); }
 .kpi-table .band { font-size: .85rem; min-width: 9ch; }
