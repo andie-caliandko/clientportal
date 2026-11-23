@@ -16,11 +16,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   // Only admins can see archived clients.
   const showArchived = isAdmin && sp.archived === "1";
   const supabase = await createClient();
-  const [{ data: clients }, { data: steps }, { data: status }, { data: cals }, { data: members }, { data: portalPeople }] = await Promise.all([
+  const [{ data: clients }, { data: cals }, { data: members }, { data: portalPeople }] = await Promise.all([
     // Everything, so this still works before health_tracked exists.
     supabase.from("clients").select("*").order("name"),
-    supabase.from("onboarding_steps").select("id").eq("agency_id", agency.id),
-    supabase.from("client_step_status").select("client_id"),
     supabase.from("content_calendars").select("client_id, status, month").order("month", { ascending: false }),
     supabase.from("agency_members").select("user_id, display_name, role").eq("agency_id", agency.id).order("display_name"),
     // Everything, so this still works before joined_at exists.
@@ -38,9 +36,6 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const all = clients ?? [];
   const list = all.filter((c) => (showArchived ? c.archived_at : !c.archived_at));
   const archivedCount = all.filter((c) => c.archived_at).length;
-  const total = steps?.length ?? 0;
-  const doneBy = new Map<string, number>();
-  (status ?? []).forEach((s) => doneBy.set(s.client_id, (doneBy.get(s.client_id) ?? 0) + 1));
   const latestCal = new Map<string, string>();
   (cals ?? []).forEach((c) => { if (!latestCal.has(c.client_id)) latestCal.set(c.client_id, c.status); });
   const name = Object.fromEntries((members ?? []).map((m) => [m.user_id, m.display_name]));
@@ -65,10 +60,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       {showArchived && <p className="note">Archived clients keep all their files, messages and history. Their portal is closed. Open one to restore it.</p>}
       <div className="tablewrap">
         <table>
-          <thead><tr><th>Client</th><th>Services</th><th>Health · internal</th><th>Account manager</th><th>Portal</th><th>Onboarding</th><th>Latest content calendar</th>{isAdmin && <th><span className="sr">Archive</span></th>}</tr></thead>
+          <thead><tr><th>Client</th><th>Services</th><th>Health · internal</th><th>Account manager</th><th>Latest content calendar</th><th>Portal</th>{isAdmin && <th><span className="sr">Archive</span></th>}</tr></thead>
           <tbody>
             {list.map((c) => {
-              const done = doneBy.get(c.id) ?? 0;
               return (
                 <tr key={c.id}>
                   <td>
@@ -83,9 +77,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     : c.health_tracked === false ? <Link href={`/team/clients/${c.id}?tab=health`} className="not-tracked" title="Health isn't tracked for this client">— Not tracked</Link>
                     : health.get(c.id) ? <Link href={`/team/clients/${c.id}?tab=health`} style={{ fontWeight: 400 }}><RatingPill rating={health.get(c.id)!.rating} /></Link> : <span className="note">No scorecard yet</span>}</td>
                   <td>{c.account_manager_id ? name[c.account_manager_id] : "Unassigned"}</td>
-                  <td>{portalStatus(c.id)}</td>
-                  <td><span className="bar"><i style={{ width: `${total ? (done / total) * 100 : 0}%` }} /></span>{done} of {total}</td>
                   <td>{pill[latestCal.get(c.id) ?? ""] ?? <span className="note">None yet</span>}</td>
+                  <td>{portalStatus(c.id)}</td>
                   {isAdmin && (
                     <td>
                       <form action={archiveClient}>
@@ -99,7 +92,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                 </tr>
               );
             })}
-            {!list.length && <tr><td colSpan={isAdmin ? 8 : 7} className="note">{showArchived ? "No archived clients." : "No clients yet."}</td></tr>}
+            {!list.length && <tr><td colSpan={isAdmin ? 7 : 6} className="note">{showArchived ? "No archived clients." : "No clients yet."}</td></tr>}
           </tbody>
         </table>
       </div>
