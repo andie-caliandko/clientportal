@@ -18,6 +18,7 @@ type KpiLite = {
   template_key?: string | null;
   category?: string | null;
   choices?: string[] | null;
+  cadence?: string | null;
 };
 
 export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: KpiLite; onDone?: () => void }) {
@@ -36,6 +37,10 @@ export function KpiForm({ clientId, kpi, onDone }: { clientId: string; kpi?: Kpi
         <div className="field"><label htmlFor={`k-unit-${p}`}>Measured in</label>
           <select className="sel" id={`k-unit-${p}`} name="unit" defaultValue={kpi?.unit ?? "number"}>
             <option value="number">Number</option><option value="percent">Percent</option><option value="currency">Dollars</option>
+          </select></div>
+        <div className="field"><label htmlFor={`k-often-${p}`}>How often</label>
+          <select className="sel" id={`k-often-${p}`} name="cadence" defaultValue={kpi?.cadence ?? "weekly"}>
+            <option value="weekly">Weekly</option><option value="monthly">Monthly</option>
           </select></div>
         <div className="field"><label htmlFor={`k-dir-${p}`}>Better when</label>
           <select className="sel" id={`k-dir-${p}`} name="direction" value={lower ? "lower" : "higher"} onChange={(e) => setLower(e.target.value === "lower")}>
@@ -88,77 +93,103 @@ export function AddKpi({ clientId }: { clientId: string }) {
   );
 }
 
-/** Scorecard history: change a week's numbers or notes after it was saved. */
-export function EditScorecardWeek({ clientId, kpis, notes, week }: { clientId: string; kpis: KpiLite[]; notes: Record<string, string>; week: string }) {
+const monthLabel = (m: string) => new Date(`${m.slice(0, 7)}-01T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** Scorecard history: change a week's (or month's) answers or notes after they were saved. */
+export function EditScorecardWeek({ clientId, kpis, notes, week, monthly }: { clientId: string; kpis: KpiLite[]; notes: Record<string, string>; week: string; monthly?: boolean }) {
   const [open, setOpen] = useState(false);
-  const label = new Date(`${week}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const label = monthly ? monthLabel(week) : new Date(`${week}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   return (
     <>
-      <button type="button" className="linkbtn note" onClick={() => setOpen(true)} aria-label={`Edit the week of ${label}`}>Edit</button>
+      <button type="button" className="linkbtn note" onClick={() => setOpen(true)} aria-label={`Edit ${monthly ? "" : "the week of "}${label}`}>Edit</button>
       {open && (
-        <Modal title={`Scorecard · week of ${label}`} onClose={() => setOpen(false)} wide>
-          <ScorecardForm clientId={clientId} kpis={kpis} notes={notes} thisWeek={week} onSaved={() => setOpen(false)} />
+        <Modal title={monthly ? `Monthly client check · ${label}` : `Scorecard · week of ${label}`} onClose={() => setOpen(false)} wide>
+          <ScorecardForm clientId={clientId} kpis={kpis} notes={notes} thisWeek={week} monthly={monthly} onSaved={() => setOpen(false)} />
         </Modal>
       )}
     </>
   );
 }
 
-/** Enter this week's numbers. Picking an earlier week loads what was entered then. */
-export function ScorecardForm({ clientId, kpis, notes, thisWeek, onSaved }: {
+/** The Monthly client check, in a pop-up. */
+export function MonthlyCheck({ clientId, kpis, notes, month, label }: { clientId: string; kpis: KpiLite[]; notes: Record<string, string>; month: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn sm" onClick={() => setOpen(true)}>{label}</button>
+      {open && (
+        <Modal title="Monthly client check" onClose={() => setOpen(false)} wide>
+          <ScorecardForm clientId={clientId} kpis={kpis} notes={notes} thisWeek={month} monthly onSaved={() => setOpen(false)} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Enter this week's numbers (or this month's client check). Picking an earlier week or month loads what was entered then. */
+export function ScorecardForm({ clientId, kpis, notes, thisWeek, monthly, onSaved }: {
   clientId: string;
   kpis: KpiLite[];
   notes: Record<string, string>;
+  /** A date in the week (or month) to start on. */
   thisWeek: string;
+  monthly?: boolean;
   /** In a pop-up: close once it's saved. */
   onSaved?: () => void;
 }) {
   const [state, action, pending] = useActionState(saveScorecard, {});
   useEffect(() => { if (state.ok) onSaved?.(); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [week, setWeek] = useState(thisWeek);
-  const monday = useMemo(() => {
+  const [week, setWeek] = useState(monthly ? thisWeek.slice(0, 7) : thisWeek);
+  const key = useMemo(() => {
+    if (monthly) return `${week}-01`;
     const [y, m, d] = week.split("-").map(Number);
     const u = new Date(Date.UTC(y, m - 1, d));
     u.setUTCDate(u.getUTCDate() - ((u.getUTCDay() + 6) % 7));
     return u.toISOString().slice(0, 10);
-  }, [week]);
-  const label = new Date(`${monday}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  }, [week, monthly]);
+  const label = new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const p = monthly ? "mc" : "sc";
 
   return (
-    <form action={action} key={monday} style={{ display: "grid", gap: 14 }}>
+    <form action={action} key={key} style={{ display: "grid", gap: 14 }}>
       <input type="hidden" name="client" value={clientId} />
       <div className="row">
-        <div className="field" style={{ maxWidth: 240 }}><label htmlFor="sc-week">Week of</label>
-          <input className="input" id="sc-week" name="week" type="date" value={week} onChange={(e) => e.target.value && setWeek(e.target.value)} /></div>
-        <p className="note" style={{ paddingBottom: 12 }}>Saving for the week starting Monday, {label}.</p>
+        {monthly ? (
+          <div className="field" style={{ maxWidth: 240 }}><label htmlFor="mc-month">Month</label>
+            <input className="input" id="mc-month" name="month" type="month" value={week} onChange={(e) => e.target.value && setWeek(e.target.value)} /></div>
+        ) : (
+          <div className="field" style={{ maxWidth: 240 }}><label htmlFor="sc-week">Week of</label>
+            <input className="input" id="sc-week" name="week" type="date" value={week} onChange={(e) => e.target.value && setWeek(e.target.value)} /></div>
+        )}
+        <p className="note" style={{ paddingBottom: 12 }}>{monthly ? `Saving for ${monthLabel(key)}. Answer for the whole month.` : `Saving for the week starting Monday, ${label}.`}</p>
       </div>
       <div className="score-inputs">
         {kpis.map((k) => {
-          const saved = k.history.find((h) => h.week === monday)?.value;
+          const saved = k.history.find((h) => h.week === key)?.value;
           return (
             <div className="field" key={k.id}>
-              <label htmlFor={`sc-${k.id}`}>{k.name}</label>
+              <label htmlFor={`${p}-${k.id}`}>{k.name}</label>
               {k.choices?.length === 3 ? (
                 // Pick-one: Green, Yellow or Red answer, saved as 2, 1, 0.
-                <select className="sel" id={`sc-${k.id}`} name={`kpi:${k.id}`} defaultValue={saved === undefined ? "" : String(Math.round(saved))}>
+                <select className="sel" id={`${p}-${k.id}`} name={`kpi:${k.id}`} defaultValue={saved === undefined ? "" : String(Math.round(saved))}>
                   <option value="">Not entered</option>
                   {k.choices.map((c, i) => <option key={c} value={String(2 - i)}>{c}</option>)}
                 </select>
               ) : (
-                <input className="input" id={`sc-${k.id}`} name={`kpi:${k.id}`} inputMode="decimal" defaultValue={saved ?? ""}
+                <input className="input" id={`${p}-${k.id}`} name={`kpi:${k.id}`} inputMode="decimal" defaultValue={saved ?? ""}
                   placeholder={k.template_key ? "" : k.unit === "percent" ? "e.g. 4.2" : k.unit === "currency" ? "e.g. 32.50" : "e.g. 1250"} />
               )}
-              <span className="note">{k.choices?.length === 3 ? k.category : k.template_key ? k.benchmark : `Good ${k.good} · Better ${k.better} · Best ${k.best}`}</span>
+              <span className="note">{k.template_key ? k.category : `Good ${k.good} · Better ${k.better} · Best ${k.best}`}</span>
             </div>
           );
         })}
       </div>
-      <div className="field"><label htmlFor="sc-note">Review notes (optional)</label>
-        <textarea className="input" id="sc-note" name="note" defaultValue={notes[monday] ?? ""} style={{ minHeight: 80 }}
-          placeholder="What moved this week, and what we're doing about it" /></div>
+      <div className="field"><label htmlFor={`${p}-note`}>{monthly ? "Notes from the month (optional)" : "Review notes (optional)"}</label>
+        <textarea className="input" id={`${p}-note`} name="note" defaultValue={notes[key] ?? ""} style={{ minHeight: 80 }}
+          placeholder={monthly ? "How the relationship is going, anything to watch" : "What moved this week, and what we're doing about it"} /></div>
       {state.error && <p className="error">{state.error}</p>}
       {state.ok && <p className="flash">{state.ok}</p>}
-      <div><button className="btn" disabled={pending}>{pending ? "Saving…" : "Save scorecard"}</button></div>
+      <div><button className="btn" disabled={pending}>{pending ? "Saving…" : monthly ? "Save monthly check" : "Save scorecard"}</button></div>
     </form>
   );
 }

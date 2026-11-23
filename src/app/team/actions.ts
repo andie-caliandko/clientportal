@@ -739,6 +739,7 @@ function readKpi(form: FormData) {
     better: num("better"),
     best: num("best"),
     benchmark: String(form.get("benchmark") ?? "").trim() || null,
+    cadence: form.get("cadence") === "monthly" ? "monthly" : "weekly",
   };
 }
 
@@ -783,9 +784,12 @@ export async function saveScorecard(_: Result, form: FormData): Promise<Result> 
   const v = await requireTeam();
   if (v.member.role === "creator") return { error: VIEW_ONLY };
   const clientId = String(form.get("client"));
+  // The Monthly client check sends a month (yyyy-mm) and saves on the 1st; the weekly scorecard sends a date.
+  const month = String(form.get("month") ?? "");
+  const monthly = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
   const date = String(form.get("week") ?? "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Pick the week you're reviewing." };
-  const week = weekStart(date);
+  if (!monthly && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Pick the week you're reviewing." };
+  const week = monthly ? `${month}-01` : weekStart(date);
   const supabase = await createClient();
 
   const rows: { kpi_id: string; client_id: string; week: string; value: number; entered_by: string }[] = [];
@@ -808,18 +812,18 @@ export async function saveScorecard(_: Result, form: FormData): Promise<Result> 
   if (note) await supabase.from("scorecard_notes").upsert({ client_id: clientId, week, note, updated_by: v.userId, updated_at: new Date().toISOString() });
   else await supabase.from("scorecard_notes").delete().eq("client_id", clientId).eq("week", week);
 
-  // Saving a scorecard checks off that client's "update this week's scorecard" task.
+  // Saving checks off that client's "update this week's scorecard" (or monthly client check) task.
   await supabase
     .from("tasks")
     .update({ status: "done", completed_at: new Date().toISOString() })
     .eq("client_id", clientId)
-    .eq("source", "scorecard")
+    .eq("source", monthly ? "client_check" : "scorecard")
     .neq("status", "done");
 
   revalidatePath(`/team/clients/${clientId}`);
   revalidatePath("/team/clients");
   revalidatePath("/team");
-  return { ok: "Scorecard saved." };
+  return { ok: monthly ? "Monthly client check saved." : "Scorecard saved." };
 }
 
 export async function saveNewClientTasks(_: Result, form: FormData): Promise<Result> {
@@ -1032,7 +1036,7 @@ async function checkSlackChannel(channelId: string, clientName: string, clientId
 
 /** A client whose health isn't tracked doesn't need the scorecard reminders already waiting for them. */
 async function clearScorecardTasks(clientId: string) {
-  await createAdminClient().from("tasks").delete().eq("client_id", clientId).eq("source", "scorecard").neq("status", "done");
+  await createAdminClient().from("tasks").delete().eq("client_id", clientId).in("source", ["scorecard", "client_check"]).neq("status", "done");
   revalidatePath("/team");
 }
 

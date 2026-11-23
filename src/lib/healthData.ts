@@ -36,5 +36,6 @@ export async function loadHealth(supabase: SupabaseClient, clientIds?: string[])
   const both = new Map([...byClient].map(([id, list]) => [id, clientHealth(list)]));
   const health = new Map([...both].map(([id, h]) => [id, h.overall]));
   const performance = new Map([...both].map(([id, h]) => [id, h.performance]));
-  return { byClient, health, performance };
+  const relationship = new Map([...both].map(([id, h]) => [id, h.relationship]));
+  return { byClient, health, performance, relationship };
 }

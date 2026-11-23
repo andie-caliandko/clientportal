@@ -674,7 +674,12 @@ a.stat:hover { border-color: var(--primary); }
   body { background: #fff !important; }
   .report { border: 0; padding: 0; background: #fff; }
   .report-table[open] summary, .report-table:not([open]) { display: none; }
-  .report-kpi { page-break-inside: avoid; }
+  /* Chrome overlaps grid items that split across printed pages (the footer landed on a chart), so print as plain blocks. */
+  .report, .report-kpis, .report-kpi { display: block; }
+  .report > * + * { margin-top: 22px; }
+  .report-kpi { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+  .report-kpi > * + * { margin-top: 8px; }
+  .report-foot { break-inside: avoid; }
 }
 .cgrid.pairs { align-items: stretch; }
 /* New task button and the due-date filter share a row; an open form drops below. */
@@ -836,6 +841,8 @@ button.stat[aria-pressed="true"] { border-color: var(--primary); box-shadow: ins
 .kpi-table .kpi-goal { width: 1%; white-space: nowrap; }
 .kpi-table .kpi-best { padding-right: 1.75em; }
 .kpi-table th.kpi-latest, .kpi-table td.kpi-latest { text-align: left; }
+.health-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.health-tile { display: grid; gap: 6px; align-content: start; padding: 14px 16px; border-radius: 14px; background: var(--soft); }
 .kpi-table .band { font-size: .85rem; min-width: 9ch; }
 .choice-dots { display: inline-flex; gap: 6px; align-items: center; min-height: 24px; }
 .choice-dots i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }

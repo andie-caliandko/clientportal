@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountHealth, bands, clientHealth, ratingFor, showKpi, summarize, tierFor, trendFor, weekStart, type Kpi } from "./health";
+import { accountHealth, bands, clientHealth, monthOf, ratingFor, showKpi, summarize, tierFor, trendFor, weekStart, type Kpi } from "./health";
 
 const engagement: Kpi = { id: "e", name: "Engagement rate", unit: "percent", higher_is_better: true, good: 3, better: 4.5, best: 6, benchmark: null };
 const costPerLead: Kpi = { id: "c", name: "Cost per lead", unit: "currency", higher_is_better: false, good: 40, better: 30, best: 20, benchmark: null };
@@ -71,14 +71,18 @@ describe("client health template", () => {
     expect(h.overall?.rating).toBe("red");
     expect(h.performance?.rating).toBe("red");
   });
-  it("counts each template KPI once and the performance KPIs together as one more", () => {
-    // 3 green template KPIs + performance (2 red KPIs → red) = (2+2+2+0)/4 = 1.5 → green
+  it("averages Social performance and Relationship into the overall color", () => {
+    // Relationship: 3 green = 2; performance: 2 red = 0; average 1 → yellow
     const h = clientHealth([
       { template_key: "updates", summary: g }, { template_key: "checkin", summary: g }, { template_key: "invoices", summary: g },
       { template_key: null, summary: r }, { template_key: null, summary: r },
     ]);
     expect(h.performance?.rating).toBe("red");
-    expect(h.overall).toEqual({ rating: "green", score: 1.5 });
+    expect(h.relationship?.rating).toBe("green");
+    expect(h.overall).toEqual({ rating: "yellow", score: 1 });
+  });
+  it("saves monthly readings on the first of the month", () => {
+    expect(monthOf("2026-11-23")).toBe("2026-11-01");
   });
   it("shows pick-one answers by their words and colors them Green, Yellow, Red", () => {
     const k: Kpi = { id: "x", name: "Check-in", unit: "number", higher_is_better: true, good: 1, better: 2, best: 2, benchmark: null, choices: ["Held", "Rescheduled", "Missed"] };

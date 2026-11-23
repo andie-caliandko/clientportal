@@ -15,6 +15,8 @@ export type Kpi = {
   category?: string | null;
   /** Pick-one KPIs: the Green, Yellow and Red answers, saved as 2, 1 and 0. */
   choices?: string[] | null;
+  /** Weekly (on the weekly scorecard) or monthly (on the Monthly client check, saved on the 1st). */
+  cadence?: "weekly" | "monthly" | null;
 };
 
 /** The client health template, in order. The KPIs themselves are added by the database (seed_health_template). */
@@ -65,20 +67,26 @@ export function accountHealth(kpis: { rating: Rating; trend: Trend | null }[]): 
   const score =
     kpis.reduce((sum, k) => sum + Math.max(0, Math.min(2.5, POINTS[k.rating] + (k.trend ? TREND_POINTS[k.trend] : 0))), 0) /
     kpis.length;
-  return { rating: score >= 1.5 ? "green" : score >= 0.75 ? "yellow" : "red", score: Math.round(score * 100) / 100 };
+  return { rating: bandFor(score), score: Math.round(score * 100) / 100 };
 }
 
+const bandFor = (score: number): Rating => (score >= 1.5 ? "green" : score >= 0.75 ? "yellow" : "red");
+
 /**
- * A client's overall health. With template KPIs, each of them counts once and the client's own (social performance)
- * KPIs count together as one more, by their combined color. Without template readings it's the performance KPIs alone.
+ * A client's health in three colors. Social performance comes from their own KPIs, Relationship from the
+ * client health template, and Overall is the two averaged (or whichever one has readings).
  */
 export function clientHealth(kpis: { template_key?: string | null; summary: { rating: Rating; trend: Trend | null } | null }[]) {
   const rated = (list: typeof kpis) => list.filter((k) => k.summary).map((k) => ({ rating: k.summary!.rating, trend: k.summary!.trend }));
   const performance = accountHealth(rated(kpis.filter((k) => !k.template_key)));
-  const template = rated(kpis.filter((k) => k.template_key));
-  if (!template.length) return { overall: performance, performance };
-  return { overall: accountHealth([...template, ...(performance ? [{ rating: performance.rating, trend: null }] : [])]), performance };
+  const relationship = accountHealth(rated(kpis.filter((k) => k.template_key)));
+  const both = [performance, relationship].filter(Boolean) as { rating: Rating; score: number }[];
+  const score = both.length ? Math.round((both.reduce((n, h) => n + h.score, 0) / both.length) * 100) / 100 : null;
+  return { overall: score === null ? null : { rating: bandFor(score), score }, performance, relationship };
 }
+
+/** First day of the month a date falls in: where Monthly client check readings are saved. */
+export const monthOf = (date: string) => `${date.slice(0, 7)}-01`;
 
 /** Latest rating and trend for one KPI from its readings (oldest first). */
 export function summarize(kpi: Kpi, readings: number[]) {
